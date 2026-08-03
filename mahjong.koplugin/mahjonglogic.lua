@@ -2,7 +2,8 @@
 --
 -- US-03: tile kind definitions, 144-tile deck, and the match rule.
 -- US-04: Turtle layout, seeded shuffling, and newGame().
--- US-05+ will build on this: free-tile rules, scoring.
+-- US-05: free-tile detection (tileAt, isFree, freeTiles, hasMoves).
+-- US-07+ will build on this: removal, scoring.
 --
 -- Self-test: `lua mahjonglogic.lua` (or `lua mahjonglogic.lua --selftest`).
 
@@ -235,7 +236,7 @@ end
 
 -- Matching rule ----------------------------------------------------------
 
--- Returns true iff the two tiles can be removed together.
+-- Returns true if the two tiles can be removed together.
 --   Identical kinds match; any flower matches any flower; any season matches
 --   any season; a flower never matches a season (or a suited tile).
 function MahjongLogic.matches(a, b)
@@ -249,6 +250,64 @@ end
 -- this with the installed icon path ("mahjong/" .. base).
 function MahjongLogic.iconForKind(kind)
     return kind
+end
+
+-- Free-tile rules ----------------------------------------------------------
+--
+-- Flat projection (design decision 5): a tile at (x,y,L) is free if
+--   * no tile exists directly above it at (x,y,L+1), and
+--   * at least one horizontal side is open: no tile at (x-1,y,L) OR
+--     no tile at (x+1,y,L).
+
+-- Kind at (x, y, layer), or nil if the cell is empty.
+function MahjongLogic.tileAt(board, x, y, layer)
+    return board[MahjongLogic.posKey(x, y, layer)]
+end
+
+-- True if a tile at (x, y, layer) is free. An empty cell is never free.
+function MahjongLogic.isFree(board, x, y, layer)
+    if MahjongLogic.tileAt(board, x, y, layer) == nil then
+        return false
+    end
+    if MahjongLogic.tileAt(board, x, y, layer + 1) ~= nil then
+        return false -- covered from above
+    end
+    if MahjongLogic.tileAt(board, x - 1, y, layer) ~= nil
+        and MahjongLogic.tileAt(board, x + 1, y, layer) ~= nil then
+        return false -- blocked on both sides
+    end
+    return true
+end
+
+-- All free tiles on a board, as an array of { x, y, layer, kind } tables.
+function MahjongLogic.freeTiles(board)
+    local free = {}
+    for key, kind in pairs(board) do
+        local x, y, layer = key:match("^(%d+),(%d+),(%d+)$")
+        if not x then
+            error("freeTiles: malformed board key " .. tostring(key))
+        end
+        x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
+        if MahjongLogic.isFree(board, x, y, layer) then
+            free[#free + 1] = { x = x, y = y, layer = layer, kind = kind }
+        end
+    end
+    return free
+end
+
+-- True if at least one pair of matching free tiles can be removed.
+-- The free-tile count is bounded by the tile count (<= 144), so an O(n^2)
+-- scan of the free tiles is fine for a board game.
+function MahjongLogic.hasMoves(board)
+    local free = MahjongLogic.freeTiles(board)
+    for i = 1, #free - 1 do
+        for j = i + 1, #free do
+            if MahjongLogic.matches(free[i].kind, free[j].kind) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 -- Self-tests --------------------------------------------------------------
@@ -364,6 +423,58 @@ function MahjongLogic.runSelfTests()
     -- Unseeded newGame still produces a full board.
     local g4 = MahjongLogic.newGame()
     check(MahjongLogic.tileCount(g4) == 144, "newGame() (random) places 144 tiles")
+
+    -- Free-tile detection ------------------------------------------------
+    local boardWith = function(tiles)
+        local board = {}
+        for _, t in ipairs(tiles) do
+            board[MahjongLogic.posKey(t[1], t[2], t[3])] = t[4]
+        end
+        return board
+    end
+
+    local b = boardWith{ {2,2,0,"b1"}, {3,2,0,"b2"}, {2,2,1,"c1"} }
+    check(MahjongLogic.tileAt(b, 2, 2, 0) == "b1", "tileAt returns the kind at (2,2,L0)")
+    check(MahjongLogic.tileAt(b, 2, 2, 1) == "c1", "tileAt returns the kind at (2,2,L1)")
+    check(MahjongLogic.tileAt(b, 9, 9, 0) == nil, "tileAt returns nil for an empty cell")
+    check(not MahjongLogic.isFree(b, 9, 9, 0), "empty cell is not a free tile")
+    check(not MahjongLogic.isFree(b, 2, 2, 0), "tile covered from above is not free")
+    check(MahjongLogic.isFree(b, 2, 2, 1), "top tile with open sides is free")
+    check(MahjongLogic.isFree(b, 3, 2, 0), "tile with one open side is free")
+
+    local b2 = boardWith{ {4,2,0,"d1"}, {5,2,0,"d2"}, {6,2,0,"d3"} }
+    check(not MahjongLogic.isFree(b2, 5, 2, 0), "tile with both sides occupied is not free")
+    check(MahjongLogic.isFree(b2, 4, 2, 0), "edge tile with one side open is free")
+    check(MahjongLogic.isFree(b2, 6, 2, 0), "edge tile with one side open is free")
+
+    local free = MahjongLogic.freeTiles(b)
+    check(#free == 2, "freeTiles finds exactly the free tiles (got " .. #free .. ")")
+    local free_ok = true
+    for _, t in ipairs(free) do
+        if not MahjongLogic.isFree(b, t.x, t.y, t.layer) then free_ok = false end
+    end
+    check(free_ok, "every freeTiles entry passes isFree")
+
+    -- Removing a tile exposes the one directly below it.
+    local b3 = boardWith{ {10,2,0,"east"}, {10,2,1,"west"} }
+    check(not MahjongLogic.isFree(b3, 10, 2, 0), "covered tile is not free before removal")
+    check(MahjongLogic.isFree(b3, 10, 2, 1), "covering tile is free")
+    b3[MahjongLogic.posKey(10, 2, 1)] = nil
+    check(MahjongLogic.tileAt(b3, 10, 2, 1) == nil, "removed tile is gone from the board")
+    check(MahjongLogic.isFree(b3, 10, 2, 0), "tile becomes free after the tile above is removed")
+
+    -- hasMoves
+    local m1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"} }
+    check(MahjongLogic.hasMoves(m1), "two matching free tiles -> hasMoves true")
+    check(#MahjongLogic.freeTiles(m1) == 2, "isolated layer-0 tiles are both free")
+    local m2 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b2"} }
+    check(not MahjongLogic.hasMoves(m2), "two free but unmatched tiles -> hasMoves false")
+    local m3 = boardWith{ {2,2,0,"flower1"}, {4,2,0,"flower2"} }
+    check(MahjongLogic.hasMoves(m3), "any two free flowers count as a move")
+    local m4 = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {4,2,0,"b2"} }
+    check(not MahjongLogic.hasMoves(m4), "covered matching tiles are not counted by hasMoves")
+    check(not MahjongLogic.hasMoves({}), "empty board has no moves")
+    check(#MahjongLogic.freeTiles({}) == 0, "empty board has no free tiles")
 
     io.write("All self-tests passed.\n")
     return true
