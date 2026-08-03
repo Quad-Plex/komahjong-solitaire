@@ -1,6 +1,7 @@
 local Device = require("device")
 local Screen = Device.screen
 local Blitbuffer = require("ffi/blitbuffer")
+local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
 local UIManager = require("ui/uimanager")
 local Font = require("ui/font")
@@ -12,9 +13,35 @@ local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
 local TitleBarWidget = require("ui/widget/titlebar")
 local ConfirmBox = require("ui/widget/confirmbox")
+local lfs = require("libs/libkoreader-lfs")
+local util = require("util")
 local _ = require("gettext")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
+
+local function getPluginPath()
+    local src = debug.getinfo(1, "S").source or ""
+    src = src:gsub("^@", "")
+    return src:match("^(.*[/\\])main%.lua$") or "."
+end
+
+local function normalizePath(path)
+    path = (path or ""):gsub("\\", "/")
+    return path:gsub("/+", "/")
+end
+
+local function joinPath(...)
+    local parts = {...}
+    local path = tostring(parts[1] or "")
+    for i = 2, #parts do
+        local part = tostring(parts[i] or "")
+        path = path:gsub("/+$", "") .. "/" .. part:gsub("^/+", "")
+    end
+    return normalizePath(path)
+end
+
+local PLUGIN_PATH = normalizePath(getPluginPath()):gsub("/+$", "")
+local ICON_DIR = "mahjong"
 
 local function createToolbarButton(icon, w, h, cb)
     return ButtonWidget:new{
@@ -27,6 +54,24 @@ local function createToolbarButton(icon, w, h, cb)
         bordersize = 0,
         callback = cb,
     }
+end
+
+-- Copies the bundled SVG tiles into the KOReader icons dir so IconWidget can
+-- resolve "mahjong/<name>" from anywhere (plugin dirs are not icon search
+-- paths). Only copies files that are missing.
+local function installIconsIfNeeded()
+    local src_dir = joinPath(PLUGIN_PATH, "icons")
+    if lfs.attributes(src_dir, "mode") ~= "directory" then return end
+    local dest_dir = DataStorage:getDataDir() .. "/icons/" .. ICON_DIR
+    util.makePath(dest_dir)
+    for entry in lfs.dir(src_dir) do
+        if entry:match("%.svg$") then
+            local dest_file = joinPath(dest_dir, entry)
+            if lfs.attributes(dest_file, "mode") ~= "file" then
+                os.execute('cp "' .. joinPath(src_dir, entry) .. '" "' .. dest_file .. '"')
+            end
+        end
+    end
 end
 
 local Mahjong = FrameContainer:extend{
@@ -54,6 +99,7 @@ function Mahjong:init()
         general = true,
     })
     self.ui.menu:registerToMainMenu(self)
+    installIconsIfNeeded()
 end
 
 function Mahjong:addToMainMenu(menu_items)
