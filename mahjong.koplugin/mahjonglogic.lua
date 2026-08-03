@@ -236,7 +236,7 @@ end
 
 -- Matching rule ----------------------------------------------------------
 
--- Returns true iff the two tiles can be removed together.
+-- Returns true if the two tiles can be removed together.
 --   Identical kinds match; any flower matches any flower; any season matches
 --   any season; a flower never matches a season (or a suited tile).
 function MahjongLogic.matches(a, b)
@@ -254,7 +254,7 @@ end
 
 -- Free-tile rules ----------------------------------------------------------
 --
--- Flat projection (design decision 5): a tile at (x,y,L) is free iff
+-- Flat projection (design decision 5): a tile at (x,y,L) is free if
 --   * no tile exists directly above it at (x,y,L+1), and
 --   * at least one horizontal side is open: no tile at (x-1,y,L) OR
 --     no tile at (x+1,y,L).
@@ -264,7 +264,7 @@ function MahjongLogic.tileAt(board, x, y, layer)
     return board[MahjongLogic.posKey(x, y, layer)]
 end
 
--- True iff a tile at (x, y, layer) is free. An empty cell is never free.
+-- True if a tile at (x, y, layer) is free. An empty cell is never free.
 function MahjongLogic.isFree(board, x, y, layer)
     if MahjongLogic.tileAt(board, x, y, layer) == nil then
         return false
@@ -295,7 +295,7 @@ function MahjongLogic.freeTiles(board)
     return free
 end
 
--- True iff at least one pair of matching free tiles can be removed.
+-- True if at least one pair of matching free tiles can be removed.
 -- The free-tile count is bounded by the tile count (<= 144), so an O(n^2)
 -- scan of the free tiles is fine for a board game.
 function MahjongLogic.hasMoves(board)
