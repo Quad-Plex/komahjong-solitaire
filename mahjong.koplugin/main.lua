@@ -58,7 +58,8 @@ end
 
 -- Copies the bundled SVG tiles into the KOReader icons dir so IconWidget can
 -- resolve "mahjong/<name>" from anywhere (plugin dirs are not icon search
--- paths). Only copies files that are missing.
+-- paths). Always overwrites so bundled icon updates (e.g. a redesign) reach
+-- the device on the next plugin load.
 local function installIconsIfNeeded()
     local src_dir = joinPath(PLUGIN_PATH, "icons")
     if lfs.attributes(src_dir, "mode") ~= "directory" then return end
@@ -66,10 +67,7 @@ local function installIconsIfNeeded()
     util.makePath(dest_dir)
     for entry in lfs.dir(src_dir) do
         if entry:match("%.svg$") then
-            local dest_file = joinPath(dest_dir, entry)
-            if lfs.attributes(dest_file, "mode") ~= "file" then
-                os.execute('cp "' .. joinPath(src_dir, entry) .. '" "' .. dest_file .. '"')
-            end
+            os.execute('cp "' .. joinPath(src_dir, entry) .. '" "' .. joinPath(dest_dir, entry) .. '"')
         end
     end
 end
