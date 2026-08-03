@@ -160,7 +160,7 @@ function Mahjong:buildUILayout()
             board = self.board,
             width = self.full_width,
             height = board_h,
-            onTileTap = function(x, y) self:handleTileTap(x, y) end,
+            onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
         },
     }
 
@@ -213,7 +213,7 @@ function Mahjong:resetGame()
 end
 
 -- luacheck: no unused args
-function Mahjong:handleTileTap(x, y)
+function Mahjong:handleTileTap(x, y, layer)
 end
 
 -- luacheck: no unused args

@@ -180,6 +180,14 @@ appending `IconWidget`s (see `overlayIcon`/`clearOverlay` in `reversiboard.lua`)
 ## Input handling
 
 - Taps on board cells fire the `callback` in each button spec.
+- For `InputContainer` `ges_events` (e.g. `TapSelect = { GestureRange:new{...} }`), KOReader's
+  `onGesture` builds `Event:new(name, gsseq.args, ev)` and `EventListener:handleEvent` calls the
+  handler as `self[event.handler](self, unpack(event.args))` → the handler receives
+  **`(gsseq.args, gesture_event)`**. Unless you set `args` in the gesture spec, the FIRST arg is
+  `nil` and the actual gesture is the **SECOND** arg. Correct signature:
+  `function Board:onTapSelect(_, ges)` (use `ges.pos`, `ges.pos.x` etc.). Writing
+  `onTapSelect(ges)` crashes with `attempt to index local 'ges' (a nil value)` the moment the
+  gesture fires (this bug shipped once in US-06).
 - A tap on the title bar's left icon / close icon fires `left_icon_tap_callback` /
   `close_callback` (see `TitleBarWidget`).
 - General widget events are methods `onXxx()`; e.g. `onCloseWidget()` for cleanup.
@@ -268,10 +276,12 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `_padding_left/_padding_right/_padding_top/_padding_bottom` fields → every paint of that widget
   crashes with `framecontainer.lua:143: attempt to perform arithmetic on field '_padding_left' (a nil
   value)`, silently killing KOReader (no error UI). `FrameContainer:paintTo` calls `getSize()` then
-  reads those fields. This hit US-06's `mahjongboard.lua` `Board:getSize()` (pattern copied from the
-  chess boards, which have the same latent bug). If you override `getSize()`, mirror
+  reads those fields. This hit the original `mahjongboard.lua` `Board:getSize()` (pattern copied from
+  the chess boards, which have the same latent bug). If you override `getSize()`, mirror
   `FrameContainer:getSize()`'s padding assignments first. The chess boards
-  (`casualkochess.koplugin/*board.lua`) are NOT safe to copy verbatim here.
+  (`casualkochess.koplugin/*board.lua`) are NOT safe to copy verbatim here. (The current 3D board
+  avoids the trap entirely: it extends `InputContainer`, not `FrameContainer`, and `getSize()` just
+  returns `self.dimen`.)
 
 ## Mahjong plugin — implementation state (US-01..US-06 done)
 
@@ -279,7 +289,9 @@ This repo builds `mahjong.koplugin` (Mahjong Solitaire). Read `IMPLEMENTATION_PL
 the locked design and story list. Current state:
 
 - **Repo layout:** `AGENTS.md`, `IMPLEMENTATION_PLAN.md`, `mahjong.koplugin/` (the deliverable),
-  `install_plugin.sh` (device sync script), `example_app/casualkochess.koplugin/` (reference).
+  `tests/` (official suite: `run.sh`, `mock.lua`, `us01_shell.lua`, `us03_icons.lua`,
+  `us06_board.lua`, `us06_paint.lua`), `install_plugin.sh` (device sync script),
+  `example_app/casualkochess.koplugin/` (reference).
 - **US-01 (done):** `_meta.lua` + `main.lua` skeleton; menu entry under `sorting_hint="tools"`
   ("Mahjong Solitaire"); `Dispatcher` action `mahjong` → event `MahjongStart` with `general=true`.
   The original separate placeholder widget was replaced by US-02's real shell — do not resurrect it.
@@ -303,29 +315,42 @@ the locked design and story list. Current state:
   (`createDeck`, `matches`); 45 SVGs in `icons/` (42 faces + `empty`/`select`/`hint`).
 - **US-04 (done):** Turtle `buildLayout()` (144 positions), seeded `newRng`/`shuffle`, `newGame(rng)`.
 - **US-05 (done):** free-tile rules: `tileAt`, `isFree`, `freeTiles`, `hasMoves`.
-- **US-06 (done):** real board rendering. `mahjongboard.lua` extends `FrameContainer` and builds a
-  `ButtonTable` over the 12x6 projection grid (`MahjongLogic.gridBounds()` → x 1..12, y 2..7).
-  - Cell sizing: `cell = floor(min(usable_w/cols, usable_h/rows))` from `Screen:scaleBySize(8)`
-    padding; `icon_height = cell - 2*scaleBySize(4)` (compensates ButtonTable's
-    `Size.padding.buttontable`). Table is centered via `CenterContainer` inside `self[1]`.
-  - Each cell is a button spec with `alpha = true`, `icon = "mahjong/<kind>"` (topmost tile via
-    `MahjongLogic.topTileAt`) or `"mahjong/empty"`, `callback = function() self:handleClick(x,y) end`.
-    `idFor(x,y)` gives 1..72 ids for `getButtonById`.
-  - `updateBoard()` refreshes every cell icon + `UIManager:setDirty(self, "ui")`.
-  - `handleClick(x, y)` forwards to the optional `onTileTap` callback (US-07 hooks here).
-  - Patched `buttontable.lua` + `button.lua` shim copied from `example_app` (alpha passthrough).
-  - `main.lua` now `require("mahjonglogic")`/`require("mahjongboard")`; `startGame()`/`resetGame()`
-    set `self.board = MahjongLogic.newGame()` and `buildUILayout()` renders it. `handleTileTap(x,y)`
-    is an intentional empty stub (`-- luacheck: no unused args`) until US-07.
+- **US-06 (done, reworked):** real board rendering as an **offset-layer 3D turtle**. The first
+  US-06 attempt was a flat `ButtonTable` projection (see git history) — the user rejected it
+  because it renders as a flat rectangle. `mahjongboard.lua` now extends `InputContainer` (NOT
+  `FrameContainer` — see the getSize crash pitfall above) and paints one `IconWidget` per
+  visible tile inside an `OverlapGroup`, each positioned with `overlap_offset = tilePos(x,y,layer)`.
+  - Geometry (`computeGeometry`): portrait tiles `th = 1.4*tw` sized to fit both axes,
+    `tw = floor(min(usable_w/units_w, (usable_h/units_h)/1.4))`; centered via `origin_x/origin_y`;
+    per-layer offsets `offx = floor(tw/2)`, `offy = floor(th/2)`. `units_w/units_h` come from the
+    layout's screen-space bounding box (0.5 tile per layer step).
+  - Children are appended in `buildLayout()` order (bottom layer first) so lower tiles paint
+    under upper ones; the `OverlapGroup` gets a board-sized `dimen` so the whole area is painted.
+  - `updateBoard()` calls `free()` on the old paint container, rebuilds, and `setDirty`.
+  - Taps: `TapSelect` gesture ranged over `self.dimen`; `hitTest` walks layers MAX→0 and returns
+    the topmost tile whose rect contains the point; `onTileTap(x, y, layer)` is invoked with the
+    tapped tile's grid position. The handler signature is `onTapSelect(_, ges)` (the gesture is
+    the second arg — see the Input-handling pitfall above).
+  - `getSize()` returns `self.dimen` (no `FrameContainer` `_padding_*` contract involved).
+  - `main.lua` wires `onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end`;
+    `handleTileTap(x, y, layer)` is an intentional empty stub (`-- luacheck: no unused args`)
+    until US-07.
+  - `buttontable.lua`/`button.lua` shims were **deleted** from the plugin (ButtonTable unused).
+    Note the shims still exist in `example_app/casualkochess.koplugin` and are documented above
+    for chess-style grids.
 
 ### Verification workflow used so far
 
 - Tooling now installed on this machine: `lua` (5.1) and `luacheck` (via luarocks).
-  Run `luac -p <file>` for syntax and `luacheck mahjong.koplugin/` for lint.
-- Per-story throwaway harnesses live in `/tmp/opencode/test_us0X.lua`. They stub every KOReader
-  module with `package.preload` (device, ui/uimanager, widgets, gettext, etc.) and drive
-  `main.lua` end-to-end: instantiate the class, fire the menu callback, tap toolbar buttons, run
-  `ConfirmBox` ok_callbacks, and assert the mock window stack/`self[1]` change correctly.
+  The official suite is `tests/`; run everything with `tests/run.sh` (syntax check
+  `luac -p`, `luacheck mahjong.koplugin/`, the embedded `mahjonglogic.lua` self-tests, and the
+  headless harnesses). **All future stories must extend this suite** (add a new `tests/usNN_*.lua`
+  and register it in `tests/run.sh`), not create throwaway scripts.
+- The headless harnesses reuse `tests/mock.lua`, which stubs every KOReader module with
+  `package.preload` (device, ui/uimanager, widgets, gettext, lfs, util, etc.) and provides a
+  fresh `mock.newContext()` per test. They drive `main.lua`/`mahjongboard.lua` end-to-end:
+  instantiate the class, fire the menu callback, tap toolbar buttons, run `ConfirmBox`
+  ok_callbacks, and assert the mock window stack/`self[1]` change correctly.
 - Mock gotcha: the stubbed `WidgetContainer:extend` must be `function(self, o)` (colon receiver)
   or `:extend{...}` silently drops the class table → "loop in gettable" at runtime.
 - KOReader UI code can't be exercised headlessly; the harness proves load-order, return values,

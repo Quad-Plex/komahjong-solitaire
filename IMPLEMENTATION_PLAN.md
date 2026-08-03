@@ -18,16 +18,18 @@ captured from `example_app/casualkochess.koplugin`.
 3. **Game logic is pure Lua, free of UI dependencies** (`mahjonglogic.lua` + friends). It must be
    runnable/testable with a plain `lua` interpreter (add `--`-style self-tests to the file).
    The UI (`main.lua`, `mahjongboard.lua`) only reads/writes via a small API.
-4. **Board model — flat projection.** The board is 3D: a tile is `{ x, y, layer }` on an integer
-   grid shared by all layers. The classic **Turtle layout** (144 tiles) is:
+4. **Board model — offset-layer 3D turtle.** The board is 3D: a tile is `{ x, y, layer }` on an
+   integer grid shared by all layers. The classic **Turtle layout** (144 tiles) is:
    - L0: x=2..11, y=2..7 (60 tiles)
    - L1: x=1..12, y=2..5 (48)
    - L2: x=3..8,  y=2..5 (24)
    - L3: x=4..7,  y=3..4 (8)
    - L4: x=4..7,  y=4    (4)
-   Rendering projects to a flat grid: the cell at (x,y) shows the **topmost** tile at that
-   position (or empty). This is simpler than half-tile-offset rendering and looks correct from
-   above; offset "peek" rendering is a later enhancement, not a requirement.
+   Rendering draws every tile at its real `(x, y, layer)` position with each higher layer offset
+   up-and-right by half a tile (classic interlock), so the stepped pyramid silhouette and the
+   exposed edges of lower tiles are visible (US-06, reworked from the earlier flat-projection
+   experiment — see `AGENTS.md` history). Lower layers paint first; the topmost tile at any
+   screen point is the one you tap.
 5. **Free-tile rule** (flat projection): tile at (x,y,L) is free iff:
    - no tile exists at (x,y,L+1) above it, **and**
    - at least one horizontal side is open: no tile at (x-1,y,L) OR no tile at (x+1,y,L).
@@ -38,8 +40,12 @@ captured from `example_app/casualkochess.koplugin`.
 7. **Input:** single taps only (e-ink). Tap a free tile to select it; tap a second free tile of
    the same kind to remove the pair. Tap a selected tile again to deselect. Invalid selection
    just re-selects.
-8. **Rendering:** `ButtonTable` grid (patched `buttontable.lua` for `alpha=true` transparency),
-   tiles as simple SVG icons installed into `DataStorage:getDataDir()/icons/mahjong/`.
+8. **Rendering:** the board is an `InputContainer` that paints `IconWidget`s (the tile SVGs)
+   absolutely positioned via an `OverlapGroup`'s `overlap_offset` — each tile at its real
+   `(x, y, layer)` offset. It hit-tests taps itself (topmost tile at the tapped point wins) and
+   forwards `(x, y, layer)`. The stock `ButtonTable` grid from the original plan was replaced;
+   `buttontable.lua`/`button.lua` shims were removed. Tiles install into
+   `DataStorage:getDataDir()/icons/mahjong/`.
 9. **Persistence:** `LuaSettings` in the KOReader settings dir; game state (tile deck, removed
    pairs, score) serialized to a table, saved on close, restored on start. Also persist a small
    settings table (hints on/off, new-game confirmation, etc.).
@@ -52,12 +58,18 @@ captured from `example_app/casualkochess.koplugin`.
 kindle_majong/
 ├── AGENTS.md                     # this repo's plugin-writing guide (already written)
 ├── IMPLEMENTATION_PLAN.md        # this file
+├── tests/                        # official test suite (tests/run.sh)
+│   ├── run.sh                    # luac -p + luacheck + logic self-tests + harnesses
+│   ├── mock.lua                  # shared KOReader stubs (fresh mock.newContext() per test)
+│   ├── us01_shell.lua            # meta, menu, dispatcher, startGame/new-game/exit shell
+│   ├── us03_icons.lua            # installIconsIfNeeded copies every SVG
+│   ├── us06_board.lua            # 3D turtle: geometry, z-order, hit-test, taps, wiring
+│   └── us06_paint.lua            # getSize/paint-contract regression
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
     ├── mahjonglogic.lua          # pure logic: deck, layout, free-tiles, match, win, shuffle
-    ├── mahjongboard.lua          # ButtonTable board widget (rendering + tap handling)
-    ├── buttontable.lua           # alpha patch (copy from example_app)
+    ├── mahjongboard.lua          # offset-layer 3D board widget (IconWidget/OverlapGroup + hit-test)
     ├── icons/*.svg               # tile + overlay icons
     └── README.md                 # install/usage (write at the end)
 ```
@@ -125,7 +137,8 @@ As a player, I want each tile to have a distinct, recognizable face so I can tel
 - Create simple flat-fill SVG icons (36 distinct faces) sized ~100x100 viewBox, installed via
   `installIconsIfNeeded()` (copy from plugin `icons/` to
   `DataStorage:getDataDir()/icons/mahjong/`), plus `select.svg`/`hint.svg` transparent overlays.
-  Use the patched `buttontable.lua` for `alpha=true`.
+  IconWidget renders SVGs directly (alpha is inherent to the SVG), so no ButtonTable patch is
+  needed.
 
 **Acceptance:**
 - Self-test passes: deck size 144, per-category counts, flower/season matching rule.
@@ -164,15 +177,25 @@ As a player, I want only genuinely "free" tiles to be selectable so the game is 
 
 As a player, I want to see the full Turtle board of tiles laid out on the e-ink screen.
 
-- `mahjongboard.lua`: `ButtonTable` over the flat projection grid (max x = 12, max y = 7).
-  Compute `cell = floor(min(usable_w/cols, usable_h/rows))` using `Screen:scaleBySize()`.
-- Each cell is a button with `icon = topmost tile icon or "mahjong/empty"`, `alpha=true`,
-  callback → `handleClick(x, y)`.
-- `updateBoard()` refreshes every cell icon + `UIManager:setDirty`.
-- Tiles above/overlap fully cover lower ones in the projection (topmost wins).
+- `mahjongboard.lua`: `Board` extends `InputContainer` (full-screen sized), paints one
+  `IconWidget` per visible tile inside an `OverlapGroup` (children offset via `overlap_offset`).
+- Geometry (`computeGeometry`): portrait tiles (`th = TILE_ASPECT * tw`, `TILE_ASPECT = 1.4`)
+  sized to fit both axes (`tw = floor(min(usable_w/units_w, (usable_h/units_h)/ASPECT))`),
+  centered with `origin_x/origin_y`; per-layer offsets `offx = floor(tw/2)`, `offy = floor(th/2)`.
+- Children are appended in `buildLayout()` order (bottom layer first) so lower tiles paint under
+  upper ones; `OverlapGroup` gets a board-sized `dimen`.
+- `updateBoard()` frees + rebuilds the tiles and calls `UIManager:setDirty`.
+- Taps: `TapSelect` gesture on `self.dimen` → `hitTest` walks layers top-down and returns the
+  topmost tile whose rect contains the point; forwarded as `(x, y, layer)` via `onTileTap`.
+- `getSize()` returns `self.dimen` — the board is NOT a `FrameContainer` subclass, so the
+  `_padding_*` override crash (`AGENTS.md` pitfall) cannot occur.
+- Per-story harnesses live in `tests/` (see `tests/run.sh`): `us06_board.lua` (geometry,
+  z-order, hit-test, taps, main wiring) and `us06_paint.lua` (paint-contract regression for
+  the crash). New stories extend this suite.
 
-**Acceptance:** Full board renders as 144 tiles in the Turtle silhouette; board fits the screen
-on the target resolution; no blank cells; icons are legible.
+**Acceptance:** Full board renders as 144 tiles in the Turtle silhouette (offset layers readable
+as a 3D stack); board fits the screen on the target resolution; no blank cells; icons legible;
+tap on a tile reports the exact (x, y, layer).
 
 ### US-07 — Core gameplay: select, match, remove, win
 
