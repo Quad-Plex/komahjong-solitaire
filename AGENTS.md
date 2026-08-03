@@ -264,8 +264,16 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
 - Mixing `Geometry` dimen objects with `Screen` objects; always build `Geometry:new{...}` for
   containers/dialogs.
 - Hardcoding pixel sizes; use `Screen:scaleBySize()` so it works across Kindle models.
+- Overriding `getSize()` on a `FrameContainer` subclass WITHOUT setting the
+  `_padding_left/_padding_right/_padding_top/_padding_bottom` fields → every paint of that widget
+  crashes with `framecontainer.lua:143: attempt to perform arithmetic on field '_padding_left' (a nil
+  value)`, silently killing KOReader (no error UI). `FrameContainer:paintTo` calls `getSize()` then
+  reads those fields. This hit US-06's `mahjongboard.lua` `Board:getSize()` (pattern copied from the
+  chess boards, which have the same latent bug). If you override `getSize()`, mirror
+  `FrameContainer:getSize()`'s padding assignments first. The chess boards
+  (`casualkochess.koplugin/*board.lua`) are NOT safe to copy verbatim here.
 
-## Mahjong plugin — implementation state (US-01, US-02 done)
+## Mahjong plugin — implementation state (US-01..US-06 done)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). Read `IMPLEMENTATION_PLAN.md` for
 the locked design and story list. Current state:
@@ -278,7 +286,7 @@ the locked design and story list. Current state:
 - **US-02 (done):** `main.lua` now extends `FrameContainer` (not `WidgetContainer`) with
   `full_width`/`full_height`, `covers_fullscreen = true`, `is_doc_only = false`. Key methods:
   - `startGame()`: closes self if already shown, calls `buildUILayout()`, then `UIManager:show(self)`.
-  - `buildUILayout()`: builds into `self[1]` a `VerticalGroup` = [board-area stub FrameContainer,
+  - `buildUILayout()`: builds into `self[1]` a `VerticalGroup` = [board widget,
     New Game toolbar (`CenterContainer` with a `plus` icon `ButtonWidget`), `self.status_bar`].
     `board_h = full_height - status_h - toolbar_btn_h` (mirrors the chess example's math).
   - `createStatusBar()`: `TitleBarWidget` with `fullscreen = true`, title "Mahjong Solitaire",
@@ -291,6 +299,24 @@ the locked design and story list. Current state:
   - `onCloseWidget()`: cleanup stub (clears `self.board`). `saveGameState()` is an intentional
     empty stub (persistence is US-10); it carries `-- luacheck: no unused args` above it.
   - `createToolbarButton` is a module-local function (not a method) — it never used `self`.
+- **US-03 (done):** 42 tile kinds + 144-tile deck + flower/season match rule in `mahjonglogic.lua`
+  (`createDeck`, `matches`); 45 SVGs in `icons/` (42 faces + `empty`/`select`/`hint`).
+- **US-04 (done):** Turtle `buildLayout()` (144 positions), seeded `newRng`/`shuffle`, `newGame(rng)`.
+- **US-05 (done):** free-tile rules: `tileAt`, `isFree`, `freeTiles`, `hasMoves`.
+- **US-06 (done):** real board rendering. `mahjongboard.lua` extends `FrameContainer` and builds a
+  `ButtonTable` over the 12x6 projection grid (`MahjongLogic.gridBounds()` → x 1..12, y 2..7).
+  - Cell sizing: `cell = floor(min(usable_w/cols, usable_h/rows))` from `Screen:scaleBySize(8)`
+    padding; `icon_height = cell - 2*scaleBySize(4)` (compensates ButtonTable's
+    `Size.padding.buttontable`). Table is centered via `CenterContainer` inside `self[1]`.
+  - Each cell is a button spec with `alpha = true`, `icon = "mahjong/<kind>"` (topmost tile via
+    `MahjongLogic.topTileAt`) or `"mahjong/empty"`, `callback = function() self:handleClick(x,y) end`.
+    `idFor(x,y)` gives 1..72 ids for `getButtonById`.
+  - `updateBoard()` refreshes every cell icon + `UIManager:setDirty(self, "ui")`.
+  - `handleClick(x, y)` forwards to the optional `onTileTap` callback (US-07 hooks here).
+  - Patched `buttontable.lua` + `button.lua` shim copied from `example_app` (alpha passthrough).
+  - `main.lua` now `require("mahjonglogic")`/`require("mahjongboard")`; `startGame()`/`resetGame()`
+    set `self.board = MahjongLogic.newGame()` and `buildUILayout()` renders it. `handleTileTap(x,y)`
+    is an intentional empty stub (`-- luacheck: no unused args`) until US-07.
 
 ### Verification workflow used so far
 

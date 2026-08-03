@@ -310,6 +310,42 @@ function MahjongLogic.hasMoves(board)
     return false
 end
 
+-- Flat projection grid -----------------------------------------------------
+--
+-- The UI renders the 3D board as a flat grid: each (x, y) cell shows the
+-- topmost tile at that position. These helpers give the grid extents and the
+-- topmost tile lookup the renderer needs.
+
+-- Highest layer used by the Turtle layout.
+MahjongLogic.MAX_LAYER = 4
+
+-- Bounds of the projection grid as { x_min, x_max, y_min, y_max }.
+function MahjongLogic.gridBounds()
+    local bounds = {
+        x_min = math.huge,
+        x_max = -math.huge,
+        y_min = math.huge,
+        y_max = -math.huge,
+    }
+    for _, spec in ipairs(LAYOUT_SPEC) do
+        bounds.x_min = math.min(bounds.x_min, spec.x_min)
+        bounds.x_max = math.max(bounds.x_max, spec.x_max)
+        bounds.y_min = math.min(bounds.y_min, spec.y_min)
+        bounds.y_max = math.max(bounds.y_max, spec.y_max)
+    end
+    return bounds
+end
+
+-- Kind of the topmost tile at projection cell (x, y), or nil if the cell is
+-- empty. Topmost means the highest layer; lower tiles are fully covered.
+function MahjongLogic.topTileAt(board, x, y)
+    for layer = MahjongLogic.MAX_LAYER, 0, -1 do
+        local kind = MahjongLogic.tileAt(board, x, y, layer)
+        if kind then return kind end
+    end
+    return nil
+end
+
 -- Self-tests --------------------------------------------------------------
 
 function MahjongLogic.runSelfTests()
@@ -475,6 +511,17 @@ function MahjongLogic.runSelfTests()
     check(not MahjongLogic.hasMoves(m4), "covered matching tiles are not counted by hasMoves")
     check(not MahjongLogic.hasMoves({}), "empty board has no moves")
     check(#MahjongLogic.freeTiles({}) == 0, "empty board has no free tiles")
+
+    -- Flat projection helpers -------------------------------------------
+    local bounds = MahjongLogic.gridBounds()
+    check(bounds.x_min == 1 and bounds.x_max == 12, "grid x extents are 1..12")
+    check(bounds.y_min == 2 and bounds.y_max == 7, "grid y extents are 2..7")
+
+    local proj = boardWith{ {2,2,0,"b1"}, {2,2,1,"c2"}, {2,2,2,"d3"}, {3,2,0,"east"} }
+    check(MahjongLogic.topTileAt(proj, 2, 2) == "d3", "topTileAt returns the highest layer's kind")
+    check(MahjongLogic.topTileAt(proj, 3, 2) == "east", "topTileAt returns a lone tile's kind")
+    check(MahjongLogic.topTileAt(proj, 9, 9) == nil, "topTileAt returns nil for an empty cell")
+    check(MahjongLogic.topTileAt({}, 4, 4) == nil, "topTileAt on an empty board returns nil")
 
     io.write("All self-tests passed.\n")
     return true

@@ -4,18 +4,18 @@ local Blitbuffer = require("ffi/blitbuffer")
 local DataStorage = require("datastorage")
 local Dispatcher = require("dispatcher")
 local UIManager = require("ui/uimanager")
-local Font = require("ui/font")
 local Geometry = require("ui/geometry")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local CenterContainer = require("ui/widget/container/centercontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
-local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
 local TitleBarWidget = require("ui/widget/titlebar")
 local ConfirmBox = require("ui/widget/confirmbox")
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
+local MahjongLogic = require("mahjonglogic")
+local MahjongBoard = require("mahjongboard")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -137,6 +137,7 @@ function Mahjong:startGame()
     if UIManager.isWidgetShown and UIManager:isWidgetShown(self) then
         UIManager:close(self)
     end
+    self.board = MahjongLogic.newGame()
     self:buildUILayout()
     UIManager:show(self)
 end
@@ -145,10 +146,8 @@ function Mahjong:buildUILayout()
     self.status_bar = self:createStatusBar()
     local status_h = self.status_bar:getSize().h
 
-    local pad = Screen:scaleBySize(8)
     local toolbar_btn_h = Screen:scaleBySize(32)
     local toolbar_btn_w = math.floor(self.full_width / 3)
-    local inner_w = self.full_width - 2 * pad
     local board_h = self.full_height - status_h - toolbar_btn_h
 
     local board_area = FrameContainer:new{
@@ -157,12 +156,11 @@ function Mahjong:buildUILayout()
         padding = 0,
         width = self.full_width,
         height = board_h,
-        CenterContainer:new{
-            dimen = Geometry:new{ w = inner_w, h = board_h },
-            TextWidget:new{
-                text = _("Board area"),
-                face = Font:getFace("ffont", 20),
-            },
+        MahjongBoard:new{
+            board = self.board,
+            width = self.full_width,
+            height = board_h,
+            onTileTap = function(x, y) self:handleTileTap(x, y) end,
         },
     }
 
@@ -209,8 +207,13 @@ function Mahjong:createStatusBar()
 end
 
 function Mahjong:resetGame()
+    self.board = MahjongLogic.newGame()
     self:buildUILayout()
     UIManager:setDirty(self, "ui")
+end
+
+-- luacheck: no unused args
+function Mahjong:handleTileTap(x, y)
 end
 
 -- luacheck: no unused args
