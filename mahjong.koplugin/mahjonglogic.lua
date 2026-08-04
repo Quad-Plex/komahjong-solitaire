@@ -344,14 +344,36 @@ function MahjongLogic.isFree(board, x, y, layer)
     if MahjongLogic.tileAt(board, x, y, layer) == nil then
         return false
     end
-    if MahjongLogic.tileAt(board, x, y, layer + 1) ~= nil then
-        return false -- covered from above
+    -- Covered from above: any tile at layer + 1 whose 1x1 rect overlaps ours.
+    -- On the half-grid, offsets of -0.5, 0, 0.5 can overlap.
+    for dx = -0.5, 0.5, 0.5 do
+        for dy = -0.5, 0.5, 0.5 do
+            if MahjongLogic.tileAt(board, x + dx, y + dy, layer + 1) then
+                return false
+            end
+        end
     end
-    if MahjongLogic.tileAt(board, x - 1, y, layer) ~= nil
-        and MahjongLogic.tileAt(board, x + 1, y, layer) ~= nil then
-        return false -- blocked on both sides
+
+    -- Blocked on the left: any tile at layer whose right edge touches our left
+    -- edge (nx = x-1) and whose y-range overlaps ours.
+    local blocked_left = false
+    for dy = -0.5, 0.5, 0.5 do
+        if MahjongLogic.tileAt(board, x - 1, y + dy, layer) then
+            blocked_left = true
+            break
+        end
     end
-    return true
+
+    -- Blocked on the right: same logic, nx = x+1.
+    local blocked_right = false
+    for dy = -0.5, 0.5, 0.5 do
+        if MahjongLogic.tileAt(board, x + 1, y + dy, layer) then
+            blocked_right = true
+            break
+        end
+    end
+
+    return not (blocked_left and blocked_right)
 end
 
 -- All free tiles on a board, as an array of { x, y, layer, kind } tables.
@@ -637,6 +659,14 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.isFree(b2, 4, 2, 0), "edge tile with one side open is free")
     check(MahjongLogic.isFree(b2, 6, 2, 0), "edge tile with one side open is free")
 
+    local b_half = boardWith{ {2,2,0,"b1"}, {1,1.5,0,"b2"}, {1,2.5,0,"b3"}, {3,2,0,"b4"} }
+    check(not MahjongLogic.isFree(b_half, 2, 2, 0), "tile blocked by half-grid neighbours on both sides is not free")
+    check(MahjongLogic.isFree(boardWith{ {2,2,0,"b1"}, {1,1.5,0,"b2"}, {1,2.5,0,"b3"} }, 2, 2, 0),
+        "tile with one side (left) blocked by two half-neighbours but other side open is free")
+
+    local b_cap = boardWith{ {6,3,0,"b1"}, {6.5,3.5,1,"b2"} }
+    check(not MahjongLogic.isFree(b_cap, 6, 3, 0), "tile partially covered from above is not free")
+
     local free = MahjongLogic.freeTiles(b)
     check(#free == 2, "freeTiles finds exactly the free tiles (got " .. #free .. ")")
     local free_ok = true
@@ -798,7 +828,7 @@ function MahjongLogic.runSelfTests()
     -- freeTiles parses their fractional position keys.
     local tur = MahjongLogic.newGame(42)
     check(MahjongLogic.isFree(tur, 0, 3.5, 0), "head tile is free")
-    check(MahjongLogic.isFree(tur, 13, 3.5, 0), "left tail tile is free")
+    check(not MahjongLogic.isFree(tur, 13, 3.5, 0), "left tail tile is blocked on both sides")
     check(MahjongLogic.isFree(tur, 14, 3.5, 0), "right tail tile is free")
     check(MahjongLogic.isFree(tur, 6.5, 3.5, 4), "cap tile is free")
     local ft = MahjongLogic.freeTiles(tur)

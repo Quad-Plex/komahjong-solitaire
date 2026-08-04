@@ -178,6 +178,7 @@ function Board:rebuildTiles()
                 width = self.tile_w,
                 height = self.tile_h,
                 overlap_offset = { px, py },
+                alpha = true,
             }
             children[#children + 1] = w
             self.tile_widgets[MahjongLogic.posKey(p.x, p.y, p.layer)] = w
@@ -262,8 +263,50 @@ function Board:removeTile(x, y, layer)
         ov:free()
     end
 
+    -- Update same-layer neighbors whose bevels might have been occluded by
+    -- this tile. Bevels (right/bottom) are only hidden by tiles to the
+    -- east/south, so removing this tile can only expose bevels of tiles to
+    -- its west/north.
+    for dy = -0.5, 0.5, 0.5 do
+        self:refreshTileIcon(x - 1, y + dy, layer)
+    end
+    for dx = -0.5, 0.5, 0.5 do
+        self:refreshTileIcon(x + dx, y - 1, layer)
+    end
+
     UIManager:setDirty("all", "ui")
     return true
+end
+
+-- Re-resolves the icon for the tile at (x, y, layer) and replaces its widget
+-- if the icon (i.e. its bevel variants) has changed. Used after a neighbor
+-- is removed.
+function Board:refreshTileIcon(x, y, layer)
+    local key = MahjongLogic.posKey(x, y, layer)
+    local w = self.tile_widgets[key]
+    if not w then return end
+
+    local new_icon = "mahjong/" .. MahjongLogic.iconForTile(self.board, x, y, layer)
+    if w.icon == new_icon then return end
+
+    local px, py = self:tilePos(x, y, layer)
+    local new_w = IconWidget:new{
+        icon = new_icon,
+        width = self.tile_w,
+        height = self.tile_h,
+        overlap_offset = { px, py },
+        alpha = true,
+    }
+
+    -- Swap in the map and the overlap group
+    self.tile_widgets[key] = new_w
+    for i = 1, #(self.overlap or {}) do
+        if self.overlap[i] == w then
+            self.overlap[i] = new_w
+            break
+        end
+    end
+    w:free()
 end
 
 -- Removes a matched pair (a and b are { x, y, layer } tables) with a single
@@ -295,6 +338,7 @@ function Board:setOverlay(x, y, layer, icon)
         width = self.tw,
         height = self.th,
         overlap_offset = { px, py },
+        alpha = true,
     }
     self.overlays[key] = ov
     self.overlap[#self.overlap + 1] = ov
