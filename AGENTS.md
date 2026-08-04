@@ -334,8 +334,13 @@ the locked design and story list. Current state:
   anchored top-left. **Bevels only appear on exposed edges:** each kind ships in four variants
   — base (both bevels), `_nb` (no bottom), `_nr` (no right), `_n` (neither) — because a
   same-layer neighbour below/right would otherwise leave a fake dark seam inside an otherwise
-  solid layer. The board picks the variant per tile via `MahjongLogic.iconForTile(board,x,y,layer)`,
-  which also handles the half-grid head/tail: an edge fully covered by TWO half-overlapping
+   solid layer. Where BOTH bevels are exposed (base variant) the two side faces meet along a
+   **diagonal line** from the face's bottom-right corner (100,140) to the widget corner (110,154) —
+   the block's front-right edge as seen from the bottom-right camera, so the corner reads as one
+   receding point (the implied rectangular box) instead of a flat L; the upper-left triangle of
+   the corner is the right face (medium), the lower-right is the base face (dark). Single-bevel
+   variants keep plain rectangles. The board picks the variant per tile via `MahjongLogic.iconForTile(board,x,y,layer)`,
+   which also handles the half-grid head/tail: an edge fully covered by TWO half-overlapping
   same-layer neighbours (`(x+1,y-0.5)` + `(x+1,y+0.5)`) hides the bevel too, while a
   partly-exposed edge keeps it. Symbols are authored in 100x100 space and wrapped in
   `<g transform="translate(0,20)">` to center them in the taller face. Overlays

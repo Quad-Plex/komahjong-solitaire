@@ -89,6 +89,19 @@ FACE_W, FACE_H = 100, 140
 FACE_BEVEL_RIGHT = '<rect x="100" y="0" width="10" height="154" fill="#78909c"/>'
 FACE_BEVEL_BOTTOM = '<rect x="0" y="140" width="100" height="14" fill="#546e7a"/>'
 
+# Corner-diagonal bevels: when BOTH bevels are exposed (base variant) the two
+# side faces meet along a DIAGONAL line from the face's bottom-right corner
+# (100,140) to the widget's bottom-right corner (110,154). That diagonal is the
+# block's front-right vertical edge as seen from the bottom-right camera, so the
+# corner reads as one receding point (the implied rectangular box) instead of a
+# square L where the right face flatly covers the corner. The upper-left
+# triangle of the corner square belongs to the right face (medium #78909c), the
+# lower-right to the base/front face (dark #546e7a). Single-bevel variants
+# (only one exposed edge) keep plain rectangles — a lone strip has no other face
+# to meet, so its outer edge stays straight.
+FACE_BEVEL_RIGHT_CORNER = '<path d="M100 0 L110 0 L110 154 L100 140 Z" fill="#78909c"/>'
+FACE_BEVEL_BOTTOM_CORNER = '<path d="M0 140 L100 140 L110 154 L0 154 Z" fill="#546e7a"/>'
+
 # Face outline: thin medium-gray ring inside the face box, ~1 viewBox unit
 # (~1 device px on the target screen). Same tone as the side bevel. See the
 # tile-body comment above.
@@ -98,10 +111,14 @@ FACE_STROKE_COLOR = "#78909c"
 
 def face(bottom=True, right=True):
     parts = []
-    if right:
-        parts.append(FACE_BEVEL_RIGHT)
-    if bottom:
-        parts.append(FACE_BEVEL_BOTTOM)
+    if right and bottom:
+        parts.append(FACE_BEVEL_RIGHT_CORNER)
+        parts.append(FACE_BEVEL_BOTTOM_CORNER)
+    else:
+        if right:
+            parts.append(FACE_BEVEL_RIGHT)
+        if bottom:
+            parts.append(FACE_BEVEL_BOTTOM)
     s = FACE_STROKE
     parts.append(f'<rect x="{s / 2:.1f}" y="{s / 2:.1f}" '
                  f'width="{FACE_W - s}" height="{FACE_H - s}" rx="3" '
