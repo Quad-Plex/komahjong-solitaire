@@ -43,6 +43,15 @@ local function make_class()
         return o
     end
     function cls:free() end
+    -- Generic getSize/setText so real plugin widgets that call them (e.g.
+    -- HudBar, via its chip TextWidgets and children) don't crash headlessly.
+    -- Real dimensions aren't available without KOReader, so these are stubs;
+    -- HudBar overrides getSize itself.
+    function cls:getSize()
+        return { w = self.width or 0, h = self.height or 0 }
+    end
+    function cls:setText(text) self.text = text end
+    function cls:resetLayout() end
     return cls
 end
 
@@ -109,6 +118,15 @@ function M.newContext()
             registerToMainMenu = function() ctx.menu_registered = true end,
         },
     }
+    -- Real FrameContainer:new copies "layout" to self[1]; mock must do the same
+    -- or getSize() crashes with "attempt to index a nil value".
+    function frame_container:new(o)
+        o = self:extend(o or {})
+        if o.layout then o[1] = o.layout end
+        -- Mirror Widget:new: call init() if present
+        if o.init then o:init() end
+        return o
+    end
 
     ctx.mocks = {
         ["device"] = { screen = ctx.screen },
@@ -162,8 +180,28 @@ function M.newContext()
         ["ui/widget/horizontalgroup"] = {
             new = function(_, o) return o end,
         },
+        ["ui/widget/textwidget"] = {
+            new = function(_, o)
+                o = o or {}
+                setmetatable(o, { __index = widget_base })
+                return o
+            end,
+        },
+        ["ui/font"] = {
+            getFace = function(_, name, size)
+                return {
+                    name = name,
+                    size = size,
+                    ftsize = { getHeightAndAscender = function() return 20, 15 end },
+                }
+            end,
+        },
         ["ui/widget/button"] = {
-            new = function(_, o) o = o or {}; return o end,
+            new = function(_, o)
+                o = o or {}
+                o.getSize = function() return { w = o.width or 32, h = o.height or 32 } end
+                return o
+            end,
         },
         ["ui/widget/titlebar"] = {
             new = function(_, o)
@@ -189,6 +227,17 @@ function M.newContext()
 
     for name, mod in pairs(ctx.mocks) do
         package.preload[name] = function() return mod end
+    end
+
+    -- Preload the REAL plugin modules too, so a require() from one plugin
+    -- module to another (e.g. main.lua requires hudbar) resolves regardless
+    -- of the order tests call ctx.loadPlugin(). The module bodies only run
+    -- when require()'d; ctx.loadPlugin() (below) loads the same file.
+    for _, name in ipairs({ "mahjonglogic", "mahjongboard", "hudbar", "main" }) do
+        local path = M.ROOT .. "/mahjong.koplugin/" .. name .. ".lua"
+        local chunk, err = loadfile(path)
+        assert(chunk, "cannot preload plugin module " .. name .. ": " .. tostring(err))
+        package.preload[name] = chunk
     end
 
     -- Override/insert a stub (call BEFORE loading the plugin modules).

@@ -11,13 +11,13 @@ local HorizontalGroup = require("ui/widget/horizontalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local ButtonWidget = require("ui/widget/button")
-local TitleBarWidget = require("ui/widget/titlebar")
 local ConfirmBox = require("ui/widget/confirmbox")
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
 local MahjongLogic = require("mahjonglogic")
 local MahjongBoard = require("mahjongboard")
+local HudBar = require("hudbar")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -242,18 +242,13 @@ function Mahjong:buildUILayout()
 end
 
 function Mahjong:createStatusBar()
-    return TitleBarWidget:new{
-        fullscreen             = true,
+    -- HUD top bar (hudbar.lua): title + three stat chips (Pairs / Free /
+    -- Score) + the quit X, replacing the old TitleBarWidget text subtitle.
+    -- updateStatus() pushes the values via setStats().
+    return HudBar:new{
         title                  = _("Mahjong Solitaire"),
-        subtitle               = _("Pairs remaining: 72 · Free pairs: 0 · Score: 0"),
-        title_top_padding      = Screen:scaleBySize(2),
-        bottom_v_padding       = Screen:scaleBySize(8),
-        -- Bigger, bolder quit X: the custom mahjong/close icon at 0.9x the
-        -- generic icon size (stock TitleBar uses 0.6x), which also widens the
-        -- button's tap zone. right_icon_tap_callback replaces close_callback,
-        -- which would force the stock thin "close" icon.
-        right_icon              = "mahjong/close",
-        right_icon_size_ratio   = 0.9,
+        right_icon             = "mahjong/close",
+        right_icon_size_ratio  = 0.9,
         right_icon_tap_callback = function()
             UIManager:show(ConfirmBox:new{
                 text        = _("Exit Mahjong Solitaire?"),
@@ -429,14 +424,13 @@ function Mahjong:shuffleBoard(force, attempts)
     end
 end
 
--- Status bar reflects the pairs left, the number of currently-matching free
--- pairs (legal moves available to tap), and the score.
+-- The HUD bar reflects the pairs left, the number of currently-matching free
+-- pairs (legal moves available to tap), and the score — each in its own chip.
 function Mahjong:updateStatus()
     if not self.status_bar then return end
     local pairs = math.floor(MahjongLogic.tileCount(self.board) / 2)
     local free = MahjongLogic.countFreePairs(self.board)
-    self.status_bar:setSubTitle(string.format(_("Pairs remaining: %d · Free pairs: %d · Score: %d"),
-                                              pairs, free, self.score))
+    self.status_bar:setStats(pairs, free, self.score)
     -- status_bar is a subwidget, so setDirty on it alone would not repaint;
     -- flag the window-level widget as well (same pattern as the chess example).
     UIManager:setDirty(self.status_bar, "ui")

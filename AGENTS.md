@@ -262,6 +262,16 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
 ## Common pitfalls (from the example + docs)
 
 - Forgetting `UIManager:setDirty` → UI doesn't update.
+- **Children go in ARRAY position (`self[1]`, not a named field):** KOReader containers
+  (`FrameContainer`, `WidgetContainer`) store their child at array index 1 — 
+  `FrameContainer:new{ child, bordersize = 1, ... }`. Passing the child as a **named**
+  field instead — `FrameContainer:new{ layout = child, ... }` — leaves `self[1]` nil, so
+  `FrameContainer:getSize()` (and `WidgetContainer:getSize()`, paintTo) die with
+  `framecontainer.lua:55: attempt to index a nil value` the moment the widget measures or
+  paints itself, silently killing KOReader at launch. Mix named options with a positional
+  child freely (`{ child, border=... }` puts `child` at `[1]` and the rest as fields).
+  `HorizontalGroup`/`VerticalGroup` do the same: they iterate `ipairs(self)`, so pass each
+  child as an array element, not `layout = ...`. (Root cause of a HUD-bar launch crash.)
 - **`setDirty` on subwidgets:** KOReader's `_repaint` only repaints window-level widgets
   flagged in `_dirty`. Calling `setDirty(subwidget, "ui")` enqueues a refresh region but
   NEVER flags a window widget for repaint, leaving the screen stale. Subwidgets must either
@@ -295,8 +305,8 @@ the locked design and story list. Current state:
 
 - **Repo layout:** `AGENTS.md`, `IMPLEMENTATION_PLAN.md`, `mahjong.koplugin/` (the deliverable),
   `tests/` (official suite: `run.sh`, `mock.lua`, `us01_shell.lua`, `us03_icons.lua`,
-  `us06_board.lua`, `us06_paint.lua`, `board_updates.lua`), `install_plugin.sh` (device sync
-  script), `example_app/casualkochess.koplugin/` (reference).
+  `us06_board.lua`, `us06_paint.lua`, `board_updates.lua`, `hud_bar.lua`), `install_plugin.sh`
+  (device sync script), `example_app/casualkochess.koplugin/` (reference).
 - **US-01 (done):** `_meta.lua` + `main.lua` skeleton; menu entry under `sorting_hint="tools"`
   ("Mahjong Solitaire"); `Dispatcher` action `mahjong` → event `MahjongStart` with `general=true`.
   The original separate placeholder widget was replaced by US-02's real shell — do not resurrect it.
@@ -308,14 +318,25 @@ the locked design and story list. Current state:
     bottom `VerticalSpan`] — title bar on top, board in the middle, toolbar at the
     bottom raised off the screen edge.
     `board_h = full_height - status_h - toolbar_btn_h - bottom_gap`.
-  - `createStatusBar()`: `TitleBarWidget` with `fullscreen = true`, title "Mahjong Solitaire",
-    and a custom quit X: `right_icon = "mahjong/close"` (a bold 4px-stroke X shipped in
-    `icons/`, the stock `close` icon is a thin 1.5px X) at `right_icon_size_ratio = 0.9`
-    (stock uses 0.6), with `right_icon_tap_callback` → `ConfirmBox` ("Exit Mahjong
-    Solitaire?") → `saveGameState()` stub + `UIManager:close(self, "full")`. Note the
-    tap callback uses `right_icon`/`right_icon_tap_callback` rather than `close_callback`,
-    because `close_callback` forces the stock thin `close` icon in `TitleBar:init()`.
-    `tests/us01_shell.lua`/`us06_board.lua` therefore read `status_bar.right_icon_tap_callback`.
+  - `createStatusBar()`: returns a `HudBar` from `hudbar.lua` (the file
+    `require("hudbar")` in `main.lua`). `HudBar` extends `FrameContainer` and renders a
+    full-width light-gray band: title "Mahjong Solitaire" (left), three stat **chips**
+    (rounded white pills, dark-gray border, `radius`/`bordersize`/`background` on a
+    `FrameContainer`) for Pairs remaining / Free pairs / Score, and the quit X (right).
+    Each chip is a `VerticalGroup` of icon (`mahjong/hud_pairs`, `mahjong/lightbulb`,
+    `mahjong/hud_score`) over a bold value (`smallinfofontbold`) over a tiny label
+    (`smallinfofont`); the bar is a `HorizontalGroup` whose default `align = "center"`
+    vertically centers the title, chips and X (no `CenterContainer` gymnastics needed).
+    The quit X is a `ButtonWidget` (icon-only, `bordersize = 0`, background = the bar
+    color so only the bold X shows) with `callback = right_icon_tap_callback` → `ConfirmBox`
+    ("Exit Mahjong Solitaire?") → `saveGameState()` stub + `UIManager:close(self, "full")`.
+    The bar keeps `title`/`right_icon`/`right_icon_size_ratio`/`right_icon_tap_callback`
+    fields, so `tests/us01_shell.lua`/`us06_board.lua` still read `status_bar.right_icon_tap_callback`.
+    `HudBar` overrides `getSize()` (returns `Geom:new{w=full_width, h=HUD_H}`) — it MUST set
+    the `_padding_left/right/top/bottom` fields in `init()` or every paint crashes with the
+    framecontainer `_padding_*` nil error (see the pitfall above). Both `VerticalGroup` and
+    `HorizontalGroup` memoize their size (`_size`/`_offsets`), so `setStats()` calls
+    `resetLayout()` on the chip layouts and the bar layout after a value changes width.
   - New Game button → `ConfirmBox` ("Start a new game?") → `resetGame()` = rebuild layout +
     `UIManager:setDirty(self, "ui")`.
   - `handleEvent()`: dispatcher guard (`onMahjongStart`) then the `_window_stack` check, then
@@ -441,11 +462,11 @@ the locked design and story list. Current state:
     then `checkGameState`; tap on a non-matching free tile → switch selection; non-free tiles
     are ignored. `checkGameState`: empty board → Win `ConfirmBox` ("Play again" → `resetGame`,
     "Close" → save + `UIManager:close`); no moves → immediate `shuffleBoard()` (US-07's simple
-    variant; US-08 adds the prompt/repeat UX). `updateStatus()` sets the title bar subtitle to
-    "Pairs remaining: N · Free pairs: F · Score: S" via `self.status_bar:setSubTitle(...)`
-    (the TitleBarWidget API — same as the chess example), where `F` comes from the new
-    `MahjongLogic.countFreePairs(board)` (distinct currently-matching free pairs = legal moves
-    available to tap), + `UIManager:setDirty(self.status_bar, "ui")`.
+    variant; US-08 adds the prompt/repeat UX). `updateStatus()` pushes the three numbers into
+    the HUD chips via `self.status_bar:setStats(pairs, free, score)` — pairs remaining, the
+    count of currently-matching free pairs (legal moves available to tap, from the new
+    `MahjongLogic.countFreePairs(board)`), and the score — + `UIManager:setDirty(self.status_bar, "ui")`
+    and the window-level widget.
   - **Repaint fix:** after initial deployment showed "zero effect" taps, the board internal
     dirty calls were changed from `setDirty(self)` to `setDirty("all", "ui")`. Because the board
     is a nested subwidget, only the "all" sentinel (or dirtying the window-level widget `self`
@@ -456,6 +477,31 @@ the locked design and story list. Current state:
     non-free ignored, selection switch, Win dialog play-again/close, and dead-board shuffle.
     The mock's titlebar stub gained `setSubTitle`/`setTitle` and now tracks all `setDirty`
     calls for regression testing.
+- **HUD bar (done, 2-row):** the top of the screen is now a stylized `HudBar`
+  (`mahjong.koplugin/hudbar.lua`, `require("hudbar")` in `main.lua`) instead of a
+  `TitleBarWidget`. It is a full-width `VerticalGroup` of two rows:
+  - **Row 1:** the title text (left) and the quit X (far right) — a `ButtonWidget`
+    with `bordersize = 0`, `background = BAR_BG` so only the icon shows.
+  - **Row 2:** the three stat chips side by side: **Pairs** (`mahjong/hud_pairs`, a
+    Material "layers" glyph), **Free** (`mahjong/lightbulb`), **Score**
+    (`mahjong/hud_score`, a Material "star" glyph). Each chip is a rounded white pill
+    (`bordersize`, `radius`, `background = WHITE`, `color = DARK_GRAY`) whose content is
+    a `HorizontalGroup`: **icon | value | label**, so the icon is on the left, the bold
+    value in the middle, and the tiny label at the right corner of the pill.
+  - `setStats(pairs, free, score)` pushes the three values into the chip value
+    TextWidgets and calls `resetLayout()` on the chip layouts + the bar layout so the
+    memoized groups re-measure.
+  `tests/hud_bar.lua` (registered in `tests/run.sh`, preloaded by `mock.lua` alongside
+  the other plugin modules so `main.lua`'s `require("hudbar")` resolves) checks the two-row
+  bar shape (title + 3 chips + quit X in row 1/row 2), that each chip is an
+  icon/value/label row, and that `setStats()` both stores and pushes the values;
+  `us01_shell.lua`/`us06_board.lua` still read `status_bar.right_icon_tap_callback` for
+  the close flow.
+  - **Row-height note:** the bar does NOT call `getSize()` on its own groups to compute
+    `HUD_H`; it measures the individual child widgets (`title`, `quit_button`, the chips)
+    first, then sums them. This avoids calling `getSize()` on `HorizontalSpan` (no such
+    method) and sidesteps the group-size cache. When sizing a bar by its children, always
+    measure the direct children, never the group.
 - **US-08 (done):** undo, hint, and shuffle UX in `main.lua` + board/logic hooks.
   - Toolbar is now a 4-button `HorizontalGroup` under the board: `mahjong/chevron.left`
     (undo), `mahjong/lightbulb` (hint), `mahjong/shuffle` (shuffle), `plus` (new game).
@@ -517,6 +563,13 @@ the locked design and story list. Current state:
   ok_callbacks, and assert the mock window stack/`self[1]` change correctly.
 - Mock gotcha: the stubbed `WidgetContainer:extend` must be `function(self, o)` (colon receiver)
   or `:extend{...}` silently drops the class table → "loop in gettable" at runtime.
+- Mock gotcha (container `new`): the mock's `frame_container.new` must mimic KOReader's
+  `Widget:new` — it must (a) call `self:extend(o)` so a subclass table's metatable chain is
+  preserved, (b) copy a positional child to `o[1]` (and map `o.layout` to `o[1]` for code that
+  still uses the old named form), and (c) call `o:init()` if present. Forgetting any of these
+  makes the harness either crash with a nil `self[1]` or silently skip `init()` (no dispatcher
+  action registered). The plugin code itself must pass children as positional array args (see
+  the Common-pitfalls entry on `self[1]`).
 - KOReader UI code can't be exercised headlessly; the harness proves load-order, return values,
   and control flow. Visual checks still need the real device/emulator.
 

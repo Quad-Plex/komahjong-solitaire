@@ -104,10 +104,12 @@ expect(Logic.tileCount(mj.board) == 142,
 expect(mapCount(mj.board_view.tile_widgets) == 142 and mapCount(mj.board_view.overlays) == 0,
     "pair removal drops exactly the two widgets and any overlays")
 expect(mj.score == 10, "score stub adds 10 per pair (got " .. tostring(mj.score) .. ")")
-expect(ctx.status_subtitle == string.format("Pairs remaining: 71 · Free pairs: %d · Score: 10",
-        Logic.countFreePairs(mj.board)),
-    "status bar shows the remaining pairs, free pairs, and score (got '"
-        .. tostring(ctx.status_subtitle) .. "')")
+expect(mj.status_bar.stats.pairs == 71
+        and mj.status_bar.stats.free == Logic.countFreePairs(mj.board)
+        and mj.status_bar.stats.score == 10,
+    "HUD chips show the remaining pairs, free pairs, and score (got "
+        .. tostring(mj.status_bar.stats.pairs) .. "/" .. tostring(mj.status_bar.stats.free)
+        .. "/" .. tostring(mj.status_bar.stats.score) .. ")")
 local window_dirtied = false
 for _, c in ipairs(ctx.dirty_calls) do
     if c.widget == mj then window_dirtied = true end
@@ -161,9 +163,12 @@ expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again"
 ctx.last_confirm.ok_callback()
 expect(Logic.tileCount(mj_win.board) == 144 and mj_win.score == 0 and mj_win.selected == nil,
     "'Play again' resets to a fresh shuffled board")
-expect(ctx.status_subtitle == string.format("Pairs remaining: 72 · Free pairs: %d · Score: 0",
-        Logic.countFreePairs(mj_win.board)),
-    "status bar resets after play-again (got '" .. tostring(ctx.status_subtitle) .. "')")
+expect(mj_win.status_bar.stats.pairs == 72
+        and mj_win.status_bar.stats.free == Logic.countFreePairs(mj_win.board)
+        and mj_win.status_bar.stats.score == 0,
+    "HUD chips reset after play-again (got "
+        .. tostring(mj_win.status_bar.stats.pairs) .. "/" .. tostring(mj_win.status_bar.stats.free)
+        .. "/" .. tostring(mj_win.status_bar.stats.score) .. ")")
 
 -- ---- Win dialog: Close ----------------------------------------------------------
 

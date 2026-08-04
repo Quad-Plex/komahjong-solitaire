@@ -339,6 +339,20 @@ def generate():
                             'stroke-linecap="round"/>'
                             '<path d="M19 5 L5 19" fill="none" stroke="#000000" stroke-width="4" '
                             'stroke-linecap="round"/></svg>')
+    # HUD chip icons (hudbar.lua): Material Design glyphs — "layers" for the
+    # Pairs-remaining chip and a star for the Score chip. The Free-pairs chip
+    # reuses the lightbulb shipped above. Like the toolbar icons these are
+    # imported 24x24 flat-fill paths.
+    written["hud_pairs.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                                'viewBox="0 0 24 24" width="24">'
+                                '<path d="M0 0h24v24H0z" fill="none"/>'
+                                '<path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 '
+                                '5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>')
+    written["hud_score.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                                'viewBox="0 0 24 24" width="24">'
+                                '<path d="M0 0h24v24H0z" fill="none"/>'
+                                '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 '
+                                '9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>')
     return written
 
 
