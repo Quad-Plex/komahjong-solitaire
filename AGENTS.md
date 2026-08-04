@@ -288,7 +288,7 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   avoids the trap entirely: it extends `InputContainer`, not `FrameContainer`, and `getSize()` just
   returns `self.dimen`.)
 
-## Mahjong plugin — implementation state (US-01..US-07 done)
+## Mahjong plugin — implementation state (US-01..US-08 done)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). Read `IMPLEMENTATION_PLAN.md` for
 the locked design and story list. Current state:
@@ -303,12 +303,19 @@ the locked design and story list. Current state:
 - **US-02 (done):** `main.lua` now extends `FrameContainer` (not `WidgetContainer`) with
   `full_width`/`full_height`, `covers_fullscreen = true`, `is_doc_only = false`. Key methods:
   - `startGame()`: closes self if already shown, calls `buildUILayout()`, then `UIManager:show(self)`.
-  - `buildUILayout()`: builds into `self[1]` a `VerticalGroup` = [board widget,
-    New Game toolbar (`CenterContainer` with a `plus` icon `ButtonWidget`), `self.status_bar`].
-    `board_h = full_height - status_h - toolbar_btn_h` (mirrors the chess example's math).
+  - `buildUILayout()`: builds into `self[1]` a `VerticalGroup` = [`self.status_bar`,
+    board widget, New Game toolbar (`CenterContainer` with a `plus` icon `ButtonWidget`),
+    bottom `VerticalSpan`] — title bar on top, board in the middle, toolbar at the
+    bottom raised off the screen edge.
+    `board_h = full_height - status_h - toolbar_btn_h - bottom_gap`.
   - `createStatusBar()`: `TitleBarWidget` with `fullscreen = true`, title "Mahjong Solitaire",
-    `close_callback` → `ConfirmBox` ("Exit Mahjong Solitaire?") → `saveGameState()` stub +
-    `UIManager:close(self, "full")`.
+    and a custom quit X: `right_icon = "mahjong/close"` (a bold 4px-stroke X shipped in
+    `icons/`, the stock `close` icon is a thin 1.5px X) at `right_icon_size_ratio = 0.9`
+    (stock uses 0.6), with `right_icon_tap_callback` → `ConfirmBox` ("Exit Mahjong
+    Solitaire?") → `saveGameState()` stub + `UIManager:close(self, "full")`. Note the
+    tap callback uses `right_icon`/`right_icon_tap_callback` rather than `close_callback`,
+    because `close_callback` forces the stock thin `close` icon in `TitleBar:init()`.
+    `tests/us01_shell.lua`/`us06_board.lua` therefore read `status_bar.right_icon_tap_callback`.
   - New Game button → `ConfirmBox` ("Start a new game?") → `resetGame()` = rebuild layout +
     `UIManager:setDirty(self, "ui")`.
   - `handleEvent()`: dispatcher guard (`onMahjongStart`) then the `_window_stack` check, then
@@ -435,8 +442,10 @@ the locked design and story list. Current state:
     are ignored. `checkGameState`: empty board → Win `ConfirmBox` ("Play again" → `resetGame`,
     "Close" → save + `UIManager:close`); no moves → immediate `shuffleBoard()` (US-07's simple
     variant; US-08 adds the prompt/repeat UX). `updateStatus()` sets the title bar subtitle to
-    "Pairs remaining: N · Score: S" via `self.status_bar:setSubTitle(...)` (the TitleBarWidget
-    API — same as the chess example) + `UIManager:setDirty(self.status_bar, "ui")`.
+    "Pairs remaining: N · Free pairs: F · Score: S" via `self.status_bar:setSubTitle(...)`
+    (the TitleBarWidget API — same as the chess example), where `F` comes from the new
+    `MahjongLogic.countFreePairs(board)` (distinct currently-matching free pairs = legal moves
+    available to tap), + `UIManager:setDirty(self.status_bar, "ui")`.
   - **Repaint fix:** after initial deployment showed "zero effect" taps, the board internal
     dirty calls were changed from `setDirty(self)` to `setDirty("all", "ui")`. Because the board
     is a nested subwidget, only the "all" sentinel (or dirtying the window-level widget `self`
@@ -447,6 +456,47 @@ the locked design and story list. Current state:
     non-free ignored, selection switch, Win dialog play-again/close, and dead-board shuffle.
     The mock's titlebar stub gained `setSubTitle`/`setTitle` and now tracks all `setDirty`
     calls for regression testing.
+- **US-08 (done):** undo, hint, and shuffle UX in `main.lua` + board/logic hooks.
+  - Toolbar is now a 4-button `HorizontalGroup` under the board: `mahjong/chevron.left`
+    (undo), `mahjong/lightbulb` (hint), `mahjong/shuffle` (shuffle), `plus` (new game).
+    The hint/shuffle icons are Material Design SVGs shipped in `icons/` (see the US-03 note
+    on `lightbulb.svg`/`shuffle.svg`) — the stock KOReader icon set has **no**
+    `lightbulb`/`refresh`/`shuffle`, so verify any icon name against `resources/icons/mdlight`
+    before use. The toolbar holds 4 action buttons **separated by 3 `HorizontalSpan`
+    spacers plus one edge spacer on each side** (5 total — the outer buttons must not
+    scrape the screen edges) — `tests/us01_shell.lua`/`us06_board.lua` scan the toolbar
+    for bordered buttons instead of hardcoding indices
+    (buttons sit at children 2/4/6/8 of `mj[1][3]`, gaps at 1/3/5/7/9).
+  - **Button styling (UI pass):** each toolbar button is a slim rounded rectangle —
+    `bordersize = 1px`, `radius = 4px`, `padding = 6px` around a square centered icon —
+    so the whole `w × 48px` widget is the tap area. **Do NOT use a `spacing` field on
+    `HorizontalGroup`** — the stock KOReader group widget ignores it (verified against the
+    source; the user hit exactly this: buttons stayed flush). Use `HorizontalSpan:new{ width = gap }`
+    widgets between buttons. `toolbar_btn_w = floor((full_width - 5*gap)/4)` accounts for the
+    five gaps (3 between + 2 edges). `createToolbarButton` computes the icon size as `h - 2*pad - 2*border`
+    (ButtonWidget's total height = icon_height + 2*padding + 2*bordersize).
+  - **Undo:** `self.history` is a stack of `{ a, b, ka, kb, score }` records pushed on every
+    successful pair removal. `MahjongLogic.undoPair(board, a, b, ka, kb)` re-inserts the two
+    kinds; `Mahjong:undo()` pops the last move, clears the selection, restores the logic board,
+    calls `board_view:addPair(...)` (new incremental add), subtracts the move's score, and
+    updates status. The board's `addTile`/`addPair` insert a tile into `tiles_by_layer`,
+    refresh west/north neighbours' bevel variants, then `syncOverlapGroup()` (which now rebuilds
+    the `OverlapGroup` child array from `tiles_by_layer` in layer order 0..4 plus overlays —
+    this replaces the old "swap in place" logic that broke when a removed tile's `refreshTileIcon`
+    rebuilt widgets). `removeTile` also calls `syncOverlapGroup()` so incremental removal and
+    addition share one z-order-safe path.
+  - **Hint:** `Mahjong:showHint()` finds `matchingFreePair`, draws the `hint` overlay on both
+    tiles, and clears it after 2s via `UIManager:scheduleIn` (guarding that the board widget
+    hasn't been replaced). If no move exists it offers the shuffle prompt.
+  - **Shuffle:** `shuffleBoard()` (toolbar) prompts with a `ConfirmBox`; the no-moves path in
+    `checkGameState()` shows a prompt too (replacing US-07's silent immediate shuffle). After
+    shuffling it auto-repeats **at most 10 times** while the board still has no moves (a board
+    whose remaining kinds can never pair must not recurse forever). `shuffleBoard(force)` skips
+    the prompt.
+  - **US-08 acceptance covered by** `tests/us08_features.lua` (registered in `tests/run.sh`):
+    undo restores the exact previous state (logic board, widgets, score, history), undo on empty
+    history is a no-op, hint draws two overlays, shuffle preserves the multiset, and a dead board
+    prompts rather than shuffling silently.
 
 ### Verification workflow used so far
 

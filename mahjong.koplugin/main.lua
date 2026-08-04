@@ -6,8 +6,10 @@ local Dispatcher = require("dispatcher")
 local UIManager = require("ui/uimanager")
 local Geometry = require("ui/geometry")
 local FrameContainer = require("ui/widget/container/framecontainer")
-local CenterContainer = require("ui/widget/container/centercontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
+local HorizontalSpan = require("ui/widget/horizontalspan")
 local ButtonWidget = require("ui/widget/button")
 local TitleBarWidget = require("ui/widget/titlebar")
 local ConfirmBox = require("ui/widget/confirmbox")
@@ -47,15 +49,25 @@ local ICON_DIR = "mahjong"
 -- the full scoring model (base + chain bonus + timer bonus).
 local SCORE_PER_PAIR = 10
 
+-- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
+-- the tap area — with a square icon centered inside it. Padding keeps the icon
+-- off the button edges, bordersize draws a slim rounded border, and radius
+-- rounds the corners. The buttons are separated by HorizontalSpan spacers in
+-- buildUILayout() (the stock HorizontalGroup ignores any `spacing` field).
 local function createToolbarButton(icon, w, h, cb)
+    local pad = Screen:scaleBySize(6)
+    local border = Screen:scaleBySize(1)
+    local radius = Screen:scaleBySize(4)
+    local icon_h = h - 2 * pad - 2 * border
     return ButtonWidget:new{
         icon = icon,
         width = w,
-        icon_width = w,
-        icon_height = h,
-        padding = 0,
+        icon_width = icon_h,
+        icon_height = icon_h,
+        padding = pad,
         margin = 0,
-        bordersize = 0,
+        bordersize = border,
+        radius = radius,
         callback = cb,
     }
 end
@@ -104,9 +116,11 @@ local Mahjong = FrameContainer:extend{
     status_bar = nil,
     selected = nil, -- { x, y, layer, kind } of the currently selected tile
     score = 0,
+    history = nil, -- stack of { a, b, ka, kb, score }
 }
 
 function Mahjong:init()
+    self.history = {}
     self.dimensions = Geometry:new{
         w = self.full_width,
         h = self.full_height,
@@ -160,6 +174,7 @@ function Mahjong:startGame()
     self.board = MahjongLogic.newGame()
     self.selected = nil
     self.score = 0
+    self.history = {}
     self:buildUILayout()
     self:updateStatus()
     UIManager:show(self)
@@ -169,9 +184,16 @@ function Mahjong:buildUILayout()
     self.status_bar = self:createStatusBar()
     local status_h = self.status_bar:getSize().h
 
-    local toolbar_btn_h = Screen:scaleBySize(32)
-    local toolbar_btn_w = math.floor(self.full_width / 3)
-    local board_h = self.full_height - status_h - toolbar_btn_h
+    -- Toolbar is 48px tall (rounded bordered buttons) with small gaps between
+    -- the buttons, edge gaps so the outer buttons don't scrape the screen
+    -- sides, and a bottom spacer that lifts the row off the screen edge; the
+    -- board fills what remains.
+    local toolbar_btn_h = Screen:scaleBySize(48)
+    local toolbar_gap = Screen:scaleBySize(6)
+    -- 5 gaps: one at each edge + 3 between the 4 buttons.
+    local toolbar_btn_w = math.floor((self.full_width - 5 * toolbar_gap) / 4)
+    local bottom_gap = Screen:scaleBySize(12)
+    local board_h = self.full_height - status_h - toolbar_btn_h - bottom_gap
 
     self.board_view = MahjongBoard:new{
         board = self.board,
@@ -189,8 +211,14 @@ function Mahjong:buildUILayout()
         self.board_view,
     }
 
-    local toolbar = CenterContainer:new{
-        dimen = Geometry:new{ w = self.full_width, h = toolbar_btn_h },
+    local toolbar = HorizontalGroup:new{
+        HorizontalSpan:new{ width = toolbar_gap },
+        createToolbarButton("chevron.left", toolbar_btn_w, toolbar_btn_h, function() self:undo() end),
+        HorizontalSpan:new{ width = toolbar_gap },
+        createToolbarButton("mahjong/lightbulb", toolbar_btn_w, toolbar_btn_h, function() self:showHint() end),
+        HorizontalSpan:new{ width = toolbar_gap },
+        createToolbarButton("mahjong/shuffle", toolbar_btn_w, toolbar_btn_h, function() self:shuffleBoard() end),
+        HorizontalSpan:new{ width = toolbar_gap },
         createToolbarButton("plus", toolbar_btn_w, toolbar_btn_h, function()
             UIManager:show(ConfirmBox:new{
                 text        = _("Start a new game?"),
@@ -198,15 +226,17 @@ function Mahjong:buildUILayout()
                 ok_callback = function() self:resetGame() end,
             })
         end),
+        HorizontalSpan:new{ width = toolbar_gap },
     }
 
     local main_vgroup = VerticalGroup:new{
         align = "center",
         width = self.full_width,
         height = self.full_height,
+        self.status_bar,
         board_area,
         toolbar,
-        self.status_bar,
+        VerticalSpan:new{ width = bottom_gap },
     }
     self[1] = main_vgroup
 end
@@ -215,10 +245,16 @@ function Mahjong:createStatusBar()
     return TitleBarWidget:new{
         fullscreen             = true,
         title                  = _("Mahjong Solitaire"),
-        subtitle               = _("Tap New Game to begin"),
+        subtitle               = _("Pairs remaining: 72 · Free pairs: 0 · Score: 0"),
         title_top_padding      = Screen:scaleBySize(2),
         bottom_v_padding       = Screen:scaleBySize(8),
-        close_callback = function()
+        -- Bigger, bolder quit X: the custom mahjong/close icon at 0.9x the
+        -- generic icon size (stock TitleBar uses 0.6x), which also widens the
+        -- button's tap zone. right_icon_tap_callback replaces close_callback,
+        -- which would force the stock thin "close" icon.
+        right_icon              = "mahjong/close",
+        right_icon_size_ratio   = 0.9,
+        right_icon_tap_callback = function()
             UIManager:show(ConfirmBox:new{
                 text        = _("Exit Mahjong Solitaire?"),
                 ok_text     = _("Exit"),
@@ -235,6 +271,7 @@ function Mahjong:resetGame()
     self.board = MahjongLogic.newGame()
     self.selected = nil
     self.score = 0
+    self.history = {}
     self:buildUILayout()
     self:updateStatus()
     UIManager:setDirty(self, "ui")
@@ -265,11 +302,13 @@ function Mahjong:handleTileTap(x, y, layer)
         -- A matching free tile removes both.
         local a = { x = sel.x, y = sel.y, layer = sel.layer }
         local b = { x = x, y = y, layer = layer }
-        if MahjongLogic.matches(sel.kind, kind)
-            and MahjongLogic.removePair(self.board, a, b) then
+        local ok, ka, kb = MahjongLogic.removePair(self.board, a, b)
+        if ok then
             self.selected = nil
             self.board_view:removePair(a, b)
-            self.score = self.score + SCORE_PER_PAIR
+            local points = SCORE_PER_PAIR
+            self.score = self.score + points
+            table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points })
             self:updateStatus()
             self:checkGameState()
             return
@@ -294,12 +333,21 @@ function Mahjong:clearSelection()
 end
 
 -- After every removal: win dialog when the board is empty, otherwise an
--- immediate reshuffle when no move remains (dedicated shuffle UX in US-08).
+-- offer to reshuffle when no move remains (US-08).
 function Mahjong:checkGameState()
     if MahjongLogic.isWin(self.board) then
         self:showWinDialog()
     elseif not MahjongLogic.hasMoves(self.board) then
-        self:shuffleBoard()
+        UIManager:show(ConfirmBox:new{
+            text = _("No moves left! Shuffle the board?"),
+            ok_text = _("Shuffle"),
+            ok_callback = function() self:shuffleBoard(true) end,
+            cancel_text = _("Close"),
+            cancel_callback = function()
+                self:saveGameState()
+                UIManager:close(self, "full")
+            end,
+        })
     end
 end
 
@@ -316,21 +364,79 @@ function Mahjong:showWinDialog()
     })
 end
 
--- Reshuffles the tiles remaining on the board in place (US-07: immediate,
--- no prompt; US-08 adds the ConfirmBox + repeat UX).
-function Mahjong:shuffleBoard()
-    MahjongLogic.shuffleBoard(self.board)
+-- US-08: Undo, hint, and shuffle ---------------------------------------------
+
+function Mahjong:undo()
+    local move = table.remove(self.history)
+    if not move then return end
+
     self:clearSelection()
-    self.board_view:updateBoard()
+    MahjongLogic.undoPair(self.board, move.a, move.b, move.ka, move.kb)
+    self.board_view:addPair({ x = move.a.x, y = move.a.y, layer = move.a.layer, kind = move.ka },
+                            { x = move.b.x, y = move.b.y, layer = move.b.layer, kind = move.kb })
+    self.score = self.score - move.score
     self:updateStatus()
-    UIManager:setDirty(self, "ui")
 end
 
--- Status bar reflects the pairs left and the score stub.
+function Mahjong:showHint()
+    local pair = MahjongLogic.matchingFreePair(self.board)
+    if not pair then
+        -- In theory checkGameState already caught this, but user can tap Hint
+        -- on a dead board before the shuffle prompt is accepted.
+        UIManager:show(ConfirmBox:new{
+            text = _("No moves left! Shuffle the board?"),
+            ok_text = _("Shuffle"),
+            ok_callback = function() self:shuffleBoard(true) end,
+        })
+        return
+    end
+    self.board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint")
+    self.board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint")
+    -- Clear hints after 2 seconds.
+    local board_view = self.board_view
+    UIManager:scheduleIn(2, function()
+        if board_view == self.board_view then
+            board_view:clearOverlay(pair.a.x, pair.a.y, pair.a.layer)
+            board_view:clearOverlay(pair.b.x, pair.b.y, pair.b.layer)
+        end
+    end)
+end
+
+-- Reshuffles the tiles remaining on the board in place.
+function Mahjong:shuffleBoard(force, attempts)
+    attempts = attempts or 10
+    local do_shuffle = function()
+        MahjongLogic.shuffleBoard(self.board)
+        self:clearSelection()
+        self.board_view:updateBoard()
+        self:updateStatus()
+        -- If still no moves (rare but possible), auto-repeat a bounded number
+        -- of times (a board whose remaining kinds can never pair must not loop).
+        if attempts > 0 and not MahjongLogic.hasMoves(self.board)
+            and MahjongLogic.tileCount(self.board) > 0 then
+            self:shuffleBoard(true, attempts - 1)
+        end
+    end
+
+    if force then
+        do_shuffle()
+    else
+        UIManager:show(ConfirmBox:new{
+            text        = _("Reshuffle remaining tiles?"),
+            ok_text     = _("Shuffle"),
+            ok_callback = do_shuffle,
+        })
+    end
+end
+
+-- Status bar reflects the pairs left, the number of currently-matching free
+-- pairs (legal moves available to tap), and the score.
 function Mahjong:updateStatus()
     if not self.status_bar then return end
     local pairs = math.floor(MahjongLogic.tileCount(self.board) / 2)
-    self.status_bar:setSubTitle(string.format(_("Pairs remaining: %d · Score: %d"), pairs, self.score))
+    local free = MahjongLogic.countFreePairs(self.board)
+    self.status_bar:setSubTitle(string.format(_("Pairs remaining: %d · Free pairs: %d · Score: %d"),
+                                              pairs, free, self.score))
     -- status_bar is a subwidget, so setDirty on it alone would not repaint;
     -- flag the window-level widget as well (same pattern as the chess example).
     UIManager:setDirty(self.status_bar, "ui")

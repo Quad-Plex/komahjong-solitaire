@@ -59,6 +59,9 @@ expect(type(mj.board) == "table" and Logic.tileCount(mj.board) == 144,
 expect(mj.status_bar ~= nil and mj.status_bar.title == "Mahjong Solitaire",
     "status bar created with the right title")
 expect(mj[1] ~= nil, "full-screen layout built into self[1]")
+expect(mj.status_bar.right_icon == "mahjong/close"
+        and (mj.status_bar.right_icon_size_ratio or 0.6) > 0.6,
+    "quit X uses the bolder mahjong/close icon at a larger size")
 
 -- Dispatcher can re-launch while the widget is on the stack: it must close and
 -- rebuild without duplicating the widget on the stack.
@@ -73,7 +76,30 @@ expect(on_stack == 1, "widget still on the stack exactly once after re-launch")
 
 -- ---- New Game ------------------------------------------------------------
 
-local new_game_btn = mj[1][2][1]
+-- The toolbar holds 4 action buttons separated by 3 HorizontalSpan gaps
+-- (the stock HorizontalGroup ignores a `spacing` field, so real spacers).
+local toolbar = mj[1][3]
+local btns, gaps = {}, {}
+for i = 1, #toolbar do
+    local b = toolbar[i]
+    if type(b) == "table" and b.bordersize then
+        btns[#btns + 1] = b
+    elseif type(b) == "table" and (b.width or 0) > 0 then
+        gaps[#gaps + 1] = b
+    end
+end
+expect(#btns == 4, "toolbar holds exactly 4 action buttons")
+expect(#gaps == 5 and gaps[1].width > 0 and gaps[5].width > 0
+        and toolbar[1] == gaps[1] and toolbar[#toolbar] == gaps[5],
+    "five spacers: three between the buttons plus edge gaps at both screen sides")
+local all_bordered = true
+for _, b in ipairs(btns) do
+    if not b.padding or not b.radius then all_bordered = false end
+end
+expect(all_bordered, "toolbar buttons are rounded bordered rectangles (bigger tap areas)")
+expect(type(mj[1][4]) == "table" and (mj[1][4].width or 0) > 0,
+    "a bottom spacer lifts the toolbar off the screen edge")
+local new_game_btn = btns[4]
 expect(type(new_game_btn.callback) == "function", "New Game button wired")
 ctx.last_confirm = nil
 new_game_btn.callback()
@@ -86,11 +112,11 @@ expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144,
 
 -- ---- Close / exit --------------------------------------------------------
 
-local mj_close_cb = mj.status_bar.close_callback
+local mj_close_cb = mj.status_bar.right_icon_tap_callback
 ctx.last_confirm = nil
 mj_close_cb()
 expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
-    "close_callback opens its ConfirmBox")
+    "quit X opens its ConfirmBox")
 ctx.last_confirm.ok_callback()
 local still_on_stack = false
 for _, e in ipairs(ctx.window_stack) do

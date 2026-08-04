@@ -190,7 +190,7 @@ menu_items.mahjong.callback()
 expect(#ctx.window_stack == 1 and ctx.window_stack[1].widget == mj, "startGame shows the plugin widget")
 expect(type(mj.board) == "table" and Logic.tileCount(mj.board) == 144, "startGame created a 144-tile board")
 
-local board_area = mj[1][1]
+local board_area = mj[1][2]
 local board_widget = board_area[1]
 expect(type(board_widget) == "table" and type(board_widget.tiles_by_layer) == "table",
     "layout contains the 3D board widget")
@@ -205,7 +205,11 @@ board_widget:onTapSelect(nil, { pos = { x = bpx + 1, y = bpy + 1 } })
 expect(tapped ~= nil and tapped[1] == 6.5 and tapped[2] == 3.5 and tapped[3] == 4,
     "board tap reaches Mahjong:handleTileTap with (6.5, 3.5, 4)")
 
-local new_game_btn = mj[1][2][1]
+local new_game_btn = nil
+for i = 1, #mj[1][3] do
+    local b = mj[1][3][i]
+    if type(b) == "table" and b.bordersize then new_game_btn = b end
+end
 expect(type(new_game_btn.callback) == "function", "New Game button wired")
 ctx.last_confirm = nil
 new_game_btn.callback()
@@ -215,7 +219,7 @@ ctx.last_confirm.ok_callback()
 expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144, "New Game ok builds a fresh board")
 
 -- Close flow still works and clears the board
-local mj_close_cb = mj.status_bar.close_callback
+local mj_close_cb = mj.status_bar.right_icon_tap_callback
 ctx.last_confirm = nil
 mj_close_cb()
 expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?", "close_callback opens its ConfirmBox")

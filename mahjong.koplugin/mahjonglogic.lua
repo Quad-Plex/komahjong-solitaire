@@ -418,8 +418,8 @@ end
 -- Removes a matched pair of free tiles from the board. `a` and `b` are
 -- { x, y, layer } tables. The board is mutated (both cells cleared) only when
 -- the pair is valid: both cells hold tiles, they are distinct positions, both
--- tiles are free, and they match. Returns true on success, false otherwise
--- (with the board left unchanged).
+-- tiles are free, and they match. Returns true, kind_a, kind_b on success,
+-- false otherwise (with the board left unchanged).
 function MahjongLogic.removePair(board, a, b)
     if not a or not b then return false end
     if a.x == b.x and a.y == b.y and a.layer == b.layer then return false end
@@ -431,7 +431,14 @@ function MahjongLogic.removePair(board, a, b)
     if not MahjongLogic.matches(ka, kb) then return false end
     board[MahjongLogic.posKey(a.x, a.y, a.layer)] = nil
     board[MahjongLogic.posKey(b.x, b.y, b.layer)] = nil
-    return true
+    return true, ka, kb
+end
+
+-- Restores a previously removed pair to the board. `a` and `b` are
+-- { x, y, layer } tables, `ka` and `kb` are their tile kinds.
+function MahjongLogic.undoPair(board, a, b, ka, kb)
+    board[MahjongLogic.posKey(a.x, a.y, a.layer)] = ka
+    board[MahjongLogic.posKey(b.x, b.y, b.layer)] = kb
 end
 
 -- True when the board is empty (every tile matched and removed).
@@ -452,6 +459,22 @@ function MahjongLogic.matchingFreePair(board)
         end
     end
     return nil
+end
+
+-- The number of distinct matching free pairs currently available — i.e. how
+-- many legal moves could be made right now. Each unordered pair of free tiles
+-- that matches counts once (so three free flowers = 3 available pairs).
+function MahjongLogic.countFreePairs(board)
+    local free = MahjongLogic.freeTiles(board)
+    local count = 0
+    for i = 1, #free - 1 do
+        for j = i + 1, #free do
+            if MahjongLogic.matches(free[i].kind, free[j].kind) then
+                count = count + 1
+            end
+        end
+    end
+    return count
 end
 
 -- Shuffle ----------------------------------------------------------------
@@ -749,6 +772,24 @@ function MahjongLogic.runSelfTests()
     local mp3 = boardWith{ {2,2,0,"c1"}, {4,2,0,"c2"}, {6,2,0,"c3"} }
     check(MahjongLogic.matchingFreePair(mp3) == nil, "matchingFreePair returns nil when no move exists")
     check(MahjongLogic.matchingFreePair({}) == nil, "matchingFreePair returns nil on an empty board")
+
+    -- Free-pair counter (US-08 status line).
+    check(MahjongLogic.countFreePairs(mp3) == 0, "countFreePairs is 0 when no free pair matches")
+    check(MahjongLogic.countFreePairs({}) == 0, "countFreePairs is 0 on an empty board")
+    local cf1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"}, {8,2,0,"c2"} }
+    check(MahjongLogic.countFreePairs(cf1) == 1,
+        "countFreePairs counts the single matching free pair")
+    local cf2 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"b1"}, {8,2,0,"b2"} }
+    check(MahjongLogic.countFreePairs(cf2) == 3,
+        "three free b1 tiles give 3 distinct matching pairs")
+    local cf3 = boardWith{ {2,2,0,"flower1"}, {4,2,0,"flower2"}, {6,2,0,"flower3"} }
+    check(MahjongLogic.countFreePairs(cf3) == 3,
+        "countFreePairs honors the flower wildcard (3 flowers -> 3 pairs)")
+    local cf4 = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {4,2,0,"b1"} }
+    check(MahjongLogic.countFreePairs(cf4) == 1,
+        "countFreePairs ignores covered matching tiles")
+    check(MahjongLogic.countFreePairs(mp1) == 1,
+        "countFreePairs matches matchingFreePair's availability on mp1")
 
     -- Shuffle preserves the remaining multiset and the position set (US-07).
     local s1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"}, {8,2,0,"c2"} }

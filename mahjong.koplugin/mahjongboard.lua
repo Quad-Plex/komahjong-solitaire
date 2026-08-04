@@ -274,13 +274,13 @@ function Board:removeTile(x, y, layer)
         self:refreshTileIcon(x + dx, y - 1, layer)
     end
 
-    UIManager:setDirty("all", "ui")
+    self:syncOverlapGroup()
     return true
 end
 
 -- Re-resolves the icon for the tile at (x, y, layer) and replaces its widget
 -- if the icon (i.e. its bevel variants) has changed. Used after a neighbor
--- is removed.
+-- is removed or added.
 function Board:refreshTileIcon(x, y, layer)
     local key = MahjongLogic.posKey(x, y, layer)
     local w = self.tile_widgets[key]
@@ -298,15 +298,77 @@ function Board:refreshTileIcon(x, y, layer)
         alpha = true,
     }
 
-    -- Swap in the map and the overlap group
+    -- Swap in the map
     self.tile_widgets[key] = new_w
-    for i = 1, #(self.overlap or {}) do
-        if self.overlap[i] == w then
-            self.overlap[i] = new_w
-            break
+    w:free()
+end
+
+-- Synchronizes the OverlapGroup children with tiles_by_layer and overlays,
+-- maintaining correct z-order (layers 0-4 then overlays). Repaints.
+function Board:syncOverlapGroup()
+    if not self.overlap then return end
+    -- Clear current children array (do NOT free them, they are in maps)
+    for i = #self.overlap, 1, -1 do
+        self.overlap[i] = nil
+    end
+    -- Add tiles in layer order
+    for layer = 0, MahjongLogic.MAX_LAYER do
+        for _, t in ipairs(self.tiles_by_layer[layer]) do
+            local w = self.tile_widgets[MahjongLogic.posKey(t.x, t.y, t.layer)]
+            if w then
+                self.overlap[#self.overlap + 1] = w
+            end
         end
     end
-    w:free()
+    -- Add overlays
+    for _, ov in pairs(self.overlays) do
+        self.overlap[#self.overlap + 1] = ov
+    end
+    UIManager:setDirty("all", "ui")
+end
+
+-- Incremental addition ------------------------------------------------------
+
+-- Restores a single tile to the rendered board. Returns true if it was
+-- missing. Repaints the board.
+function Board:addTile(x, y, layer, kind)
+    local key = MahjongLogic.posKey(x, y, layer)
+    if self.tile_widgets[key] then return false end
+
+    local px, py = self:tilePos(x, y, layer)
+    local icon_name = MahjongLogic.iconForTile(self.board, x, y, layer)
+    local w = IconWidget:new{
+        icon = "mahjong/" .. icon_name,
+        width = self.tile_w,
+        height = self.tile_h,
+        overlap_offset = { px, py },
+        alpha = true,
+    }
+
+    self.tile_widgets[key] = w
+    table.insert(self.tiles_by_layer[layer], {
+        x = x, y = y, layer = layer, kind = kind,
+        px = px, py = py, w = self.tw, h = self.th,
+    })
+
+    -- Update same-layer neighbors whose bevels might now be occluded.
+    for dy = -0.5, 0.5, 0.5 do
+        self:refreshTileIcon(x - 1, y + dy, layer)
+    end
+    for dx = -0.5, 0.5, 0.5 do
+        self:refreshTileIcon(x + dx, y - 1, layer)
+    end
+
+    self:syncOverlapGroup()
+    return true
+end
+
+-- Restores a pair of tiles (a and b are { x, y, layer, kind } tables).
+-- Returns true if both tiles were added.
+function Board:addPair(a, b)
+    local ra = self:addTile(a.x, a.y, a.layer, a.kind)
+    local rb = self:addTile(b.x, b.y, b.layer, b.kind)
+    return ra and rb
 end
 
 -- Removes a matched pair (a and b are { x, y, layer } tables) with a single

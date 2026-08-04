@@ -153,6 +153,15 @@ function M.newContext()
         ["ui/widget/verticalgroup"] = {
             new = function(_, o) return o end,
         },
+        ["ui/widget/verticalspan"] = {
+            new = function(_, o) return o end,
+        },
+        ["ui/widget/horizontalspan"] = {
+            new = function(_, o) return o end,
+        },
+        ["ui/widget/horizontalgroup"] = {
+            new = function(_, o) return o end,
+        },
         ["ui/widget/button"] = {
             new = function(_, o) o = o or {}; return o end,
         },

@@ -104,8 +104,10 @@ expect(Logic.tileCount(mj.board) == 142,
 expect(mapCount(mj.board_view.tile_widgets) == 142 and mapCount(mj.board_view.overlays) == 0,
     "pair removal drops exactly the two widgets and any overlays")
 expect(mj.score == 10, "score stub adds 10 per pair (got " .. tostring(mj.score) .. ")")
-expect(ctx.status_subtitle == "Pairs remaining: 71 · Score: 10",
-    "status bar shows the remaining pairs and score (got '" .. tostring(ctx.status_subtitle) .. "')")
+expect(ctx.status_subtitle == string.format("Pairs remaining: 71 · Free pairs: %d · Score: 10",
+        Logic.countFreePairs(mj.board)),
+    "status bar shows the remaining pairs, free pairs, and score (got '"
+        .. tostring(ctx.status_subtitle) .. "')")
 local window_dirtied = false
 for _, c in ipairs(ctx.dirty_calls) do
     if c.widget == mj then window_dirtied = true end
@@ -159,8 +161,9 @@ expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again"
 ctx.last_confirm.ok_callback()
 expect(Logic.tileCount(mj_win.board) == 144 and mj_win.score == 0 and mj_win.selected == nil,
     "'Play again' resets to a fresh shuffled board")
-expect(ctx.status_subtitle == "Pairs remaining: 72 · Score: 0",
-    "status bar resets after play-again")
+expect(ctx.status_subtitle == string.format("Pairs remaining: 72 · Free pairs: %d · Score: 0",
+        Logic.countFreePairs(mj_win.board)),
+    "status bar resets after play-again (got '" .. tostring(ctx.status_subtitle) .. "')")
 
 -- ---- Win dialog: Close ----------------------------------------------------------
 
@@ -179,7 +182,7 @@ end
 expect(not still_on_stack and mj_win2.board == nil,
     "'Close' exits the game and clears the board")
 
--- ---- Dead board: immediate reshuffle -------------------------------------------
+-- ---- Dead board: shuffle prompt (US-08) --------------------------------------
 
 local mj_dead = Mahjong:new()
 mj_dead.board = boardWith{
@@ -191,10 +194,14 @@ ctx.last_confirm = nil
 mj_dead:handleTileTap(2, 2, 0)
 mj_dead:handleTileTap(4, 2, 0)
 expect(Logic.tileCount(mj_dead.board) == 2, "pair removed from the dead-board game")
-expect(ctx.last_confirm == nil, "no win dialog on a non-empty board")
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text:find("Shuffle", 1, true) ~= nil,
+    "no win dialog but a shuffle prompt on a non-empty dead board")
+expect(mj_dead.score == 10 and #mj_dead.history == 1,
+    "the removal that dead-locked the board still counts")
+ctx.last_confirm.ok_callback()
 local dead_kinds = sortedKinds(mj_dead.board)
 expect(#dead_kinds == 2 and dead_kinds[1] == "c1" and dead_kinds[2] == "c2",
-    "dead board keeps exactly the two leftover tiles after the immediate shuffle")
+    "shuffle keeps exactly the two leftover tiles (multiset preserved)")
 expect(mapCount(mj_dead.board_view.tile_widgets) == 2,
     "board view matches the shuffled board")
 

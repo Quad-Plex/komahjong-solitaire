@@ -314,6 +314,31 @@ def generate():
                            f'stroke-linecap="round" stroke-linejoin="round"/></svg>')
     written["empty.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
                             'viewBox="0 0 100 140"/>')
+    # Toolbar icons (hint = lightbulb, shuffle = crossing arrows), imported from
+    # Google's Material Design icon set (24px, flat fills). The toolbar buttons
+    # in main.lua reference them as "mahjong/lightbulb" / "mahjong/shuffle";
+    # installIconsIfNeeded() ships them to the KOReader icons dir like the tiles.
+    written["lightbulb.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                                'viewBox="0 0 24 24" width="24">'
+                                '<path d="M0 0h24v24H0z" fill="none"/>'
+                                '<path d="M9 21c0 .5.4 1 1 1h4c.6 0 1-.5 1-1v-1H9v1zm3-19C8.1 2 5 5.1 5 9'
+                                'c0 2.4 1.2 4.5 3 5.7V17c0 .5.4 1 1 1h6c.6 0 1-.5 1-1v-2.3c1.8-1.3 3-3.4 '
+                                '3-5.7 0-3.9-3.1-7-7-7z"/></svg>')
+    written["shuffle.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                              'viewBox="0 0 24 24" width="24">'
+                              '<path d="M0 0h24v24H0z" fill="none"/>'
+                              '<path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 '
+                              '2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 '
+                              '3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>')
+    # Quit X (title bar): KOReader's stock "close" icon is a thin 1.5px-stroke
+    # X; this is a heavier 4px rounded X, full-bleed in the 24x24 canvas. It is
+    # the title bar's right icon ("mahjong/close"), see createStatusBar().
+    written["close.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" '
+                            'viewBox="0 0 24 24">'
+                            '<path d="M5 5 L19 19" fill="none" stroke="#000000" stroke-width="4" '
+                            'stroke-linecap="round"/>'
+                            '<path d="M19 5 L5 19" fill="none" stroke="#000000" stroke-width="4" '
+                            'stroke-linecap="round"/></svg>')
     return written
 
 

@@ -17,14 +17,18 @@ A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch
 The plugin launches "Mahjong Solitaire" from the **Tools** menu and renders the
 full 144-tile Turtle board as an outward-bevel 3D stack. Core gameplay is in:
 tap two matching free tiles to remove them, win when the board is clear, and a
-dead board is reshuffled (US-01..US-07 done).
+dead board offers to reshuffle (US-01..US-08 done).
 
 Recent improvements:
+- **Undo / Hint / Shuffle:** the toolbar now has undo (restores the removed
+  pair and its score), a hint (highlights a matching free pair for 2s), and a
+  confirm-gated reshuffle; dead boards prompt to shuffle instead of shuffling
+  silently, with bounded auto-repeat.
 - **Visual Feedback:** Fixed selection overlay transparency (tile symbols remain visible).
 - **Bevel Logic:** Dynamic bevel restoration when neighbors are removed (no "floating" tiles).
 - **Rule Accuracy:** Improved free-tile detection to handle partial and half-grid overlaps correctly.
 
-Undo, hints, scoring and persistence (US-08..US-10) are not implemented yet.
+Scoring, persistence and polish (US-09..US-11) are not implemented yet.
 
 ## Install on a Kindle
 
