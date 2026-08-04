@@ -138,7 +138,11 @@ function M.newContext()
             end,
         },
         ["ui/widget/iconwidget"] = {
-            new = function(_, o) o = o or {}; return o end,
+            new = function(_, o)
+                o = o or {}
+                setmetatable(o, { __index = widget_base })
+                return o
+            end,
         },
         ["ui/widget/container/centercontainer"] = {
             new = function(_, o) return o end,

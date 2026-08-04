@@ -1,12 +1,17 @@
 -- US-03 icons: verifies installIconsIfNeeded() copies every bundled SVG from
--- the plugin's icons/ dir into the (stubbed) data dir, referenced as
--- "mahjong/<name>" by IconWidget. Exercises the real main.lua init path with
--- a real plugin icons directory and captured `cp` invocations.
+-- the plugin's icons/ dir into the data dir's icons/mahjong/ directory,
+-- referenced as "mahjong/<name>" by IconWidget. The copy is a Lua io loop (no
+-- per-file shell forks), so this test writes to a real temp dir and compares
+-- the copied bytes against the bundled originals.
 
 local mock = require("mock")
 local ctx = mock.newContext()
 
 local src_icons = mock.ROOT .. "/mahjong.koplugin/icons"
+local tmp_dir = mock.ROOT .. "/tests/.tmp/us03"
+os.execute('rm -rf "' .. tmp_dir .. '"')
+os.execute('mkdir -p "' .. tmp_dir .. '"')
+ctx.data_dir = tmp_dir
 
 local function list_dir(dir)
     local f = io.popen('ls -1 "' .. dir .. '"')
@@ -18,7 +23,8 @@ local function list_dir(dir)
     return names
 end
 
--- Simulate a real icons dir that needs installing (dest does not exist yet).
+-- Simulate a real icons dir: lfs.dir lists the bundled SVGs, and
+-- util.makePath creates the destination directories the io copy needs.
 ctx.setMock("libs/libkoreader-lfs", {
     attributes = function(path, mode)
         if path == src_icons then return "directory" end
@@ -33,19 +39,17 @@ ctx.setMock("libs/libkoreader-lfs", {
         end
     end,
 })
+ctx.setMock("util", {
+    makePath = function(path)
+        os.execute('mkdir -p "' .. path .. '"')
+    end,
+})
 
--- Capture every `cp` installIconsIfNeeded issues instead of writing anywhere.
-local copied = {}
-local real_execute = os.execute
-os.execute = function(cmd)
-    local src, dst = cmd:match('cp "([^"]+)" "([^"]+)"')
-    if src then
-        assert(io.open(src, "rb"), "cp source missing: " .. src)
-        copied[#copied + 1] = { src = src, dst = dst }
-        return true
-    end
-    return real_execute(cmd)
+local expected = {}
+for _, name in ipairs(list_dir(src_icons)) do
+    if name:match("%.svg$") then expected[#expected + 1] = name end
 end
+assert(#expected > 0, "no SVG icons found in " .. src_icons)
 
 -- Load the real plugin; new() runs init() -> installIconsIfNeeded().
 ctx.loadPlugin("mahjonglogic")
@@ -53,13 +57,6 @@ ctx.loadPlugin("mahjongboard")
 local Mahjong = ctx.loadPlugin("main")
 local m = Mahjong:new{ ui = { menu = { registerToMainMenu = function() end } } }
 assert(m.name == "mahjong", "plugin failed to init")
-
--- The expected set is exactly the SVGs bundled in the repo.
-local expected = {}
-for _, name in ipairs(list_dir(src_icons)) do
-    if name:match("%.svg$") then expected[#expected + 1] = name end
-end
-assert(#expected > 0, "no SVG icons found in " .. src_icons)
 
 local failures = 0
 local function expect(cond, msg)
@@ -71,16 +68,18 @@ local function expect(cond, msg)
     end
 end
 
+local dest_dir = tmp_dir .. "/icons/mahjong"
+local copied = list_dir(dest_dir)
+
 expect(#copied == #expected, "every SVG installed (" .. #copied .. "/" .. #expected .. ")")
 
 local copied_names = {}
-local all_copied = true
-for _, c in ipairs(copied) do
-    local name = c.dst:match("([^/]+)$")
-    if not name:match("%.svg$") then all_copied = false end
+local all_svg = true
+for _, name in ipairs(copied) do
+    if not name:match("%.svg$") then all_svg = false end
     copied_names[name] = true
 end
-expect(all_copied, "all copied targets are .svg files")
+expect(all_svg, "all copied targets are .svg files")
 
 local missing = {}
 for _, name in ipairs(expected) do
@@ -88,12 +87,19 @@ for _, name in ipairs(expected) do
 end
 expect(#missing == 0, "every bundled SVG reached the data dir" .. (#missing > 0 and (" (missing " .. table.concat(missing, ", ") .. ")") or ""))
 
-local dest_prefix = (ctx.data_dir or (mock.ROOT .. "/tests/.tmp")) .. "/icons/mahjong/"
-local dest_ok = true
-for _, c in ipairs(copied) do
-    if c.dst:sub(1, #dest_prefix) ~= dest_prefix then dest_ok = false end
+-- Byte-for-byte: the io copy must not corrupt any icon.
+local identical = true
+for _, name in ipairs(expected) do
+    local src = assert(io.open(src_icons .. "/" .. name, "rb"))
+    local dst = assert(io.open(dest_dir .. "/" .. name, "rb"))
+    local same = src:read("*a") == dst:read("*a")
+    src:close()
+    dst:close()
+    if not same then identical = false end
 end
-expect(dest_ok, "copied into the mahjong icon dir")
+expect(identical, "copied icons match the bundled originals byte-for-byte")
+
+os.execute('rm -rf "' .. tmp_dir .. '"')
 
 if failures == 0 then
     print("\nALL US-03 ICON CHECKS PASSED")

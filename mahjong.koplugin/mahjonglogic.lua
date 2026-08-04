@@ -149,16 +149,23 @@ local LAYOUT_SPEC = {
 
 -- Returns the 144 tile positions of the Turtle layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first.
+-- The layout is static, so it is built once and cached: rebuilds (new game,
+-- board repaints) iterate the same table instead of allocating 144 fresh
+-- position tables every call. Callers must NOT mutate the returned array.
+local _layout_cache = nil
 function MahjongLogic.buildLayout()
-    local layout = {}
-    for _, spec in ipairs(LAYOUT_SPEC) do
-        for y = spec.y_min, spec.y_max do
-            for x = spec.x_min, spec.x_max do
-                layout[#layout + 1] = { x = x, y = y, layer = spec.layer }
+    if not _layout_cache then
+        local layout = {}
+        for _, spec in ipairs(LAYOUT_SPEC) do
+            for y = spec.y_min, spec.y_max do
+                for x = spec.x_min, spec.x_max do
+                    layout[#layout + 1] = { x = x, y = y, layer = spec.layer }
+                end
             end
         end
+        _layout_cache = layout
     end
-    return layout
+    return _layout_cache
 end
 
 -- Canonical map key for a board position. A board is keyed by this string
@@ -320,20 +327,25 @@ end
 MahjongLogic.MAX_LAYER = 4
 
 -- Bounds of the projection grid as { x_min, x_max, y_min, y_max }.
+-- Static, so cached like buildLayout() (callers must not mutate).
+local _bounds_cache = nil
 function MahjongLogic.gridBounds()
-    local bounds = {
-        x_min = math.huge,
-        x_max = -math.huge,
-        y_min = math.huge,
-        y_max = -math.huge,
-    }
-    for _, spec in ipairs(LAYOUT_SPEC) do
-        bounds.x_min = math.min(bounds.x_min, spec.x_min)
-        bounds.x_max = math.max(bounds.x_max, spec.x_max)
-        bounds.y_min = math.min(bounds.y_min, spec.y_min)
-        bounds.y_max = math.max(bounds.y_max, spec.y_max)
+    if not _bounds_cache then
+        local bounds = {
+            x_min = math.huge,
+            x_max = -math.huge,
+            y_min = math.huge,
+            y_max = -math.huge,
+        }
+        for _, spec in ipairs(LAYOUT_SPEC) do
+            bounds.x_min = math.min(bounds.x_min, spec.x_min)
+            bounds.x_max = math.max(bounds.x_max, spec.x_max)
+            bounds.y_min = math.min(bounds.y_min, spec.y_min)
+            bounds.y_max = math.max(bounds.y_max, spec.y_max)
+        end
+        _bounds_cache = bounds
     end
-    return bounds
+    return _bounds_cache
 end
 
 -- Kind of the topmost tile at projection cell (x, y), or nil if the cell is

@@ -34,6 +34,30 @@ local LAYER_OFF_Y = 0.5
 -- Empty board padding inside the widget.
 local MARGIN = 6
 
+-- Unit-space extents of the Turtle layout. These depend only on the static
+-- layout and the fixed layer offsets (not on widget size or board state), so
+-- they are computed once at load and reused by every geometry pass.
+local GRID = MahjongLogic.gridBounds()
+local LAYOUT_BOUNDS
+do
+    local min_px, max_px = math.huge, -math.huge
+    local min_py, max_py = math.huge, -math.huge
+    for _, p in ipairs(MahjongLogic.buildLayout()) do
+        local ux = (p.x - GRID.x_min) + LAYER_OFF_X * p.layer
+        local uy = (p.y - GRID.y_min) - LAYER_OFF_Y * p.layer
+        min_px = math.min(min_px, ux)
+        max_px = math.max(max_px, ux + 1) -- right edge (in tile-width units)
+        min_py = math.min(min_py, uy)
+        max_py = math.max(max_py, uy + 1) -- bottom edge (in tile-height units)
+    end
+    LAYOUT_BOUNDS = {
+        min_px = min_px,
+        min_py = min_py,
+        width_units = max_px - min_px,
+        height_units = max_py - min_py,
+    }
+end
+
 local Board = InputContainer:extend{
     name = "mahjongboard",
     board = nil,
@@ -48,11 +72,14 @@ local Board = InputContainer:extend{
     offx = 0,        -- layer offset in px
     offy = 0,
     tiles_by_layer = nil, -- [layer] -> array of {x, y, layer, kind, px, py, w, h}
+    tile_widgets = nil,   -- posKey -> IconWidget (for O(1) incremental removal)
+    overlap = nil,        -- the painted OverlapGroup (self[1][1])
+    overlays = nil,       -- posKey -> IconWidget overlay (select/hint), painted on top
 }
 
 function Board:init()
     self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self.height }
-    self.grid = MahjongLogic.gridBounds()
+    self.grid = GRID
     self.ges_events.TapSelect = {
         GestureRange:new{
             ges = "tap",
@@ -65,21 +92,11 @@ function Board:init()
 end
 
 -- Derives tile size and layer offsets from the widget size so the whole
--- turtle fits, then centers it.
+-- turtle fits, then centers it. Uses the module-level LAYOUT_BOUNDS (the
+-- layout is static), so no layout re-scan happens per geometry pass.
 function Board:computeGeometry()
-    local grid = self.grid
-    local min_px, max_px = math.huge, -math.huge
-    local min_py, max_py = math.huge, -math.huge
-    for _, p in ipairs(MahjongLogic.buildLayout()) do
-        local ux = (p.x - grid.x_min) + LAYER_OFF_X * p.layer
-        local uy = (p.y - grid.y_min) - LAYER_OFF_Y * p.layer
-        min_px = math.min(min_px, ux)
-        max_px = math.max(max_px, ux + 1) -- right edge (in tile-width units)
-        min_py = math.min(min_py, uy)
-        max_py = math.max(max_py, uy + 1) -- bottom edge (in tile-height units)
-    end
-    local width_units = max_px - min_px
-    local height_units = max_py - min_py
+    local width_units = LAYOUT_BOUNDS.width_units
+    local height_units = LAYOUT_BOUNDS.height_units
 
     local margin = Screen:scaleBySize(MARGIN)
     local usable_w = self.width - 2 * margin
@@ -98,8 +115,8 @@ function Board:computeGeometry()
 
     local bounds_w = width_units * tw
     local bounds_h = height_units * th
-    self.origin_x = margin + math.floor((usable_w - bounds_w) / 2) - min_px * tw
-    self.origin_y = margin + math.floor((usable_h - bounds_h) / 2) - min_py * th
+    self.origin_x = margin + math.floor((usable_w - bounds_w) / 2) - LAYOUT_BOUNDS.min_px * tw
+    self.origin_y = margin + math.floor((usable_h - bounds_h) / 2) - LAYOUT_BOUNDS.min_py * th
 end
 
 -- Widget-local position of a tile's top-left corner.
@@ -110,12 +127,17 @@ function Board:tilePos(x, y, layer)
 end
 
 -- (Re)builds the visible tile widgets from the current board state. Called on
--- init and whenever the board changes (new game, tile removal, shuffle).
+-- init and whenever the board changes structurally (new game, shuffle). After
+-- a pair removal, prefer removeTile/removePair so only the removed tiles are
+-- dropped instead of recreating all 144 IconWidgets.
 function Board:rebuildTiles()
     if self[1] then
         self[1]:free()
         self[1] = nil
     end
+    self.overlap = nil
+    self.tile_widgets = {}
+    self.overlays = {}
 
     local by_layer = {}
     for layer = 0, MahjongLogic.MAX_LAYER do
@@ -127,12 +149,14 @@ function Board:rebuildTiles()
         local kind = MahjongLogic.tileAt(self.board, p.x, p.y, p.layer)
         if kind then
             local px, py = self:tilePos(p.x, p.y, p.layer)
-            children[#children + 1] = IconWidget:new{
+            local w = IconWidget:new{
                 icon = "mahjong/" .. MahjongLogic.iconForKind(kind),
                 width = self.tw,
                 height = self.th,
                 overlap_offset = { px, py },
             }
+            children[#children + 1] = w
+            self.tile_widgets[MahjongLogic.posKey(p.x, p.y, p.layer)] = w
             by_layer[p.layer][#by_layer[p.layer] + 1] = {
                 x = p.x, y = p.y, layer = p.layer, kind = kind,
                 px = px, py = py, w = self.tw, h = self.th,
@@ -149,6 +173,7 @@ function Board:rebuildTiles()
         overlap_opts[i] = child
     end
     local overlap = OverlapGroup:new(overlap_opts)
+    self.overlap = overlap
 
     self[1] = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
@@ -161,6 +186,128 @@ end
 -- Refreshes the board from the current game state (US-07+ hooks here).
 function Board:updateBoard()
     self:rebuildTiles()
+    UIManager:setDirty(self, "ui")
+end
+
+-- Incremental removal -------------------------------------------------------
+--
+-- After a matched pair is removed the logic board changes by exactly two
+-- tiles, so rebuilding all 144 IconWidgets (updateBoard) would be wasteful.
+-- US-07 removes from the logic board first, then calls removePair here so only
+-- the two affected widgets are freed and the hit-test table is updated.
+
+-- Removes a single rendered tile. Returns true if it was present. Any overlay
+-- sitting on the tile is dropped too. Repaints the board.
+function Board:removeTile(x, y, layer)
+    local key = MahjongLogic.posKey(x, y, layer)
+    local w = self.tile_widgets[key]
+    if not w then return false end
+
+    -- drop the tile widget from the paint stack
+    self.tile_widgets[key] = nil
+    for i = #(self.overlap or {}), 1, -1 do
+        if self.overlap[i] == w then
+            table.remove(self.overlap, i)
+            break
+        end
+    end
+    w:free()
+
+    -- drop the tile from the hit-test table
+    local by = self.tiles_by_layer[layer]
+    if by then
+        for i = #by, 1, -1 do
+            if by[i].x == x and by[i].y == y then
+                table.remove(by, i)
+                break
+            end
+        end
+    end
+
+    -- drop any overlay that was sitting on this tile (no repaint here;
+    -- the one from removeTile below covers it)
+    local ov = self.overlays[key]
+    if ov then
+        self.overlays[key] = nil
+        for i = #(self.overlap or {}), 1, -1 do
+            if self.overlap[i] == ov then
+                table.remove(self.overlap, i)
+                break
+            end
+        end
+        ov:free()
+    end
+
+    UIManager:setDirty(self, "ui")
+    return true
+end
+
+-- Removes a matched pair (a and b are { x, y, layer } tables) with a single
+-- call, keeping z-order. Returns true if both tiles were present. The logic
+-- board is expected to have been updated by the caller before this.
+function Board:removePair(a, b)
+    local ra = self:removeTile(a.x, a.y, a.layer)
+    local rb = self:removeTile(b.x, b.y, b.layer)
+    return ra and rb
+end
+
+-- Overlays ----------------------------------------------------------------
+--
+-- Selection/hint highlights (US-07/US-08) are IconWidgets appended AFTER all
+-- tile widgets in the same OverlapGroup, so they always paint on top of every
+-- tile. They are never added to tiles_by_layer, so the board's own hit-testing
+-- (which walks tiles_by_layer) ignores them and taps pass through to tiles.
+
+-- Draws `icon` ("select" or "hint" from the mahjong/ icon set) over the tile
+-- at (x, y, layer), replacing any existing overlay on that tile. Returns true
+-- if the tile exists. Repaints the board.
+function Board:setOverlay(x, y, layer, icon)
+    local key = MahjongLogic.posKey(x, y, layer)
+    if not self.tile_widgets[key] then return false end
+    self:clearOverlay(x, y, layer)
+    local px, py = self:tilePos(x, y, layer)
+    local ov = IconWidget:new{
+        icon = "mahjong/" .. icon,
+        width = self.tw,
+        height = self.th,
+        overlap_offset = { px, py },
+    }
+    self.overlays[key] = ov
+    self.overlap[#self.overlap + 1] = ov
+    UIManager:setDirty(self, "ui")
+    return true
+end
+
+-- Removes the overlay on the tile at (x, y, layer), if any. Returns true if
+-- one existed. Repaints the board.
+function Board:clearOverlay(x, y, layer)
+    local key = MahjongLogic.posKey(x, y, layer)
+    local ov = self.overlays[key]
+    if not ov then return false end
+    self.overlays[key] = nil
+    for i = #(self.overlap or {}), 1, -1 do
+        if self.overlap[i] == ov then
+            table.remove(self.overlap, i)
+            break
+        end
+    end
+    ov:free()
+    UIManager:setDirty(self, "ui")
+    return true
+end
+
+-- Removes every overlay (new game, shuffle, full rebuild). Repaints.
+function Board:clearAllOverlays()
+    for key, ov in pairs(self.overlays or {}) do
+        for i = #(self.overlap or {}), 1, -1 do
+            if self.overlap[i] == ov then
+                table.remove(self.overlap, i)
+                break
+            end
+        end
+        ov:free()
+        self.overlays[key] = nil
+    end
     UIManager:setDirty(self, "ui")
 end
 

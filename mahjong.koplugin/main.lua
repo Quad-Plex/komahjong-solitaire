@@ -56,10 +56,25 @@ local function createToolbarButton(icon, w, h, cb)
     }
 end
 
+-- Binary copy in pure Lua (no shell subprocess).
+local function copyFile(src, dst)
+    local in_f, err = io.open(src, "rb")
+    if not in_f then return false, err end
+    local data = in_f:read("*a")
+    in_f:close()
+    local out_f, oerr = io.open(dst, "wb")
+    if not out_f then return false, oerr end
+    out_f:write(data)
+    out_f:close()
+    return true
+end
+
 -- Copies the bundled SVG tiles into the KOReader icons dir so IconWidget can
 -- resolve "mahjong/<name>" from anywhere (plugin dirs are not icon search
 -- paths). Always overwrites so bundled icon updates (e.g. a redesign) reach
--- the device on the next plugin load.
+-- the device on the next plugin load. The copy is a Lua io loop rather than
+-- per-file os.execute('cp ...') to avoid spawning ~45 shell processes on every
+-- plugin load on the slow Kindle.
 local function installIconsIfNeeded()
     local src_dir = joinPath(PLUGIN_PATH, "icons")
     if lfs.attributes(src_dir, "mode") ~= "directory" then return end
@@ -67,7 +82,7 @@ local function installIconsIfNeeded()
     util.makePath(dest_dir)
     for entry in lfs.dir(src_dir) do
         if entry:match("%.svg$") then
-            os.execute('cp "' .. joinPath(src_dir, entry) .. '" "' .. joinPath(dest_dir, entry) .. '"')
+            copyFile(joinPath(src_dir, entry), joinPath(dest_dir, entry))
         end
     end
 end

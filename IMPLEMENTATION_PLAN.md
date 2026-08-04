@@ -289,6 +289,33 @@ As a player, I want a polished, stable game on my specific Kindle.
 **Acceptance:** Game runs smoothly end-to-end on the target device; no clipped tiles; overlays
 readable; README present; luacheck clean.
 
+## Deferred optimizations (P3 — marked for later)
+
+Reviewed during the P1/P2 optimization pass (US-01..06 shipped). These are
+**not** worth doing before gameplay lands (US-07..09), but are recorded here so
+they are not lost. Revisit after US-10/11 or if device profiling shows tap lag.
+
+1. **`freeTiles()` string-key round trip.** `freeTiles` iterates `pairs(board)`
+   and re-parses every key with `key:match("^(%d+),(%d+),(%d+)$")` + 3×
+   `tonumber` (`mahjonglogic.lua`). Measured ~0.46 ms on a full board in plain
+   Lua 5.1 (dominant pure-logic cost); sub-millisecond under the Kindle's
+   LuaJIT, so it is a non-issue today. If ever needed, iterate the (now
+   memoized) `buildLayout()` instead of `pairs(board)` — posKey lookup per
+   position replaces the parse, roughly 5-6× faster. Do NOT change the board's
+   storage (flat `posKey → kind` table): it is what makes US-10 persistence a
+   plain table.
+2. **Dead code to remove in the US-11 cleanup pass:**
+   - `MahjongLogic.topTileAt` (`mahjonglogic.lua`) plus its self-tests — a
+     leftover from the flat-projection renderer; the 3D turtle board hit-tests
+     via `Board:hitTest` and never calls it.
+   - `MahjongLogic.isSpecial`/`isFlower`/`isSeason` — unused today; delete only
+     if they remain unused after US-07/09 scoring lands.
+   - `MahjongLogic.MULTIPLICITY` export — only used internally by `createDeck`;
+     confirm no test/UI dependency before dropping the export.
+3. **Explicitly not worth it:** coroutines/timers (no AI engine), `hasMoves`
+   O(n²) (free-tile count ≤ 144), micro-optimizing `posKey` string
+   concatenation, or replacing the string-keyed board with nested tables.
+
 ---
 
 ## Later / optional enhancements (not in the current scope)
