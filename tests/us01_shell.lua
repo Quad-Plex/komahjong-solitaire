@@ -76,7 +76,8 @@ expect(on_stack == 1, "widget still on the stack exactly once after re-launch")
 
 -- ---- New Game ------------------------------------------------------------
 
--- The toolbar holds 4 action buttons separated by 3 HorizontalSpan gaps
+-- The toolbar holds 4 action-button cells (icon button + hint label)
+-- separated by 3 HorizontalSpan gaps plus one edge spacer on each side
 -- (the stock HorizontalGroup ignores a `spacing` field, so real spacers).
 local toolbar = mj[1][3]
 local btns, gaps = {}, {}
@@ -84,6 +85,8 @@ for i = 1, #toolbar do
     local b = toolbar[i]
     if type(b) == "table" and b.bordersize then
         btns[#btns + 1] = b
+    elseif type(b) == "table" and b[1] and b[1].bordersize then
+        btns[#btns + 1] = b[1] -- a toolbar cell: VerticalGroup{ button, label }
     elseif type(b) == "table" and (b.width or 0) > 0 then
         gaps[#gaps + 1] = b
     end
@@ -97,6 +100,13 @@ for _, b in ipairs(btns) do
     if not b.padding or not b.radius then all_bordered = false end
 end
 expect(all_bordered, "toolbar buttons are rounded bordered rectangles (bigger tap areas)")
+local labels_ok = true
+for i, cell in ipairs({ toolbar[2], toolbar[4], toolbar[6], toolbar[8] }) do
+    if type(cell[2]) ~= "table" or type(cell[2].text) ~= "string" or #cell[2].text == 0 then
+        labels_ok = false
+    end
+end
+expect(labels_ok, "each toolbar cell carries a hint label under the icon")
 expect(type(mj[1][4]) == "table" and (mj[1][4].width or 0) > 0,
     "a bottom spacer lifts the toolbar off the screen edge")
 local new_game_btn = btns[4]

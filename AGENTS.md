@@ -508,19 +508,24 @@ the locked design and story list. Current state:
     The hint/shuffle icons are Material Design SVGs shipped in `icons/` (see the US-03 note
     on `lightbulb.svg`/`shuffle.svg`) — the stock KOReader icon set has **no**
     `lightbulb`/`refresh`/`shuffle`, so verify any icon name against `resources/icons/mdlight`
-    before use. The toolbar holds 4 action buttons **separated by 3 `HorizontalSpan`
+    before use. Each button is a **cell** — a `VerticalGroup` of `{ icon ButtonWidget,
+    hint TextWidget }` (small dark-gray caption beneath the icon, `smallinfofont` @ 11) —
+    with the icon button as the tap area. The cells are **separated by 3 `HorizontalSpan`
     spacers plus one edge spacer on each side** (5 total — the outer buttons must not
     scrape the screen edges) — `tests/us01_shell.lua`/`us06_board.lua` scan the toolbar
-    for bordered buttons instead of hardcoding indices
-    (buttons sit at children 2/4/6/8 of `mj[1][3]`, gaps at 1/3/5/7/9).
-  - **Button styling (UI pass):** each toolbar button is a slim rounded rectangle —
+    and unwrap the `VerticalGroup` cells (`cell[1]` = the bordered button) instead of
+    hardcoding indices (cells sit at children 2/4/6/8 of `mj[1][3]`, gaps at 1/3/5/7/9).
+  - **Button styling (UI pass):** each toolbar icon button is a slim rounded rectangle —
     `bordersize = 1px`, `radius = 4px`, `padding = 6px` around a square centered icon —
-    so the whole `w × 48px` widget is the tap area. **Do NOT use a `spacing` field on
-    `HorizontalGroup`** — the stock KOReader group widget ignores it (verified against the
-    source; the user hit exactly this: buttons stayed flush). Use `HorizontalSpan:new{ width = gap }`
+    so the whole `w × 48px` button is the tap area (the caption below is not part of it).
+    **Do NOT use a `spacing` field on `HorizontalGroup`** — the stock KOReader group widget
+    ignores it (verified against the source; the user hit exactly this: buttons stayed flush).
+    Use `HorizontalSpan:new{ width = gap }`
     widgets between buttons. `toolbar_btn_w = floor((full_width - 5*gap)/4)` accounts for the
     five gaps (3 between + 2 edges). `createToolbarButton` computes the icon size as `h - 2*pad - 2*border`
-    (ButtonWidget's total height = icon_height + 2*padding + 2*bordersize).
+    (ButtonWidget's total height = icon_height + 2*padding + 2*bordersize). The toolbar row
+    reserves the caption height too: `toolbar_h = toolbar_btn_h + label_h`, probed from a
+    throwaway `TextWidget` in `buildUILayout()`.
   - **Undo:** `self.history` is a stack of `{ a, b, ka, kb, score }` records pushed on every
     successful pair removal. `MahjongLogic.undoPair(board, a, b, ka, kb)` re-inserts the two
     kinds; `Mahjong:undo()` pops the last move, clears the selection, restores the logic board,

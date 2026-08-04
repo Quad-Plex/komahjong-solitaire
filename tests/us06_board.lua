@@ -208,7 +208,11 @@ expect(tapped ~= nil and tapped[1] == 6.5 and tapped[2] == 3.5 and tapped[3] == 
 local new_game_btn = nil
 for i = 1, #mj[1][3] do
     local b = mj[1][3][i]
-    if type(b) == "table" and b.bordersize then new_game_btn = b end
+    if type(b) == "table" and b.bordersize then
+        new_game_btn = b
+    elseif type(b) == "table" and b[1] and b[1].bordersize then
+        new_game_btn = b[1] -- a toolbar cell: VerticalGroup{ button, label }
+    end
 end
 expect(type(new_game_btn.callback) == "function", "New Game button wired")
 ctx.last_confirm = nil

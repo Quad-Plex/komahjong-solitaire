@@ -11,7 +11,9 @@ local HorizontalGroup = require("ui/widget/horizontalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local ButtonWidget = require("ui/widget/button")
+local TextWidget = require("ui/widget/textwidget")
 local ConfirmBox = require("ui/widget/confirmbox")
+local Font = require("ui/font")
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
@@ -50,16 +52,19 @@ local ICON_DIR = "mahjong"
 local SCORE_PER_PAIR = 10
 
 -- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
--- the tap area — with a square icon centered inside it. Padding keeps the icon
--- off the button edges, bordersize draws a slim rounded border, and radius
--- rounds the corners. The buttons are separated by HorizontalSpan spacers in
--- buildUILayout() (the stock HorizontalGroup ignores any `spacing` field).
-local function createToolbarButton(icon, w, h, cb)
+-- the tap area — with a square icon centered inside it, plus a small hint
+-- label beneath. Padding keeps the icon off the button edges, bordersize draws
+-- a slim rounded border, and radius rounds the corners. The icon button and
+-- its label are stacked in a VerticalGroup so each toolbar cell carries a
+-- caption (Undo / Hint / Shuffle / New Game). The cells are separated by
+-- HorizontalSpan spacers in buildUILayout() (the stock HorizontalGroup ignores
+-- any `spacing` field).
+local function createToolbarButton(icon, label, w, h, cb)
     local pad = Screen:scaleBySize(6)
     local border = Screen:scaleBySize(1)
     local radius = Screen:scaleBySize(4)
     local icon_h = h - 2 * pad - 2 * border
-    return ButtonWidget:new{
+    local button = ButtonWidget:new{
         icon = icon,
         width = w,
         icon_width = icon_h,
@@ -69,6 +74,17 @@ local function createToolbarButton(icon, w, h, cb)
         bordersize = border,
         radius = radius,
         callback = cb,
+    }
+    local label_widget = TextWidget:new{
+        text = label,
+        padding = 0,
+        face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
+        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+    }
+    return VerticalGroup:new{
+        align = "center",
+        button,
+        label_widget,
     }
 end
 
@@ -184,16 +200,25 @@ function Mahjong:buildUILayout()
     self.status_bar = self:createStatusBar()
     local status_h = self.status_bar:getSize().h
 
-    -- Toolbar is 48px tall (rounded bordered buttons) with small gaps between
-    -- the buttons, edge gaps so the outer buttons don't scrape the screen
-    -- sides, and a bottom spacer that lifts the row off the screen edge; the
-    -- board fills what remains.
+    -- Toolbar is 48px tall (rounded bordered buttons) with a small hint label
+    -- under each icon, small gaps between the buttons, edge gaps so the outer
+    -- buttons don't scrape the screen sides, and a bottom spacer that lifts
+    -- the row off the screen edge; the board fills what remains.
     local toolbar_btn_h = Screen:scaleBySize(48)
     local toolbar_gap = Screen:scaleBySize(6)
     -- 5 gaps: one at each edge + 3 between the 4 buttons.
     local toolbar_btn_w = math.floor((self.full_width - 5 * toolbar_gap) / 4)
+    -- Probe the hint-label height so the toolbar row reserves room for it.
+    local label_probe = TextWidget:new{
+        text = "Ag",
+        padding = 0,
+        face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
+    }
+    local label_h = label_probe:getSize().h
+    label_probe:free()
+    local toolbar_h = toolbar_btn_h + label_h
     local bottom_gap = Screen:scaleBySize(12)
-    local board_h = self.full_height - status_h - toolbar_btn_h - bottom_gap
+    local board_h = self.full_height - status_h - toolbar_h - bottom_gap
 
     self.board_view = MahjongBoard:new{
         board = self.board,
@@ -213,13 +238,16 @@ function Mahjong:buildUILayout()
 
     local toolbar = HorizontalGroup:new{
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("chevron.left", toolbar_btn_w, toolbar_btn_h, function() self:undo() end),
+        createToolbarButton("chevron.left", _("Undo"), toolbar_btn_w, toolbar_btn_h,
+            function() self:undo() end),
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("mahjong/lightbulb", toolbar_btn_w, toolbar_btn_h, function() self:showHint() end),
+        createToolbarButton("mahjong/lightbulb", _("Hint"), toolbar_btn_w, toolbar_btn_h,
+            function() self:showHint() end),
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("mahjong/shuffle", toolbar_btn_w, toolbar_btn_h, function() self:shuffleBoard() end),
+        createToolbarButton("mahjong/shuffle", _("Shuffle"), toolbar_btn_w, toolbar_btn_h,
+            function() self:shuffleBoard() end),
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("plus", toolbar_btn_w, toolbar_btn_h, function()
+        createToolbarButton("plus", _("New Game"), toolbar_btn_w, toolbar_btn_h, function()
             UIManager:show(ConfirmBox:new{
                 text        = _("Start a new game?"),
                 ok_text     = _("New Game"),
