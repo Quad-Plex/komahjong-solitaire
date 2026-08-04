@@ -262,6 +262,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
 ## Common pitfalls (from the example + docs)
 
 - Forgetting `UIManager:setDirty` → UI doesn't update.
+- **`setDirty` on subwidgets:** KOReader's `_repaint` only repaints window-level widgets
+  flagged in `_dirty`. Calling `setDirty(subwidget, "ui")` enqueues a refresh region but
+  NEVER flags a window widget for repaint, leaving the screen stale. Subwidgets must either
+  call `setDirty("all", "ui")` (matches the chess reference) or hold a reference to the
+  window-level widget and dirty that. (This was the root cause of US-07's "zero effect" taps).
 - Blocking the main loop with long synchronous computation (AI, big board init) → use the
   coroutine + `scheduleIn` pattern.
 - Loading a plugin while a widget is mid-lifecycle: guard `handleEvent` against the widget not
@@ -283,7 +288,7 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   avoids the trap entirely: it extends `InputContainer`, not `FrameContainer`, and `getSize()` just
   returns `self.dimen`.)
 
-## Mahjong plugin — implementation state (US-01..US-06 done)
+## Mahjong plugin — implementation state (US-01..US-07 done)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). Read `IMPLEMENTATION_PLAN.md` for
 the locked design and story list. Current state:
@@ -409,11 +414,39 @@ the locked design and story list. Current state:
     the second arg — see the Input-handling pitfall above).
   - `getSize()` returns `self.dimen` (no `FrameContainer` `_padding_*` contract involved).
   - `main.lua` wires `onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end`;
-    `handleTileTap(x, y, layer)` is an intentional empty stub (`-- luacheck: no unused args`)
-    until US-07.
+    `handleTileTap(x, y, layer)` was an intentional empty stub until US-07 (now the gameplay
+    entry point, below).
   - `buttontable.lua`/`button.lua` shims were **deleted** from the plugin (ButtonTable unused).
     Note the shims still exist in `example_app/casualkochess.koplugin` and are documented above
     for chess-style grids.
+- **US-07 (done):** core gameplay in `main.lua` + logic hooks in `mahjonglogic.lua`.
+  - `mahjonglogic.lua` additions: `removePair(board, a, b)` (validates both cells present,
+    distinct, free, and matching; mutates only on success), `isWin(board)`, and
+    `matchingFreePair(board)` (returns `{ a = {x,y,layer,kind}, b = {...} }` or nil). Also
+    `shuffleBoard(board, rng)` which reassigns the remaining kinds to the remaining positions
+    IN PLACE (same keys, same multiset, same count — verified by self-tests).
+  - `main.lua` gameplay: `self.selected` (`{ x, y, layer, kind }`) + `self.board_view` (the
+    board widget, stored at buildUILayout so taps can drive it). `handleTileTap`:
+    free tile → `setSelection` (draws the `select` overlay); tap on the selected tile →
+    `clearSelection`; tap on a matching free tile → `Logic.removePair` on the logic board
+    FIRST, then `self.board_view:removePair(a, b)` (incremental widget removal, per the P1
+    refactor), `self.score += SCORE_PER_PAIR` (10; US-09 replaces this stub), status update,
+    then `checkGameState`; tap on a non-matching free tile → switch selection; non-free tiles
+    are ignored. `checkGameState`: empty board → Win `ConfirmBox` ("Play again" → `resetGame`,
+    "Close" → save + `UIManager:close`); no moves → immediate `shuffleBoard()` (US-07's simple
+    variant; US-08 adds the prompt/repeat UX). `updateStatus()` sets the title bar subtitle to
+    "Pairs remaining: N · Score: S" via `self.status_bar:setSubTitle(...)` (the TitleBarWidget
+    API — same as the chess example) + `UIManager:setDirty(self.status_bar, "ui")`.
+  - **Repaint fix:** after initial deployment showed "zero effect" taps, the board internal
+    dirty calls were changed from `setDirty(self)` to `setDirty("all", "ui")`. Because the board
+    is a nested subwidget, only the "all" sentinel (or dirtying the window-level widget `self`
+    directly) flags the widget tree for repaint in `UIManager:_repaint`. `updateStatus` was
+    similarly fixed to dirty the window-level widget.
+  - `tests/us07_gameplay.lua` (registered in `tests/run.sh`) drives the whole flow headlessly:
+    select/overlay, match removal (logic + rendered board + score + status), deselect,
+    non-free ignored, selection switch, Win dialog play-again/close, and dead-board shuffle.
+    The mock's titlebar stub gained `setSubTitle`/`setTitle` and now tracks all `setDirty`
+    calls for regression testing.
 
 ### Verification workflow used so far
 

@@ -115,6 +115,36 @@ p3:updateBoard()
 expect(tilesOf(p3) == 4 and #p3.overlap == 4 and mapCount(p3.overlays) == 0,
     "updateBoard rebuilds tiles and clears stale overlays")
 
+-- ---- Window-level repaint regression --------------------------------------
+-- The board is NOT a window-level widget, so setDirty(self) would never flag
+-- anything for repaint on a real device (only window-level widgets get
+-- repainted). Every board mutation must request a repaint via the "all"
+-- sentinel (as the chess reference boards do).
+
+local p4 = Board:new{ board = proj3, width = 600, height = 400 }
+local function dirtyTargetsAll()
+    for _, c in ipairs(ctx.dirty_calls) do
+        if c.widget == "all" and c.refreshtype == "ui" then return true end
+    end
+    return false
+end
+
+ctx.dirty_calls = {}
+p4:setOverlay(5, 3, 0, "select")
+expect(dirtyTargetsAll(), "setOverlay dirties the window-level widget (setDirty 'all')")
+ctx.dirty_calls = {}
+p4:clearOverlay(5, 3, 0)
+expect(dirtyTargetsAll(), "clearOverlay dirties the window-level widget (setDirty 'all')")
+ctx.dirty_calls = {}
+p4:removeTile(5, 3, 0)
+expect(dirtyTargetsAll(), "removeTile dirties the window-level widget (setDirty 'all')")
+ctx.dirty_calls = {}
+p4:updateBoard()
+expect(dirtyTargetsAll(), "updateBoard dirties the window-level widget (setDirty 'all')")
+ctx.dirty_calls = {}
+p4:clearAllOverlays()
+expect(dirtyTargetsAll(), "clearAllOverlays dirties the window-level widget (setDirty 'all')")
+
 if failures == 0 then
     print("\nALL BOARD UPDATE/OVERLAY CHECKS PASSED")
 else

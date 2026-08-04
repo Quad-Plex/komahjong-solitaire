@@ -66,6 +66,7 @@ function M.newContext()
     ctx.confirms = {}
     ctx.menu_registered = false
     ctx.dispatcher_actions = {}
+    ctx.dirty_calls = {}
 
     ctx.screen = {
         getWidth = function() return 1200 end,
@@ -94,7 +95,9 @@ function M.newContext()
             end
             if w and w.onCloseWidget then w:onCloseWidget() end
         end,
-        setDirty = function() end,
+        setDirty = function(_, widget, refreshtype)
+            ctx.dirty_calls[#ctx.dirty_calls + 1] = { widget = widget, refreshtype = refreshtype }
+        end,
         scheduleIn = function() end,
         nextTick = function() end,
     }
@@ -154,7 +157,13 @@ function M.newContext()
             new = function(_, o) o = o or {}; return o end,
         },
         ["ui/widget/titlebar"] = {
-            new = function(_, o) o.getSize = function() return { h = 40 } end; return o end,
+            new = function(_, o)
+                o = o or {}
+                o.getSize = function() return { h = 40 } end
+                o.setSubTitle = function(_, s) ctx.status_subtitle = s end
+                o.setTitle = function() end
+                return o
+            end,
         },
         ["ui/widget/confirmbox"] = {
             new = function(_, o) o = o or {}; return o end,

@@ -210,7 +210,7 @@ end
 -- Refreshes the board from the current game state (US-07+ hooks here).
 function Board:updateBoard()
     self:rebuildTiles()
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty("all", "ui")
 end
 
 -- Incremental removal -------------------------------------------------------
@@ -262,7 +262,7 @@ function Board:removeTile(x, y, layer)
         ov:free()
     end
 
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty("all", "ui")
     return true
 end
 
@@ -298,7 +298,7 @@ function Board:setOverlay(x, y, layer, icon)
     }
     self.overlays[key] = ov
     self.overlap[#self.overlap + 1] = ov
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty("all", "ui")
     return true
 end
 
@@ -316,7 +316,7 @@ function Board:clearOverlay(x, y, layer)
         end
     end
     ov:free()
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty("all", "ui")
     return true
 end
 
@@ -332,7 +332,7 @@ function Board:clearAllOverlays()
         ov:free()
         self.overlays[key] = nil
     end
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty("all", "ui")
 end
 
 -- Topmost tile whose rect contains the widget-local point, or nil.

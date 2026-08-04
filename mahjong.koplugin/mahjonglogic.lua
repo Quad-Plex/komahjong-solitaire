@@ -386,6 +386,73 @@ function MahjongLogic.hasMoves(board)
     return false
 end
 
+-- Removal / win / hint ---------------------------------------------------
+--
+-- US-07: pair removal, win detection, and a free matching-pair finder. These
+-- are the logic hooks the UI calls after every tap; the board widget's own
+-- removePair() only drops the rendered widgets, the caller updates the logic
+-- board FIRST (via removePair below) then the view.
+
+-- Removes a matched pair of free tiles from the board. `a` and `b` are
+-- { x, y, layer } tables. The board is mutated (both cells cleared) only when
+-- the pair is valid: both cells hold tiles, they are distinct positions, both
+-- tiles are free, and they match. Returns true on success, false otherwise
+-- (with the board left unchanged).
+function MahjongLogic.removePair(board, a, b)
+    if not a or not b then return false end
+    if a.x == b.x and a.y == b.y and a.layer == b.layer then return false end
+    local ka = MahjongLogic.tileAt(board, a.x, a.y, a.layer)
+    local kb = MahjongLogic.tileAt(board, b.x, b.y, b.layer)
+    if not ka or not kb then return false end
+    if not MahjongLogic.isFree(board, a.x, a.y, a.layer) then return false end
+    if not MahjongLogic.isFree(board, b.x, b.y, b.layer) then return false end
+    if not MahjongLogic.matches(ka, kb) then return false end
+    board[MahjongLogic.posKey(a.x, a.y, a.layer)] = nil
+    board[MahjongLogic.posKey(b.x, b.y, b.layer)] = nil
+    return true
+end
+
+-- True when the board is empty (every tile matched and removed).
+function MahjongLogic.isWin(board)
+    return MahjongLogic.tileCount(board) == 0
+end
+
+-- A matching free pair on the board, as { a = { x, y, layer, kind },
+-- b = { x, y, layer, kind } }, or nil if no move exists. Used for the no-moves
+-- check and the US-08 hint.
+function MahjongLogic.matchingFreePair(board)
+    local free = MahjongLogic.freeTiles(board)
+    for i = 1, #free - 1 do
+        for j = i + 1, #free do
+            if MahjongLogic.matches(free[i].kind, free[j].kind) then
+                return { a = free[i], b = free[j] }
+            end
+        end
+    end
+    return nil
+end
+
+-- Shuffle ----------------------------------------------------------------
+
+-- Reshuffles the tiles remaining on a board IN PLACE: the remaining kinds are
+-- reassigned to the remaining positions, so the board keeps the same keys, the
+-- same tile count, and the same multiset of kinds — only their placement
+-- changes. `rng` is nil (math.random), an integer seed, or a [0,1) function.
+function MahjongLogic.shuffleBoard(board, rng)
+    rng = rng or math.random
+    local positions = {}
+    local kinds = {}
+    for key, kind in pairs(board) do
+        positions[#positions + 1] = key
+        kinds[#kinds + 1] = kind
+    end
+    MahjongLogic.shuffle(kinds, rng)
+    for i, key in ipairs(positions) do
+        board[key] = kinds[i]
+    end
+    return board
+end
+
 -- Flat projection grid -----------------------------------------------------
 --
 -- The UI renders the 3D board as a flat grid: each (x, y) cell shows the
@@ -598,6 +665,87 @@ function MahjongLogic.runSelfTests()
     check(not MahjongLogic.hasMoves(m4), "covered matching tiles are not counted by hasMoves")
     check(not MahjongLogic.hasMoves({}), "empty board has no moves")
     check(#MahjongLogic.freeTiles({}) == 0, "empty board has no free tiles")
+
+    -- Removal / win / hint (US-07) --------------------------------------
+    local r1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"} }
+    check(MahjongLogic.removePair(r1, { x = 2, y = 2, layer = 0 }, { x = 4, y = 2, layer = 0 }) == true,
+        "removePair removes a valid matching free pair")
+    check(MahjongLogic.tileCount(r1) == 1 and MahjongLogic.tileAt(r1, 2, 2, 0) == nil
+        and MahjongLogic.tileAt(r1, 4, 2, 0) == nil,
+        "removePair cleared exactly the two cells")
+    check(MahjongLogic.tileAt(r1, 6, 2, 0) == "c1", "removePair leaves other tiles untouched")
+
+    local r2 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b2"} }
+    check(MahjongLogic.removePair(r2, { x = 2, y = 2, layer = 0 }, { x = 4, y = 2, layer = 0 }) == false,
+        "removePair rejects a non-matching pair")
+    check(MahjongLogic.tileCount(r2) == 2, "rejected pair leaves the board unchanged")
+
+    local r3 = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {4,2,0,"b1"} }
+    check(MahjongLogic.removePair(r3, { x = 2, y = 2, layer = 0 }, { x = 4, y = 2, layer = 0 }) == false,
+        "removePair rejects a pair with a non-free (covered) tile")
+    check(MahjongLogic.tileCount(r3) == 3, "covered-tile rejection leaves the board unchanged")
+    check(MahjongLogic.removePair(r3, { x = 2, y = 2, layer = 1 }, { x = 4, y = 2, layer = 0 }) == true,
+        "removePair accepts a free pair from different layers")
+    check(MahjongLogic.tileCount(r3) == 1, "valid removal drops the count by 2")
+
+    check(MahjongLogic.removePair(r2, { x = 2, y = 2, layer = 0 }, { x = 2, y = 2, layer = 0 }) == false,
+        "removePair rejects tapping the same tile twice")
+    check(MahjongLogic.removePair(r2, { x = 9, y = 9, layer = 0 }, { x = 4, y = 2, layer = 0 }) == false,
+        "removePair rejects a missing tile")
+    check(MahjongLogic.removePair(r2, nil, { x = 4, y = 2, layer = 0 }) == false,
+        "removePair rejects a nil position")
+
+    local r4 = boardWith{ {2,2,0,"flower1"}, {4,2,0,"flower3"} }
+    check(MahjongLogic.removePair(r4, { x = 2, y = 2, layer = 0 }, { x = 4, y = 2, layer = 0 }) == true,
+        "removePair accepts the flower rule (any flower matches any flower)")
+    check(MahjongLogic.isWin(r4), "board is empty after removing its last pair")
+
+    local w1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"} }
+    check(not MahjongLogic.isWin(w1), "isWin is false while tiles remain")
+    check(MahjongLogic.isWin({}), "isWin is true only when the board is empty")
+
+    local mp1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"}, {8,2,0,"c2"} }
+    local pair = MahjongLogic.matchingFreePair(mp1)
+    check(pair ~= nil and pair.a.kind == pair.b.kind
+        and MahjongLogic.matches(pair.a.kind, pair.b.kind),
+        "matchingFreePair returns a matching free pair when one exists")
+    check(MahjongLogic.isFree(mp1, pair.a.x, pair.a.y, pair.a.layer)
+        and MahjongLogic.isFree(mp1, pair.b.x, pair.b.y, pair.b.layer),
+        "matchingFreePair's pair is genuinely free")
+    local mp2 = boardWith{ {2,2,0,"flower1"}, {4,2,0,"flower2"}, {6,2,0,"season1"} }
+    pair = MahjongLogic.matchingFreePair(mp2)
+    check(pair ~= nil and pair.a.kind ~= pair.b.kind and MahjongLogic.matches(pair.a.kind, pair.b.kind),
+        "matchingFreePair honors the flower/season wildcard match")
+    local mp3 = boardWith{ {2,2,0,"c1"}, {4,2,0,"c2"}, {6,2,0,"c3"} }
+    check(MahjongLogic.matchingFreePair(mp3) == nil, "matchingFreePair returns nil when no move exists")
+    check(MahjongLogic.matchingFreePair({}) == nil, "matchingFreePair returns nil on an empty board")
+
+    -- Shuffle preserves the remaining multiset and the position set (US-07).
+    local s1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"}, {8,2,0,"c2"} }
+    local s1_keys, s1_kinds = {}, {}
+    for k, v in pairs(s1) do s1_keys[#s1_keys + 1] = k; s1_kinds[#s1_kinds + 1] = v end
+    table.sort(s1_keys)
+    MahjongLogic.shuffleBoard(s1, MahjongLogic.newRng(11))
+    check(MahjongLogic.tileCount(s1) == 4, "shuffleBoard keeps the tile count")
+    local s2_keys, s2_kinds = {}, {}
+    for k, v in pairs(s1) do s2_keys[#s2_keys + 1] = k; s2_kinds[#s2_kinds + 1] = v end
+    table.sort(s2_keys)
+    local key_same = #s1_keys == #s2_keys
+    if key_same then
+        for i = 1, #s1_keys do
+            if s1_keys[i] ~= s2_keys[i] then key_same = false break end
+        end
+    end
+    check(key_same, "shuffleBoard keeps the same positions (same keys)")
+    table.sort(s1_kinds)
+    table.sort(s2_kinds)
+    local multiset_same = #s1_kinds == #s2_kinds
+    if multiset_same then
+        for i = 1, #s1_kinds do
+            if s1_kinds[i] ~= s2_kinds[i] then multiset_same = false break end
+        end
+    end
+    check(multiset_same, "shuffleBoard preserves the multiset of remaining tiles")
 
     -- Flat projection helpers -------------------------------------------
     local bounds = MahjongLogic.gridBounds()

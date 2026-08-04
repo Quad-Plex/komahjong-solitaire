@@ -43,6 +43,10 @@ end
 local PLUGIN_PATH = normalizePath(getPluginPath()):gsub("/+$", "")
 local ICON_DIR = "mahjong"
 
+-- US-07 score stub: flat 10 points per matched pair. US-09 replaces this with
+-- the full scoring model (base + chain bonus + timer bonus).
+local SCORE_PER_PAIR = 10
+
 local function createToolbarButton(icon, w, h, cb)
     return ButtonWidget:new{
         icon = icon,
@@ -96,7 +100,10 @@ local Mahjong = FrameContainer:extend{
     full_width = Screen:getWidth(),
     full_height = Screen:getHeight(),
     board = nil,
+    board_view = nil,
     status_bar = nil,
+    selected = nil, -- { x, y, layer, kind } of the currently selected tile
+    score = 0,
 }
 
 function Mahjong:init()
@@ -151,7 +158,10 @@ function Mahjong:startGame()
         UIManager:close(self)
     end
     self.board = MahjongLogic.newGame()
+    self.selected = nil
+    self.score = 0
     self:buildUILayout()
+    self:updateStatus()
     UIManager:show(self)
 end
 
@@ -163,18 +173,20 @@ function Mahjong:buildUILayout()
     local toolbar_btn_w = math.floor(self.full_width / 3)
     local board_h = self.full_height - status_h - toolbar_btn_h
 
+    self.board_view = MahjongBoard:new{
+        board = self.board,
+        width = self.full_width,
+        height = board_h,
+        onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
+    }
+
     local board_area = FrameContainer:new{
         background = BACKGROUND_COLOR,
         bordersize = 0,
         padding = 0,
         width = self.full_width,
         height = board_h,
-        MahjongBoard:new{
-            board = self.board,
-            width = self.full_width,
-            height = board_h,
-            onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
-        },
+        self.board_view,
     }
 
     local toolbar = CenterContainer:new{
@@ -221,12 +233,108 @@ end
 
 function Mahjong:resetGame()
     self.board = MahjongLogic.newGame()
+    self.selected = nil
+    self.score = 0
     self:buildUILayout()
+    self:updateStatus()
     UIManager:setDirty(self, "ui")
 end
 
--- luacheck: no unused args
+-- Core gameplay (US-07) ------------------------------------------------------
+--
+-- Tap behavior:
+--   * free tile tapped -> select (highlight with the `select` overlay);
+--   * non-free tile tapped -> ignored;
+--   * tapping the selected tile again -> deselect;
+--   * tapping a different matching free tile -> remove the pair, then check for
+--     a win / a dead board;
+--   * tapping a different, non-matching free tile -> switch the selection.
+
 function Mahjong:handleTileTap(x, y, layer)
+    local kind = MahjongLogic.tileAt(self.board, x, y, layer)
+    if not kind then return end
+    if not MahjongLogic.isFree(self.board, x, y, layer) then return end
+
+    local sel = self.selected
+    if sel then
+        -- Tapping the selected tile again deselects it.
+        if sel.x == x and sel.y == y and sel.layer == layer then
+            self:clearSelection()
+            return
+        end
+        -- A matching free tile removes both.
+        local a = { x = sel.x, y = sel.y, layer = sel.layer }
+        local b = { x = x, y = y, layer = layer }
+        if MahjongLogic.matches(sel.kind, kind)
+            and MahjongLogic.removePair(self.board, a, b) then
+            self.selected = nil
+            self.board_view:removePair(a, b)
+            self.score = self.score + SCORE_PER_PAIR
+            self:updateStatus()
+            self:checkGameState()
+            return
+        end
+    end
+
+    -- First tap, or switching from a different tile.
+    self:setSelection(x, y, layer, kind)
+end
+
+function Mahjong:setSelection(x, y, layer, kind)
+    self:clearSelection()
+    self.selected = { x = x, y = y, layer = layer, kind = kind }
+    self.board_view:setOverlay(x, y, layer, "select")
+end
+
+function Mahjong:clearSelection()
+    if self.selected then
+        self.board_view:clearOverlay(self.selected.x, self.selected.y, self.selected.layer)
+        self.selected = nil
+    end
+end
+
+-- After every removal: win dialog when the board is empty, otherwise an
+-- immediate reshuffle when no move remains (dedicated shuffle UX in US-08).
+function Mahjong:checkGameState()
+    if MahjongLogic.isWin(self.board) then
+        self:showWinDialog()
+    elseif not MahjongLogic.hasMoves(self.board) then
+        self:shuffleBoard()
+    end
+end
+
+function Mahjong:showWinDialog()
+    UIManager:show(ConfirmBox:new{
+        text = string.format(_("You cleared the board! Score: %d"), self.score),
+        ok_text = _("Play again"),
+        ok_callback = function() self:resetGame() end,
+        cancel_text = _("Close"),
+        cancel_callback = function()
+            self:saveGameState()
+            UIManager:close(self, "full")
+        end,
+    })
+end
+
+-- Reshuffles the tiles remaining on the board in place (US-07: immediate,
+-- no prompt; US-08 adds the ConfirmBox + repeat UX).
+function Mahjong:shuffleBoard()
+    MahjongLogic.shuffleBoard(self.board)
+    self:clearSelection()
+    self.board_view:updateBoard()
+    self:updateStatus()
+    UIManager:setDirty(self, "ui")
+end
+
+-- Status bar reflects the pairs left and the score stub.
+function Mahjong:updateStatus()
+    if not self.status_bar then return end
+    local pairs = math.floor(MahjongLogic.tileCount(self.board) / 2)
+    self.status_bar:setSubTitle(string.format(_("Pairs remaining: %d · Score: %d"), pairs, self.score))
+    -- status_bar is a subwidget, so setDirty on it alone would not repaint;
+    -- flag the window-level widget as well (same pattern as the chess example).
+    UIManager:setDirty(self.status_bar, "ui")
+    UIManager:setDirty(self, "ui")
 end
 
 -- luacheck: no unused args
@@ -234,6 +342,8 @@ function Mahjong:saveGameState()
 end
 
 function Mahjong:onCloseWidget()
+    self.selected = nil
+    self.board_view = nil
     self.board = nil
 end
 
