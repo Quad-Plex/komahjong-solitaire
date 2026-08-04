@@ -18,18 +18,33 @@ captured from `example_app/casualkochess.koplugin`.
 3. **Game logic is pure Lua, free of UI dependencies** (`mahjonglogic.lua` + friends). It must be
    runnable/testable with a plain `lua` interpreter (add `--`-style self-tests to the file).
    The UI (`main.lua`, `mahjongboard.lua`) only reads/writes via a small API.
-4. **Board model — offset-layer 3D turtle.** The board is 3D: a tile is `{ x, y, layer }` on an
-   integer grid shared by all layers. The classic **Turtle layout** (144 tiles) is:
-   - L0: x=2..11, y=2..7 (60 tiles)
-   - L1: x=1..12, y=2..5 (48)
-   - L2: x=3..8,  y=2..5 (24)
-   - L3: x=4..7,  y=3..4 (8)
-   - L4: x=4..7,  y=4    (4)
-   Rendering draws every tile at its real `(x, y, layer)` position with each higher layer offset
-   up-and-right by half a tile (classic interlock), so the stepped pyramid silhouette and the
-   exposed edges of lower tiles are visible (US-06, reworked from the earlier flat-projection
-   experiment — see `AGENTS.md` history). Lower layers paint first; the topmost tile at any
-   screen point is the one you tap.
+4. **Board model — outward-bevel 3D turtle.** The board is 3D: a tile is `{ x, y, layer }` on a
+   shared grid (x, y may be fractional — the head/tail/cap sit on the half grid). The classic
+   **Turtle layout** (144 tiles, the canonical GNOME Mahjongg map) is:
+   - L0: body rows (12+8+10+12+12+10+8+12 = 84) + head (x=0, y=3.5) + tail (x=13..14, y=3.5) = 87
+   - L1: block x=4..9, y=1..6 (6x6 = 36)
+   - L2: block x=5..8, y=2..5 (4x4 = 16)
+   - L3: block x=6..7, y=3..4 (2x2 = 4)
+   - L4: single tile x=6.5, y=3.5 (1)
+   Grid extents: x=0..14, y=0..7.
+    Rendering draws every tile at its real `(x, y, layer)` position, but **each layer is shifted
+    up-left by exactly the bevel thickness** (`tilePos` subtracts `layer*bw`/`layer*bh`), so a
+    raised tile's face is inset from the tile directly beneath it and its outward bevels land
+    exactly on that underlying tile's face edges — the bevel is the visible step and never
+    overlaps the tiles to its east/south. Each tile face is 100x140 (portrait, aspect 1.4)
+    and the outward depth bevels (right side `#78909c`, bottom base `#546e7a`) hang OFF the
+    east/south edges into extension bands of a shared 110x154 viewBox, so a tile with visible
+    bevels is slightly larger than a bare face. The bevels are on the
+    bottom/right, so the camera is at the bottom-right and the stack rises toward the top-left.
+    (A first redesign shipped no layer offset and let the artwork overhang the neighbours — the
+    user rejected it because the bevels overlapped the tiles to their east/south; the
+    per-layer shift of exactly one bevel makes the steps land cleanly. Earlier manual
+    `LAYER_OFF_*` shifts — 0.25/0.25, 0.2/0.14 up-and-right, 0.10/0.10 up-and-left — all
+    produced skewed stacks or white face strips.) The stepped pyramid silhouette, the head/tail
+    protrusions, and the exposed depth
+    bevel edges of lower tiles are visible (US-06, reworked from the earlier flat-projection
+    experiment — see `AGENTS.md` history). Lower layers paint first; the topmost tile at any
+    screen point is the one you tap.
 5. **Free-tile rule** (flat projection): tile at (x,y,L) is free iff:
    - no tile exists at (x,y,L+1) above it, **and**
    - at least one horizontal side is open: no tile at (x-1,y,L) OR no tile at (x+1,y,L).
@@ -42,10 +57,10 @@ captured from `example_app/casualkochess.koplugin`.
    just re-selects.
 8. **Rendering:** the board is an `InputContainer` that paints `IconWidget`s (the tile SVGs)
    absolutely positioned via an `OverlapGroup`'s `overlap_offset` — each tile at its real
-   `(x, y, layer)` offset. It hit-tests taps itself (topmost tile at the tapped point wins) and
-   forwards `(x, y, layer)`. The stock `ButtonTable` grid from the original plan was replaced;
-   `buttontable.lua`/`button.lua` shims were removed. Tiles install into
-   `DataStorage:getDataDir()/icons/mahjong/`.
+    `(x, y, layer)` position on the shared grid. It hit-tests taps itself (topmost tile at the
+    tapped point wins) and forwards `(x, y, layer)`. The stock `ButtonTable` grid from the
+    original plan was replaced; `buttontable.lua`/`button.lua` shims were removed. Tiles install
+    into `DataStorage:getDataDir()/icons/mahjong/`.
 9. **Persistence:** `LuaSettings` in the KOReader settings dir; game state (tile deck, removed
    pairs, score) serialized to a table, saved on close, restored on start. Also persist a small
    settings table (hints on/off, new-game confirmation, etc.).
@@ -134,9 +149,26 @@ As a player, I want each tile to have a distinct, recognizable face so I can tel
   flowers/seasons). Self-test: counts per category match.
 - `matches(a, b)` returns true iff same kind, EXCEPT flowers match any flower and seasons match
   any season.
-- Create simple flat-fill SVG icons (36 distinct faces) sized ~100x100 viewBox, installed via
-  `installIconsIfNeeded()` (copy from plugin `icons/` to
-  `DataStorage:getDataDir()/icons/mahjong/`), plus `select.svg`/`hint.svg` transparent overlays.
+- Create simple flat-fill SVG icons (42 distinct faces, each in 4 bevel variants: base, `_nb`
+  no bottom, `_nr` no right, `_n` neither) sized 100x140 (portrait, matching the
+  board's 1.4 aspect) installed via `installIconsIfNeeded()` (copy from plugin `icons/` to
+  `DataStorage:getDataDir()/icons/mahjong/`), plus `select.svg`/`hint.svg` transparent overlays
+  (also portrait 100x140 so the highlight frames the face without intruding on neighbours).
+   The depth bevel is an **outward extension**: the white face fills (nearly) the full 100x140
+   canvas and medium/dark bevels (right `#78909c`, bottom `#546e7a`) hang OFF its east/south
+   edges into the extension bands of a shared **110x154 viewBox** (bevels 10px wide / 14px tall),
+   so a tile with visible bevels is slightly larger than a bare face. The 3D step is produced by
+   the **board's per-layer up-left shift** (exactly one bevel thickness per layer), so a raised
+   tile's bevels land exactly on the edges of the tile directly beneath it. The face
+   also has a **thin gray outline** drawn inside the face box (~1 viewBox unit ≈ 1 device px,
+   tone `#78909c`), so
+   two adjacent same-layer tiles — which have no bevels between them — show a crisp ~1px grid
+   line at
+   their seam instead of an invisible white-on-white border. Bevels are only drawn
+  on **exposed edges**: a same-layer neighbour to the right/below hides that bevel (no fake seam
+  inside a solid layer); on the half grid an edge is also hidden when covered by TWO
+  half-overlapping same-layer neighbours. Icons are generated by `tools/gen_icons.py` (never
+  hand-edited) and QA'd by `tools/check_icons.py`.
   IconWidget renders SVGs directly (alpha is inherent to the SVG), so no ButtonTable patch is
   needed.
 
@@ -181,7 +213,25 @@ As a player, I want to see the full Turtle board of tiles laid out on the e-ink 
   `IconWidget` per visible tile inside an `OverlapGroup` (children offset via `overlap_offset`).
 - Geometry (`computeGeometry`): portrait tiles (`th = TILE_ASPECT * tw`, `TILE_ASPECT = 1.4`)
   sized to fit both axes (`tw = floor(min(usable_w/units_w, (usable_h/units_h)/ASPECT))`),
-  centered with `origin_x/origin_y`; per-layer offsets `offx = floor(tw/2)`, `offy = floor(th/2)`.
+  centered with `origin_x/origin_y`. **Each layer is shifted up-left by exactly the bevel
+  thickness** (`tilePos` subtracts `layer*bw`/`layer*bh`), so a raised tile's face is inset from
+  the tile directly beneath it and its outward bevels land exactly on that underlying tile's
+  face edges — the bevel is the visible step and never overlaps the tiles to its east/south.
+  Each widget is sized `tile_w = tw + bw`,
+  `tile_h = th + bh` with `BEVEL_FRAC = 0.10` (`bw = floor(tw*0.10+0.5)`, `bh = floor(th*0.10+0.5)`),
+  the face is anchored at the widget's top-left, and the tile's outward depth bevels (right
+  `#78909c`, bottom `#546e7a`) hang off its east/south edges. Earlier
+  manual `LAYER_OFF_*` shifts (0.25/0.25, 0.2/0.14 up-and-right, 0.10/0.10 up-and-left) all
+  produced skewed stacks or white face strips, and the first outward-bevel attempt (no layer
+  offset, bevels overhanging the neighbours) overlapped the tiles to their east/south. `units_w/units_h` come from `LAYOUT_BOUNDS`,
+  computed with `+1 + BEVEL_FRAC` on the east/south extents (bevel overhang) and
+  `- layer*BEVEL_FRAC` on the west/north (the up-left shift).
+  Tile SVGs are portrait 100x140 (matching the 1.4 aspect) in a shared 110x154 viewBox with the
+  outward bevels, so tiles fill their box exactly (no white row gaps) and the stack reads as
+  raised. Each tile's icon is resolved per-position via
+  `MahjongLogic.iconForTile(board, x, y, layer)`, which hides the bottom/right bevel when a
+  same-layer neighbour covers that edge (4 generated variants per face), including on the half
+  grid where an edge covered by TWO half-overlapping same-layer neighbours is also hidden.
 - Children are appended in `buildLayout()` order (bottom layer first) so lower tiles paint under
   upper ones; `OverlapGroup` gets a board-sized `dimen`.
 - `updateBoard()` frees + rebuilds the tiles and calls `UIManager:setDirty`.
@@ -193,7 +243,7 @@ As a player, I want to see the full Turtle board of tiles laid out on the e-ink 
   z-order, hit-test, taps, main wiring) and `us06_paint.lua` (paint-contract regression for
   the crash). New stories extend this suite.
 
-**Acceptance:** Full board renders as 144 tiles in the Turtle silhouette (offset layers readable
+**Acceptance:** Full board renders as 144 tiles in the Turtle silhouette (outward bevels readable
 as a 3D stack); board fits the screen on the target resolution; no blank cells; icons legible;
 tap on a tile reports the exact (x, y, layer).
 

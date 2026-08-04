@@ -1,9 +1,10 @@
 -- US-06 (3D turtle) board suite: loads the REAL mahjonglogic.lua +
--- mahjongboard.lua against the shared stubs and verifies the offset-layer
+-- mahjongboard.lua against the shared stubs and verifies the outward-bevel
 -- board rendering. Checks: geometry fitting, per-layer tile counts, z-order,
--- layer offsets, hit-testing (topmost wins), tap forwarding (x,y,layer) via
--- both the direct and the real KOReader dispatch path, updateBoard after
--- removal, and main.lua wiring.
+-- per-layer up-left shift by the bevel width, bevel-extended icon dimen,
+-- hit-testing (topmost wins), tap forwarding (x,y,layer) via both the direct
+-- and the real KOReader dispatch path, updateBoard after removal, and
+-- main.lua wiring.
 
 local mock = require("mock")
 local ctx = mock.newContext()
@@ -32,8 +33,8 @@ local b = Board:new{
     onTileTap = function(x, y, layer) taps[#taps + 1] = { x, y, layer } end,
 }
 
-expect(b.grid.x_min == 1 and b.grid.x_max == 12 and b.grid.y_min == 2 and b.grid.y_max == 7,
-    "grid bounds are 1..12 x 2..7")
+expect(b.grid.x_min == 0 and b.grid.x_max == 14 and b.grid.y_min == 0 and b.grid.y_max == 7,
+    "grid bounds are 0..14 x 0..7")
 expect(b.tw > 0 and b.th > 0, "tile size computed (" .. b.tw .. "x" .. b.th .. ")")
 expect(b.th > b.tw, "tiles are portrait (th > tw)")
 
@@ -47,9 +48,9 @@ expect(#b[1][1] == 144, "OverlapGroup holds 144 icon widgets")
 
 local layer_sizes = {}
 for l = 0, Logic.MAX_LAYER do layer_sizes[l] = #b.tiles_by_layer[l] end
-expect(layer_sizes[0] == 60 and layer_sizes[1] == 48 and layer_sizes[2] == 24
-    and layer_sizes[3] == 8 and layer_sizes[4] == 4,
-    "per-layer tile counts match the Turtle layout")
+expect(layer_sizes[0] == 87 and layer_sizes[1] == 36 and layer_sizes[2] == 16
+    and layer_sizes[3] == 4 and layer_sizes[4] == 1,
+    "per-layer tile counts match the classic Turtle (87/36/16/4/1)")
 
 -- Every drawn tile stays inside the widget area.
 local all_inside = true
@@ -79,13 +80,22 @@ for _, p in ipairs(Logic.buildLayout()) do
 end
 expect(zi - 1 == 144 and z_order_ok, "children appended in buildLayout order (bottom layer first)")
 
--- Layer offset: same (x,y) in a higher layer sits up-and-right of the lower.
+-- Layer offset: each layer L is shifted up-left by L*bw / L*bh (the outward
+-- bevel thickness), so a raised tile's face is inset from the tile directly
+-- beneath it and its bevels land exactly on that underlying tile's face
+-- edges — the visible step between layers.
 local px0, py0 = b:tilePos(2, 2, 0)
 local px1, py1 = b:tilePos(2, 2, 1)
 local px2, py2 = b:tilePos(2, 2, 2)
-expect(px1 > px0 and py1 < py0, "L1 is offset right-and-up from L0")
-expect(px2 > px1 and py2 < py1, "L2 is offset right-and-up from L1")
-expect(px1 - px0 == b.offx and py0 - py1 == b.offy, "offsets equal one layer step")
+expect(px1 == px0 - b.bw and py1 == py0 - b.bh
+    and px2 == px0 - 2 * b.bw and py2 == py0 - 2 * b.bh,
+    "each layer is shifted up-left by the bevel width (L*BW / L*BH)")
+expect(b.bw > 0 and b.bh > 0, "outward bevel thickness computed (" .. b.bw .. "x" .. b.bh .. ")")
+expect(b.tile_w == b.tw + b.bw and b.tile_h == b.th + b.bh,
+    "icon widget dimen is face + bevel (tile_w/tile_h)")
+local icon_widget = b.tile_widgets[Logic.posKey(2, 2, 0)]
+expect(icon_widget.width == b.tile_w and icon_widget.height == b.tile_h,
+    "IconWidgets are sized face + bevel so the bevels overhang neighbours")
 
 -- ---- Hit-testing: topmost tile at a point wins ---------------------------------
 
@@ -98,32 +108,38 @@ proj[pk(9, 6, 0)] = "east"
 
 local p = Board:new{ board = proj, width = 600, height = 400 }
 
-local lp0x, lp0y = p:tilePos(5, 3, 0)
-local lp1x, lp1y = p:tilePos(5, 3, 1)
-local lp2x, lp2y = p:tilePos(5, 3, 2)
+local lpx, lpy = p:tilePos(5, 3, 0)
 local epx, epy = p:tilePos(9, 6, 0)
 
-local h = p:hitTest(lp2x + 2, lp2y + 2)
-expect(h ~= nil and h.layer == 2 and h.kind == "d3", "tap on top tile hits L2")
-h = p:hitTest(lp1x + 2, lp1y + 2)
-expect(h ~= nil and h.layer == 1 and h.kind == "c2", "tap on exposed L1 top-left hits L1 (not L2)")
-h = p:hitTest(lp0x + p.tw - 2, lp0y + p.th - 2)
-expect(h ~= nil and h.layer == 0 and h.kind == "b1", "tap on exposed L0 bottom-right hits L0")
+local h = p:hitTest(lpx + 2, lpy + 2)
+expect(h ~= nil and h.layer == 2 and h.kind == "d3",
+    "tap on a 3-tile stack hits the topmost layer (L2)")
+h = p:hitTest(lpx + p.tw - 1, lpy + p.th - 1)
+expect(h ~= nil and h.layer == 0 and h.kind == "b1",
+    "raised tiles are shifted up-left, so the stack's bottom-right corner exposes the bottom tile (L0)")
 h = p:hitTest(epx + 2, epy + 2)
 expect(h ~= nil and h.layer == 0 and h.kind == "east", "tap on lone tile hits it")
 h = p:hitTest(0, 0)
 expect(h == nil, "tap on empty area hits nothing")
+
+-- Removing the top tile exposes the one below it at the same grid position.
+proj[pk(5, 3, 2)] = nil
+proj[pk(5, 3, 1)] = nil
+p:updateBoard()
+h = p:hitTest(lpx + 2, lpy + 2)
+expect(h ~= nil and h.layer == 0 and h.kind == "b1",
+    "lower tile is hit after the tiles above it were removed")
 
 -- ---- Tap forwarding (x, y, layer) ---------------------------------------------
 
 local taps2 = {}
 local p3 = Board:new{ board = proj, width = 300, height = 200, onTileTap = function(x, y, layer) taps2[#taps2 + 1] = { x, y, layer } end }
 p3.dimen.x, p3.dimen.y = 0, 0
-local p3x, p3y = p3:tilePos(5, 3, 0)
+local p3x, p3y = p3:tilePos(9, 6, 0)
 local g = { pos = { x = p3x + p3.tw - 2, y = p3y + p3.th - 2 } }
 p3:onTapSelect(nil, g)
-expect(#taps2 == 1 and taps2[1][1] == 5 and taps2[1][2] == 3 and taps2[1][3] == 0,
-    "onTapSelect forwards (5, 3, 0) for a tap on the exposed L0 tile")
+expect(#taps2 == 1 and taps2[1][1] == 9 and taps2[1][2] == 6 and taps2[1][3] == 0,
+    "onTapSelect forwards (9, 6, 0) for a tap on the lone tile")
 
 -- Simulate KOReader's REAL dispatch (regression for a device crash):
 -- onGesture does Event:new(name, gsseq.args, ev) which table.pack()s the
@@ -148,11 +164,18 @@ local function tileCountFor(w)
     return n
 end
 
-proj[pk(5, 3, 2)] = nil
-p:updateBoard()
-expect(#p.tiles_by_layer[2] == 0 and tileCountFor(p) == 3, "removed tile is no longer drawn")
-h = p:hitTest(lp2x + 2, lp2y + 2)
-expect(h == nil, "removed tile's old spot is no longer tappable")
+local projB = {}
+projB[pk(5, 3, 0)] = "b1"
+projB[pk(5, 3, 1)] = "c2"
+projB[pk(9, 6, 0)] = "east"
+local pB = Board:new{ board = projB, width = 600, height = 400 }
+projB[pk(5, 3, 1)] = nil
+pB:updateBoard()
+expect(#pB.tiles_by_layer[1] == 0 and tileCountFor(pB) == 2, "removed tile is no longer drawn")
+local blpx, blpy = pB:tilePos(5, 3, 0)
+h = pB:hitTest(blpx + 2, blpy + 2)
+expect(h ~= nil and h.layer == 0 and h.kind == "b1",
+    "after removal the tile below is drawn and tappable")
 
 -- ---- main.lua integration ------------------------------------------------------
 
@@ -177,10 +200,10 @@ expect(tileCountFor(board_widget) == 144, "game board draws all 144 tiles")
 local tapped = nil
 mj.handleTileTap = function(_, x, y, layer) tapped = { x, y, layer } end
 board_widget.dimen.x, board_widget.dimen.y = 0, 0
-local bpx, bpy = board_widget:tilePos(4, 4, 4)
+local bpx, bpy = board_widget:tilePos(6.5, 3.5, 4)
 board_widget:onTapSelect(nil, { pos = { x = bpx + 1, y = bpy + 1 } })
-expect(tapped ~= nil and tapped[1] == 4 and tapped[2] == 4 and tapped[3] == 4,
-    "board tap reaches Mahjong:handleTileTap with (4, 4, 4)")
+expect(tapped ~= nil and tapped[1] == 6.5 and tapped[2] == 3.5 and tapped[3] == 4,
+    "board tap reaches Mahjong:handleTileTap with (6.5, 3.5, 4)")
 
 local new_game_btn = mj[1][2][1]
 expect(type(new_game_btn.callback) == "function", "New Game button wired")

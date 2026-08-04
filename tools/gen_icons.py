@@ -11,11 +11,36 @@ Usage:
     python3 tools/gen_icons.py --check    # exit 1 if any committed icon is stale
     python3 tools/gen_icons.py --out DIR  # write into a custom directory
 
-Design goals (locked in by the rendering upgrade):
-  1. Tile faces fill the whole 100x100 viewBox so adjacent tiles touch
-     edge-to-edge (no white margin between tiles or between rows). A thin
-     gray stroke on each face delineates individual tiles.
-  2. Symbols fill much more of the tile: larger glyphs, less inner padding.
+Design goals (locked in by the 2.5D redesign):
+  1. The bevel is an OUTWARD extension of the tile, not an inset. The tile
+     face fills (nearly) the full 100x140 portrait canvas (matching the
+     board's 1.4 aspect) and the depth bevels hang off its right and bottom
+     sides, so a tile with visible bevels is slightly LARGER than a bare
+     face. This is the outside of the tile that is visible. The 3D step is
+     produced by the BOARD: it shifts each layer up-left by exactly the bevel
+     thickness (mahjongboard.lua tilePos subtracts layer*bevel), so a raised
+     tile's bevels land exactly on the edges of the tile directly beneath it
+     and the bevel never overlaps the tiles to its east/south. The artwork
+     only supplies the outward bevel bands; the shift is a board concern.
+  2. Every variant shares one 110x154 viewBox: the face at [0,0]-[100,140]
+     and the bevels in the extension bands [100,110]x[0,154] (right side) and
+     [0,100]x[140,154] (base). A variant simply leaves the absent bevel band
+     transparent, so the board can give every tile widget the same dimen and
+     the face is always anchored at the widget's top-left. The board sets the
+     widget dimen to (tw + bw, th + bh) with bw/bh = 10% of the tile size, so
+     the rendered face is exactly the grid pitch.
+  3. The face carries a thin gray outline (FACE_STROKE, ~1 viewBox unit)
+     drawn inside the face box, so adjacent same-layer tiles — which have no
+     bevels between them — show a crisp ~1px grid line at every seam instead
+     of an invisible white-on-white border.
+  4. Bevels appear ONLY on exposed edges. Each kind ships in four variants
+     (base / "_nb" / "_nr" / "_n", see VARIANTS): a same-layer neighbour to
+     the right or below blocks that bevel (it would read as a fake seam inside
+     an otherwise solid layer). The board picks the variant per tile via
+     MahjongLogic.iconForTile, which also handles the Turtle's half-grid
+     head/tail (an edge covered by two half-overlapping neighbours has no
+     bevel either).
+  5. Symbols fill much of the face: larger glyphs, less inner padding.
      Low-count tiles use larger symbols (authentic mahjong style: the single
      bamboo is a large stick, the 1-dot is a big dot).
 """
@@ -26,7 +51,62 @@ import os
 ICONS_DIR = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "mahjong.koplugin", "icons"))
 
-FACE = '<rect x="1" y="1" width="98" height="98" rx="4" fill="#ffffff" stroke="#9e9e9e" stroke-width="2"/>'
+# Canvas: face + outward bevels. The FACE is [0,0]-[100,140] (portrait,
+# matching the board's TILE_ASPECT); the bevel bands hang OFF the face, so a
+# tile with visible bevels is larger than a bare face. Every variant uses the
+# SAME 110x154 viewBox — absent bevels are just left transparent — which lets
+# the board give every tile widget one uniform dimen.
+VB_W, VB_H = 110, 154
+FACE_W, FACE_H = 100, 140
+
+# The tile body: the white face fills the whole 100x140 area and the two
+# depth-bevel bands extend OUTSIDE it — a 10-wide right side and a 14-tall
+# base (10% of each axis). They are drawn first so the face sits on top.
+#
+# The face is outlined by a medium-gray ring (FACE_STROKE, ~1 viewBox unit —
+# about 1 device px on the target screen) drawn INSIDE the face box, so it
+# never bleeds into the bevel bands or beyond the widget. Two adjacent
+# same-layer tiles (which have no bevels between them) each draw half of this
+# ring, giving a crisp ~1px "grid" line at every seam instead of a pure-white
+# hairline — without it, internal seams of a solid layer are invisible on
+# e-ink. The tone matches the right-side bevel so an exposed edge still reads
+# as one continuous tile side (face -> border -> bevel).
+#
+# Bevel variants: a tile's right/bottom bevel is only drawn when that edge is
+# exposed — a same-layer neighbour to the right/below blocks it (the bevel
+# would read as a fake seam inside an otherwise solid layer). Each kind is
+# generated in four variants (see VARIANTS): base (both bevels), "_nb" (no
+# bottom bevel), "_nr" (no right bevel), "_n" (neither). The bevel band is
+# transparent on the hidden side, so hidden edges mesh seamlessly with the
+# neighbouring tile.
+#
+# The step between layers comes from the board, not the artwork: mahjongboard
+# shifts each layer up-left by exactly the bevel thickness, so a raised tile's
+# bevels land exactly on the edges of the tile directly beneath it (the bevel
+# never overlaps the tiles to its east/south). This artwork only supplies the
+# outward bevel bands. Darker fills than the original pale grays give the
+# tiles contrast on e-ink (white face -> light right side -> dark base).
+FACE_BEVEL_RIGHT = '<rect x="100" y="0" width="10" height="154" fill="#78909c"/>'
+FACE_BEVEL_BOTTOM = '<rect x="0" y="140" width="100" height="14" fill="#546e7a"/>'
+
+# Face outline: thin medium-gray ring inside the face box, ~1 viewBox unit
+# (~1 device px on the target screen). Same tone as the side bevel. See the
+# tile-body comment above.
+FACE_STROKE = 1
+FACE_STROKE_COLOR = "#78909c"
+
+
+def face(bottom=True, right=True):
+    parts = []
+    if right:
+        parts.append(FACE_BEVEL_RIGHT)
+    if bottom:
+        parts.append(FACE_BEVEL_BOTTOM)
+    s = FACE_STROKE
+    parts.append(f'<rect x="{s / 2:.1f}" y="{s / 2:.1f}" '
+                 f'width="{FACE_W - s}" height="{FACE_H - s}" rx="3" '
+                 f'fill="#ffffff" stroke="{FACE_STROKE_COLOR}" stroke-width="{s}"/>')
+    return "".join(parts)
 
 
 def fnum(x):
@@ -46,9 +126,12 @@ def path(d, stroke, w=8, fill="none", lc="round", lj="round"):
     return f'<path d="{d}" fill="{fill}" stroke="{stroke}" stroke-width="{fnum(w)}" stroke-linecap="{lc}" stroke-linejoin="{lj}"/>'
 
 
-def svg(body):
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" '
-            f'viewBox="0 0 100 100">{FACE}{body}</svg>')
+def svg(body, bottom=True, right=True):
+    # Symbols are authored in 100x100 space; shift them so their center lands
+    # on the face center (50, 70) in viewBox units.
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{VB_W}" height="{VB_H}" '
+            f'viewBox="0 0 {VB_W} {VB_H}">{face(bottom, right)}'
+            f'<g transform="translate(0,20)">{body}</g></svg>')
 
 
 def dot(cx, cy, r=8.5):
@@ -163,38 +246,57 @@ SEASONS = {
 }
 
 
+# Bevel variants per kind, in the order the board expects (see
+# MahjongLogic.iconForTile): "" both bevels, "_nb" no bottom, "_nr" no right,
+# "_n" neither. base name <-> (bottom, right).
+VARIANTS = [
+    ("",     True,  True),
+    ("_nb",  False, True),
+    ("_nr",  True,  False),
+    ("_n",   False, False),
+]
+
+
 def generate():
     """Return {filename: svg_contents} for every icon the plugin ships."""
     written = {}
     for n in range(1, 10):
-        written[f"b{n}.svg"] = svg("".join(bamboo(cx, cy, w, h) for cx, cy, w, h in B[n]))
-        written[f"d{n}.svg"] = svg("".join(dot(cx, cy, r) for cx, cy, r in D[n]))
-        written[f"c{n}.svg"] = svg("".join(path(d, "#c62828") for d in C[n]))
+        for suffix, bottom, right in VARIANTS:
+            written[f"b{n}{suffix}.svg"] = svg("".join(bamboo(cx, cy, w, h) for cx, cy, w, h in B[n]), bottom, right)
+        for suffix, bottom, right in VARIANTS:
+            written[f"d{n}{suffix}.svg"] = svg("".join(dot(cx, cy, r) for cx, cy, r in D[n]), bottom, right)
+        for suffix, bottom, right in VARIANTS:
+            written[f"c{n}{suffix}.svg"] = svg("".join(path(d, "#c62828") for d in C[n]), bottom, right)
     for name, strokes in WINDS.items():
-        written[f"{name}.svg"] = svg("".join(path(d, "#1565c0") for d in strokes))
+        for suffix, bottom, right in VARIANTS:
+            written[f"{name}{suffix}.svg"] = svg("".join(path(d, "#1565c0") for d in strokes), bottom, right)
     for name, body in DRAGONS.items():
         if isinstance(body, list):
             body = "".join(body)
-        written[f"{name}.svg"] = svg(body)
+        for suffix, bottom, right in VARIANTS:
+            written[f"{name}{suffix}.svg"] = svg(body, bottom, right)
     for n in range(1, 5):
-        written[f"flower{n}.svg"] = svg("".join(FLOWERS[n]))
-        written[f"season{n}.svg"] = svg("".join(SEASONS[n]))
-    # Overlays + empty face (no face rect).
-    written["select.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" '
-                             f'viewBox="0 0 100 100"><rect x="1" y="1" width="98" height="98" rx="4" '
+        for suffix, bottom, right in VARIANTS:
+            written[f"flower{n}{suffix}.svg"] = svg("".join(FLOWERS[n]), bottom, right)
+        for suffix, bottom, right in VARIANTS:
+            written[f"season{n}{suffix}.svg"] = svg("".join(SEASONS[n]), bottom, right)
+    # Overlays + empty face (no face rect). Portrait, matching the tile box so
+    # the highlight covers the whole face.
+    written["select.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
+                             f'viewBox="0 0 100 140"><rect x="1" y="1" width="98" height="138" rx="4" '
                              f'fill="none" stroke="#263238" stroke-width="5"/></svg>')
-    written["hint.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" '
-                           f'viewBox="0 0 100 100">'
+    written["hint.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
+                           f'viewBox="0 0 100 140">'
                            f'<path d="M6 18 L6 6 L18 6" fill="none" stroke="#263238" stroke-width="6" '
                            f'stroke-linecap="round" stroke-linejoin="round"/>'
                            f'<path d="M82 6 L94 6 L94 18" fill="none" stroke="#263238" stroke-width="6" '
                            f'stroke-linecap="round" stroke-linejoin="round"/>'
-                           f'<path d="M94 82 L94 94 L82 94" fill="none" stroke="#263238" stroke-width="6" '
+                           f'<path d="M94 122 L94 134 L82 134" fill="none" stroke="#263238" stroke-width="6" '
                            f'stroke-linecap="round" stroke-linejoin="round"/>'
-                           f'<path d="M18 94 L6 94 L6 82" fill="none" stroke="#263238" stroke-width="6" '
+                           f'<path d="M18 134 L6 134 L6 122" fill="none" stroke="#263238" stroke-width="6" '
                            f'stroke-linecap="round" stroke-linejoin="round"/></svg>')
-    written["empty.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" '
-                            'viewBox="0 0 100 100"/>')
+    written["empty.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
+                            'viewBox="0 0 100 140"/>')
     return written
 
 

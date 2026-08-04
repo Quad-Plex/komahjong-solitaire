@@ -131,24 +131,40 @@ end
 
 -- Turtle layout ---------------------------------------------------------
 --
--- The classic 144-tile Turtle, one flat rectangle per height level (L0
--- bottom, L4 top), all on the shared integer grid:
---   L0: x=2..11, y=2..7   (10x6 = 60)
---   L1: x=1..12, y=2..5   (12x4 = 48)
---   L2: x=3..8,  y=2..5   ( 6x4 = 24)
---   L3: x=4..7,  y=3..4   ( 4x2 =  8)
---   L4: x=4..7,  y=4       ( 4x1 =  4)
--- 60 + 48 + 24 + 8 + 4 = 144. Max x is 12, max y is 7.
+-- The classic 144-tile Turtle (the canonical GNOME Mahjongg map), with the
+-- stepped pyramid and the head/tail protrusions. Coordinates are tile
+-- top-left corners; `y` may be fractional (x=0/y=3.5 head, x=13..14/y=3.5
+-- tail, x=6.5/y=3.5 cap) so the silhouette's half-tile overhang is kept:
+--   L0: body rows (12+8+10+12+12+10+8+12 = 84) + head (x=0, y=3.5) + tail
+--       (x=13..14, y=3.5) = 87
+--   L1: block x=4..9,  y=1..6   (6x6  = 36)
+--   L2: block x=5..8,  y=2..5   (4x4  = 16)
+--   L3: block x=6..7,  y=3..4   (2x2  =  4)
+--   L4: single tile x=6.5, y=3.5 (       1)
+-- 87 + 36 + 16 + 4 + 1 = 144. Grid extents: x=0..14, y=0..7.
 local LAYOUT_SPEC = {
-    { layer = 0, x_min = 2,  x_max = 11, y_min = 2, y_max = 7 },
-    { layer = 1, x_min = 1,  x_max = 12, y_min = 2, y_max = 5 },
-    { layer = 2, x_min = 3,  x_max = 8,  y_min = 2, y_max = 5 },
-    { layer = 3, x_min = 4,  x_max = 7,  y_min = 3, y_max = 4 },
-    { layer = 4, x_min = 4,  x_max = 7,  y_min = 4, y_max = 4 },
+    -- Layer 0 body rows, bottom row first.
+    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 0 },
+    { layer = 0, kind = "row",   x_min = 3,  x_max = 10, y = 1 },
+    { layer = 0, kind = "row",   x_min = 2,  x_max = 11, y = 2 },
+    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 3 },
+    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 4 },
+    { layer = 0, kind = "row",   x_min = 2,  x_max = 11, y = 5 },
+    { layer = 0, kind = "row",   x_min = 3,  x_max = 10, y = 6 },
+    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 7 },
+    -- Head and tail protrusions (half a tile below the y=3 body row).
+    { layer = 0, kind = "tile",  x = 0,  y = 3.5 },
+    { layer = 0, kind = "row",   x_min = 13, x_max = 14, y = 3.5 },
+    -- Upper pyramid blocks.
+    { layer = 1, kind = "block", x_min = 4, x_max = 9,  y_min = 1, y_max = 6 },
+    { layer = 2, kind = "block", x_min = 5, x_max = 8,  y_min = 2, y_max = 5 },
+    { layer = 3, kind = "block", x_min = 6, x_max = 7,  y_min = 3, y_max = 4 },
+    { layer = 4, kind = "tile",  x = 6.5, y = 3.5 },
 }
 
 -- Returns the 144 tile positions of the Turtle layout as an array of
--- { x = .., y = .., layer = .. } tables, bottom layer first.
+-- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
+-- paint lower layers first).
 -- The layout is static, so it is built once and cached: rebuilds (new game,
 -- board repaints) iterate the same table instead of allocating 144 fresh
 -- position tables every call. Callers must NOT mutate the returned array.
@@ -156,11 +172,22 @@ local _layout_cache = nil
 function MahjongLogic.buildLayout()
     if not _layout_cache then
         local layout = {}
+        local function add(x, y, layer)
+            layout[#layout + 1] = { x = x, y = y, layer = layer }
+        end
         for _, spec in ipairs(LAYOUT_SPEC) do
-            for y = spec.y_min, spec.y_max do
+            if spec.kind == "row" then
                 for x = spec.x_min, spec.x_max do
-                    layout[#layout + 1] = { x = x, y = y, layer = spec.layer }
+                    add(x, spec.y, spec.layer)
                 end
+            elseif spec.kind == "block" then
+                for y = spec.y_min, spec.y_max do
+                    for x = spec.x_min, spec.x_max do
+                        add(x, y, spec.layer)
+                    end
+                end
+            else -- single tile
+                add(spec.x, spec.y, spec.layer)
             end
         end
         _layout_cache = layout
@@ -259,6 +286,47 @@ function MahjongLogic.iconForKind(kind)
     return kind
 end
 
+-- True if a same-layer neighbour fully covers the tile's east edge — either
+-- a tile directly at (x+1, y), or two half-overlapping neighbours at
+-- (x+1, y-0.5) and (x+1, y+0.5). The Turtle's head/tail/cap sit on the half
+-- grid, so a tile can be adjacent to half of two other tiles on one side
+-- (the head at (0, 3.5) has body tiles at (1, 3) and (1, 4) to its east);
+-- only a FULLY covered edge hides the bevel. x/y are 0.5-grid exact in the
+-- layout, so ±0.5 arithmetic produces the canonical keys.
+local function hasEastNeighbour(board, x, y, layer)
+    if MahjongLogic.tileAt(board, x + 1, y, layer) then return true end
+    return MahjongLogic.tileAt(board, x + 1, y - 0.5, layer) ~= nil
+        and MahjongLogic.tileAt(board, x + 1, y + 0.5, layer) ~= nil
+end
+
+local function hasSouthNeighbour(board, x, y, layer)
+    if MahjongLogic.tileAt(board, x, y + 1, layer) then return true end
+    return MahjongLogic.tileAt(board, x - 0.5, y + 1, layer) ~= nil
+        and MahjongLogic.tileAt(board, x + 0.5, y + 1, layer) ~= nil
+end
+
+-- Icon name for the tile at (x, y, layer), including the 2.5D bevel-variant
+-- suffix: "" (both bevels), "_nb" (no bottom bevel), "_nr" (no right bevel),
+-- "_n" (neither). A tile's right/bottom bevel is only drawn when that edge is
+-- exposed: a same-layer neighbour to the right/below blocks it (otherwise it
+-- reads as a fake seam inside an otherwise solid layer). The variants are
+-- generated by tools/gen_icons.py and installed with the rest of the set.
+-- Returns nil if the cell is empty.
+function MahjongLogic.iconForTile(board, x, y, layer)
+    local kind = MahjongLogic.tileAt(board, x, y, layer)
+    if not kind then return nil end
+    local has_right = hasEastNeighbour(board, x, y, layer)
+    local has_bottom = hasSouthNeighbour(board, x, y, layer)
+    if has_right and has_bottom then
+        return kind .. "_n"
+    elseif has_right then
+        return kind .. "_nr"
+    elseif has_bottom then
+        return kind .. "_nb"
+    end
+    return kind
+end
+
 -- Free-tile rules ----------------------------------------------------------
 --
 -- Flat projection (design decision 5): a tile at (x,y,L) is free if
@@ -290,7 +358,8 @@ end
 function MahjongLogic.freeTiles(board)
     local free = {}
     for key, kind in pairs(board) do
-        local x, y, layer = key:match("^(%d+),(%d+),(%d+)$")
+        -- x/y may be fractional (head/tail/cap tiles sit on the half grid).
+        local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
         if not x then
             error("freeTiles: malformed board key " .. tostring(key))
         end
@@ -337,11 +406,11 @@ function MahjongLogic.gridBounds()
             y_min = math.huge,
             y_max = -math.huge,
         }
-        for _, spec in ipairs(LAYOUT_SPEC) do
-            bounds.x_min = math.min(bounds.x_min, spec.x_min)
-            bounds.x_max = math.max(bounds.x_max, spec.x_max)
-            bounds.y_min = math.min(bounds.y_min, spec.y_min)
-            bounds.y_max = math.max(bounds.y_max, spec.y_max)
+        for _, p in ipairs(MahjongLogic.buildLayout()) do
+            bounds.x_min = math.min(bounds.x_min, p.x)
+            bounds.x_max = math.max(bounds.x_max, p.x)
+            bounds.y_min = math.min(bounds.y_min, p.y)
+            bounds.y_max = math.max(bounds.y_max, p.y)
         end
         _bounds_cache = bounds
     end
@@ -392,8 +461,8 @@ function MahjongLogic.runSelfTests()
     check(not MahjongLogic.matches("flower1", "b1"), "flower never matches a suited tile")
     check(not MahjongLogic.matches("east", "south"), "east does not match south")
 
-    -- Turtle layout: exactly 144 unique positions, per-layer rectangles
-    -- matching the table, grid within x<=12, y<=7.
+    -- Turtle layout: exactly 144 unique positions, per-layer counts matching
+    -- the classic Turtle (87/36/16/4/1), grid within x<=14, y<=7.
     local layout = MahjongLogic.buildLayout()
     check(#layout == 144, "layout has 144 positions (got " .. #layout .. ")")
     local layer_counts = {}
@@ -407,23 +476,29 @@ function MahjongLogic.runSelfTests()
         max_x = math.max(max_x, p.x)
         max_y = math.max(max_y, p.y)
     end
-    check(layer_counts[0] == 60, "layer 0 has 60 tiles (got " .. tostring(layer_counts[0]) .. ")")
-    check(layer_counts[1] == 48, "layer 1 has 48 tiles (got " .. tostring(layer_counts[1]) .. ")")
-    check(layer_counts[2] == 24, "layer 2 has 24 tiles (got " .. tostring(layer_counts[2]) .. ")")
-    check(layer_counts[3] == 8, "layer 3 has 8 tiles (got " .. tostring(layer_counts[3]) .. ")")
-    check(layer_counts[4] == 4, "layer 4 has 4 tiles (got " .. tostring(layer_counts[4]) .. ")")
-    check(max_x == 12 and max_y == 7, "grid bounds are x<=12, y<=7 (got " .. max_x .. "x" .. max_y .. ")")
+    check(layer_counts[0] == 87, "layer 0 has 87 tiles (got " .. tostring(layer_counts[0]) .. ")")
+    check(layer_counts[1] == 36, "layer 1 has 36 tiles (got " .. tostring(layer_counts[1]) .. ")")
+    check(layer_counts[2] == 16, "layer 2 has 16 tiles (got " .. tostring(layer_counts[2]) .. ")")
+    check(layer_counts[3] == 4, "layer 3 has 4 tiles (got " .. tostring(layer_counts[3]) .. ")")
+    check(layer_counts[4] == 1, "layer 4 has 1 tile (got " .. tostring(layer_counts[4]) .. ")")
+    check(max_x == 14 and max_y == 7, "grid bounds are x<=14, y<=7 (got " .. max_x .. "x" .. max_y .. ")")
     for _, s in ipairs(LAYOUT_SPEC) do
-        local count = 0
-        for y = s.y_min, s.y_max do
+        if s.kind == "row" then
             for x = s.x_min, s.x_max do
-                count = count + 1
-                check(seen[MahjongLogic.posKey(x, y, s.layer)] ~= nil,
-                    "position " .. x .. "," .. y .. ",L" .. s.layer .. " is present")
+                check(seen[MahjongLogic.posKey(x, s.y, s.layer)] ~= nil,
+                    "row tile " .. x .. "," .. s.y .. ",L" .. s.layer .. " is present")
             end
+        elseif s.kind == "block" then
+            for y = s.y_min, s.y_max do
+                for x = s.x_min, s.x_max do
+                    check(seen[MahjongLogic.posKey(x, y, s.layer)] ~= nil,
+                        "block tile " .. x .. "," .. y .. ",L" .. s.layer .. " is present")
+                end
+            end
+        else
+            check(seen[MahjongLogic.posKey(s.x, s.y, s.layer)] ~= nil,
+                "tile " .. s.x .. "," .. s.y .. ",L" .. s.layer .. " is present")
         end
-        check(count == layer_counts[s.layer],
-            "layer " .. s.layer .. " has " .. count .. " spec cells (got " .. tostring(layer_counts[s.layer]) .. ")")
     end
 
     -- newGame: same seed is deterministic; different seed differs.
@@ -526,8 +601,64 @@ function MahjongLogic.runSelfTests()
 
     -- Flat projection helpers -------------------------------------------
     local bounds = MahjongLogic.gridBounds()
-    check(bounds.x_min == 1 and bounds.x_max == 12, "grid x extents are 1..12")
-    check(bounds.y_min == 2 and bounds.y_max == 7, "grid y extents are 2..7")
+    check(bounds.x_min == 0 and bounds.x_max == 14, "grid x extents are 0..14")
+    check(bounds.y_min == 0 and bounds.y_max == 7, "grid y extents are 0..7")
+
+    -- Bevel-variant icons (2.5D bevels only on exposed edges): a same-layer
+    -- neighbour below hides the bottom bevel, one to the right hides the right
+    -- bevel.
+    local bv = boardWith{
+        {2,2,0,"b1"}, {3,2,0,"b2"}, {2,3,0,"b3"}, {3,3,0,"b4"},
+    }
+    check(MahjongLogic.iconForTile(bv, 2, 2, 0) == "b1_n",
+        "tile with right + bottom neighbours draws no bevels (b1_n)")
+    check(MahjongLogic.iconForTile(bv, 3, 2, 0) == "b2_nb",
+        "tile with only a bottom neighbour keeps the right bevel (b2_nb)")
+    check(MahjongLogic.iconForTile(bv, 2, 3, 0) == "b3_nr",
+        "tile with only a right neighbour keeps the bottom bevel (b3_nr)")
+    check(MahjongLogic.iconForTile(bv, 3, 3, 0) == "b4",
+        "corner tile with no neighbours keeps both bevels (b4)")
+    check(MahjongLogic.iconForTile(boardWith{ {5,5,0,"east"} }, 5, 5, 0) == "east",
+        "lone tile keeps both bevels")
+    check(MahjongLogic.iconForTile(bv, 9, 9, 0) == nil, "no icon for an empty cell")
+
+    -- Half-grid protrusions: a tile adjacent to half of two other tiles loses
+    -- the bevel on that side (fully covered edge), while a partly-exposed
+    -- edge keeps it. On a full Turtle the head (0,3.5) faces (1,3) and (1,4)
+    -- on its east, so it has no right bevel; the cap and the east tail tip
+    -- are fully exposed and keep both bevels.
+    local tur_bevel = MahjongLogic.newGame(42)
+    local head_kind = MahjongLogic.tileAt(tur_bevel, 0, 3.5, 0)
+    check(MahjongLogic.iconForTile(tur_bevel, 0, 3.5, 0) == head_kind .. "_nr",
+        "head (0,3.5) has no right bevel (its east edge is covered by (1,3)+(1,4))")
+    local cap_kind = MahjongLogic.tileAt(tur_bevel, 6.5, 3.5, 4)
+    check(MahjongLogic.iconForTile(tur_bevel, 6.5, 3.5, 4) == cap_kind,
+        "cap (6.5,3.5,L4) keeps both bevels")
+    local tail_kind = MahjongLogic.tileAt(tur_bevel, 14, 3.5, 0)
+    check(MahjongLogic.iconForTile(tur_bevel, 14, 3.5, 0) == tail_kind,
+        "east tail tip (14,3.5) keeps both bevels")
+    local tail_l_kind = MahjongLogic.tileAt(tur_bevel, 13, 3.5, 0)
+    check(MahjongLogic.iconForTile(tur_bevel, 13, 3.5, 0) == tail_l_kind .. "_nr",
+        "left tail tile (13,3.5) has no right bevel (neighbour (14,3.5) covers it)")
+    -- (12,3) is only PARTIALLY covered on its east by the tail (which starts
+    -- at y=3.5), so it keeps the right bevel.
+    local b12_3 = MahjongLogic.tileAt(tur_bevel, 12, 3, 0)
+    check(MahjongLogic.iconForTile(tur_bevel, 12, 3, 0) == b12_3 .. "_nb",
+        "(12,3) keeps the right bevel (tail covers only half its east edge)")
+
+    -- Half-grid protrusions: head/tail/cap are free on a full board, and
+    -- freeTiles parses their fractional position keys.
+    local tur = MahjongLogic.newGame(42)
+    check(MahjongLogic.isFree(tur, 0, 3.5, 0), "head tile is free")
+    check(MahjongLogic.isFree(tur, 13, 3.5, 0), "left tail tile is free")
+    check(MahjongLogic.isFree(tur, 14, 3.5, 0), "right tail tile is free")
+    check(MahjongLogic.isFree(tur, 6.5, 3.5, 4), "cap tile is free")
+    local ft = MahjongLogic.freeTiles(tur)
+    local has_head = false
+    for _, t in ipairs(ft) do
+        if t.x == 0 and t.y == 3.5 and t.layer == 0 then has_head = true end
+    end
+    check(has_head, "freeTiles parses half-grid keys and lists the head tile")
 
     local proj = boardWith{ {2,2,0,"b1"}, {2,2,1,"c2"}, {2,2,2,"d3"}, {3,2,0,"east"} }
     check(MahjongLogic.topTileAt(proj, 2, 2) == "d3", "topTileAt returns the highest layer's kind")

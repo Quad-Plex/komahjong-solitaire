@@ -15,6 +15,7 @@ Usage:
     python3 tools/preview.py --tile 65        # tile width in px (default 65)
 """
 import argparse
+import math
 import os
 import subprocess
 import sys
@@ -31,36 +32,54 @@ def svg_content(icon_dir, name):
 
 
 def board_tiles(tile_w):
-    """Screen positions of every tile on a seeded board, via mahjonglogic."""
+    """Screen positions of every tile on a seeded board, via mahjonglogic.
+    Returns (tiles, (W, H)) with W/H sized to the real layout bounds (incl. the
+    outward-bevel overhang and the up-left layer shift) + margin. Each tile
+    carries its bevel-variant icon name (MahjongLogic.iconForTile). Layer L is
+    shifted up-left by L*BW/L*BH — the bevel thickness — so a raised tile's
+    bevels land exactly on the edges of the tile directly beneath it."""
     lua = r'''
 package.path = "%s/?.lua;" .. package.path
 local Logic = require("mahjonglogic")
 local TW = %d
 local TH = math.floor(TW * 1.4)
-local offx, offy = math.floor(TW/2), math.floor(TH/2)
+local BW = math.floor(TW * 0.10 + 0.5)
+local BH = math.floor(TH * 0.10 + 0.5)
+local MARGIN = 10
 local g = Logic.gridBounds()
 local min_px, max_px = math.huge, -math.huge
 local min_py, max_py = math.huge, -math.huge
 for _, p in ipairs(Logic.buildLayout()) do
-    local ux = (p.x - g.x_min) + 0.5*p.layer
-    local uy = (p.y - g.y_min) - 0.5*p.layer
-    min_px = math.min(min_px, ux); max_px = math.max(max_px, ux+1)
-    min_py = math.min(min_py, uy); max_py = math.max(max_py, uy+1)
+    local ux = (p.x - g.x_min) - p.layer * 0.10
+    local uy = (p.y - g.y_min) - p.layer * 0.10
+    min_px = math.min(min_px, ux); max_px = math.max(max_px, (p.x - g.x_min) + 1 + 0.10)
+    min_py = math.min(min_py, uy); max_py = math.max(max_py, (p.y - g.y_min) + 1 + 0.10)
 end
-local ox = 10 - min_px*TW
-local oy = 10 - min_py*TH
+local ox = MARGIN - min_px * TW
+local oy = MARGIN - min_py * TH
 local board = Logic.newGame(42)
 for _, p in ipairs(Logic.buildLayout()) do
     local kind = Logic.tileAt(board, p.x, p.y, p.layer)
     if kind then
-        local px = math.floor(ox + (p.x - g.x_min)*TW + p.layer*offx)
-        local py = math.floor(oy + (p.y - g.y_min)*TH - p.layer*offy)
-        io.write(string.format("%%s %%d %%d\n", kind, px, py))
+        local icon = Logic.iconForTile(board, p.x, p.y, p.layer)
+        local px = math.floor(ox + (p.x - g.x_min) * TW - p.layer * BW)
+        local py = math.floor(oy + (p.y - g.y_min) * TH - p.layer * BH)
+        io.write(string.format("%%s %%d %%d\n", icon, px, py))
     end
 end
+io.write(string.format("BOUNDS %%d %%d\n",
+    math.ceil(max_px - min_px) * TW + 2 * MARGIN, math.ceil(max_py - min_py) * TH + 2 * MARGIN))
 ''' % (os.path.join(REPO_ROOT, "mahjong.koplugin"), tile_w)
     res = subprocess.run(["lua", "-e", lua], capture_output=True, text=True, check=True)
-    return [ln.split() for ln in res.stdout.strip().splitlines()]
+    tiles = []
+    bounds = None
+    for ln in res.stdout.strip().splitlines():
+        parts = ln.split()
+        if parts[0] == "BOUNDS":
+            bounds = (int(parts[1]), int(parts[2]))
+        else:
+            tiles.append((parts[0], int(parts[1]), int(parts[2])))
+    return tiles, bounds
 
 
 def main():
@@ -72,11 +91,13 @@ def main():
 
     tw = args.tile
     th = int(tw * 1.4)
-    tiles = board_tiles(tw)
-    W = 10 + 12 * tw + 10
-    H = 10 + 7 * th + 10
-    strip_cols = 15
-    strip_rows = 3
+    bw = int(tw * 0.10 + 0.5)
+    bh = int(th * 0.10 + 0.5)
+    tiles, (W, H) = board_tiles(tw)
+    strip_margin = 10  # match the board framing margin
+    strip_gap = tw + bw + 2  # room for the outward right bevel in the gallery
+    strip_cols = max(1, (W - 2 * strip_margin) // strip_gap)
+    strip_rows = math.ceil(42 / strip_cols)
     kinds = []
     for s in "bcd":
         for i in range(1, 10):
@@ -84,22 +105,22 @@ def main():
     kinds += ["east", "south", "west", "north", "red", "green", "white",
               "flower1", "flower2", "flower3", "flower4",
               "season1", "season2", "season3", "season4"]
-    tot_h = H + 20 + strip_rows * (th + 2) + 10
+    tot_h = H + 20 + strip_rows * (th + bh + 2) + 10
 
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{tot_h}" '
              f'viewBox="0 0 {W} {tot_h}">',
              f'<rect width="{W}" height="{tot_h}" fill="#ffffff"/>']
     for kind, px, py in tiles:
         body = svg_content(args.icons, kind + ".svg")
-        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">', '').replace('</svg>', '')
-        parts.append(f'<g transform="translate({px},{py}) scale({tw / 100},{th / 100})">{body}</g>')
-    parts.append(f'<g transform="translate(0,{H + 20})">')
+        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="154" viewBox="0 0 110 154">', '').replace('</svg>', '')
+        parts.append(f'<g transform="translate({px},{py}) scale({tw / 100},{th / 140})">{body}</g>')
+    parts.append(f'<g transform="translate({strip_margin},{H + 20})">')
     for i, kind in enumerate(kinds):
         col = i % strip_cols
         row = i // strip_cols
         body = svg_content(args.icons, kind + ".svg")
-        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">', '').replace('</svg>', '')
-        parts.append(f'<g transform="translate({col * (tw + 2)},{row * (th + 2)}) scale({tw / 100},{th / 100})">{body}</g>')
+        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="154" viewBox="0 0 110 154">', '').replace('</svg>', '')
+        parts.append(f'<g transform="translate({col * strip_gap},{row * (th + bh + 2)}) scale({tw / 100},{th / 140})">{body}</g>')
     parts.append('</g></svg>')
 
     svg_path = os.path.join(os.path.dirname(os.path.abspath(args.out)) or ".", ".preview.svg")

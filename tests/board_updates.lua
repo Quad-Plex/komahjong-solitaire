@@ -54,8 +54,9 @@ expect(#p.overlap == 4, "OverlapGroup holds the 4 tile widgets")
 local removed = p:removeTile(5, 3, 2)
 expect(removed == true, "removeTile returns true for a present tile")
 expect(tilesOf(p) == 3 and #p.overlap == 3, "removeTile drops the widget from paint stack and map")
-local lp2x, lp2y = p:tilePos(5, 3, 2)
-expect(p:hitTest(lp2x + 2, lp2y + 2) == nil, "removed tile is no longer tappable")
+local lpx, lpy = p:tilePos(5, 3, 2)
+expect(p:hitTest(lpx + 2, lpy + 2) == nil,
+    "removed top tile's spot is empty (the L1 tile below is offset up-left by the bevel)")
 
 expect(p:removeTile(5, 3, 2) == false, "removeTile returns false for a missing tile")
 

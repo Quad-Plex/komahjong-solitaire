@@ -1,17 +1,23 @@
--- Mahjong Solitaire — board widget (offset-layer 3D turtle).
+-- Mahjong Solitaire — board widget (outward-bevel 3D turtle).
 --
--- Renders the 3D Turtle as a stack of flat tile faces: every tile in the
--- layout is drawn at its real (x, y, layer) position, with each higher layer
--- offset up-and-right by half a tile from the one below (classic mahjong
--- interlock). Lower layers are painted first so the stepped pyramid
--- silhouette and the exposed edges of lower tiles are visible.
+-- Renders the 3D Turtle as a stack of flat tile faces with OUTWARD depth
+-- bevels. Each layer is shifted up-left by exactly the bevel thickness (the
+-- board's tilePos subtracts layer*bw/layer*bh), so a raised (higher-layer)
+-- tile's face is inset from the tile directly beneath it and its outward
+-- bevels land EXACTLY on that underlying tile's face edges — the bevel is the
+-- visible step between layers and never overlaps the tiles to its east/south
+-- (unlike the earlier model where bevels overhung the neighbours). The camera
+-- sits at the bottom-right and the pyramid rises toward the top-left. Lower
+-- layers are painted first so the raised tiles land on top of them.
+--
+-- The bevel bands live in the tile artwork (right #78909c, bottom #546e7a,
+-- 10% of each axis, see tools/gen_icons.py); each icon widget is sized
+-- (tw + bw) x (th + bh) so the rendered face is exactly the grid pitch.
 --
 -- Instead of a ButtonTable, the board paints IconWidgets absolutely
 -- positioned via an OverlapGroup's `overlap_offset`, and hit-tests taps
 -- itself (topmost tile at the tapped point wins). Tap results are forwarded
 -- as (x, y, layer) so the game logic can identify the exact tile (US-07).
---
--- Replaces the US-06 flat-projection grid.
 
 local Geom = require("ui/geometry")
 local Blitbuffer = require("ffi/blitbuffer")
@@ -27,28 +33,37 @@ local MahjongLogic = require("mahjonglogic")
 
 -- Tile height/width ratio: tiles are portrait (taller than wide).
 local TILE_ASPECT = 1.4
--- Per-layer screen offset, as a fraction of the tile size. Half a tile gives
--- the classic interlock (each upper tile covers the corner of 4 below it).
-local LAYER_OFF_X = 0.5
-local LAYER_OFF_Y = 0.5
+-- Outward bevel thickness as a fraction of the tile size: the icons' bevel
+-- bands are 10 viewBox units wide (right) / 14 tall (bottom) on a 110x154
+-- canvas — i.e. 0.10 of a face width in both axes. Each icon widget is sized
+-- (tw + bw) x (th + bh) with bw/bh = this fraction, so the rendered face is
+-- exactly the grid pitch. The bevel is ALSO the per-layer offset: tilePos
+-- shifts layer L up-left by L*bw / L*bh, so a raised tile's bevels land
+-- exactly on the edges of the tile directly beneath it (the step between
+-- layers is the bevel width).
+local BEVEL_FRAC = 0.10
 -- Empty board padding inside the widget.
 local MARGIN = 6
 
--- Unit-space extents of the Turtle layout. These depend only on the static
--- layout and the fixed layer offsets (not on widget size or board state), so
--- they are computed once at load and reused by every geometry pass.
+-- Unit-space extents of the Turtle layout, including the 0.10-unit outward
+-- bevel overhang on the east/south edges AND the up-left layer shift on the
+-- west/north (layer L is shifted by L*BEVEL_FRAC, so the top layer reaches
+-- MAX_LAYER*BEVEL_FRAC up and left of its grid position). These depend only
+-- on the static layout and the fixed bevel fraction (not on widget size or
+-- board state), so they are computed once at load and reused by every
+-- geometry pass.
 local GRID = MahjongLogic.gridBounds()
 local LAYOUT_BOUNDS
 do
     local min_px, max_px = math.huge, -math.huge
     local min_py, max_py = math.huge, -math.huge
     for _, p in ipairs(MahjongLogic.buildLayout()) do
-        local ux = (p.x - GRID.x_min) + LAYER_OFF_X * p.layer
-        local uy = (p.y - GRID.y_min) - LAYER_OFF_Y * p.layer
+        local ux = (p.x - GRID.x_min) - p.layer * BEVEL_FRAC
+        local uy = (p.y - GRID.y_min) - p.layer * BEVEL_FRAC
         min_px = math.min(min_px, ux)
-        max_px = math.max(max_px, ux + 1) -- right edge (in tile-width units)
+        max_px = math.max(max_px, (p.x - GRID.x_min) + 1 + BEVEL_FRAC) -- right edge + bevel
         min_py = math.min(min_py, uy)
-        max_py = math.max(max_py, uy + 1) -- bottom edge (in tile-height units)
+        max_py = math.max(max_py, (p.y - GRID.y_min) + 1 + BEVEL_FRAC) -- bottom edge + bevel
     end
     LAYOUT_BOUNDS = {
         min_px = min_px,
@@ -65,12 +80,14 @@ local Board = InputContainer:extend{
     height = 0,
     onTileTap = nil,
     grid = nil,
-    tw = 0,          -- tile width in px
-    th = 0,          -- tile height in px
+    tw = 0,          -- face width in px (also the grid pitch)
+    th = 0,          -- face height in px
+    bw = 0,          -- outward right-bevel thickness in px
+    bh = 0,          -- outward bottom-bevel thickness in px
+    tile_w = 0,      -- icon widget width = tw + bw (face + right bevel)
+    tile_h = 0,      -- icon widget height = th + bh
     origin_x = 0,    -- widget-local position of grid cell (x_min, y_min)
     origin_y = 0,
-    offx = 0,        -- layer offset in px
-    offy = 0,
     tiles_by_layer = nil, -- [layer] -> array of {x, y, layer, kind, px, py, w, h}
     tile_widgets = nil,   -- posKey -> IconWidget (for O(1) incremental removal)
     overlap = nil,        -- the painted OverlapGroup (self[1][1])
@@ -91,7 +108,7 @@ function Board:init()
     self:rebuildTiles()
 end
 
--- Derives tile size and layer offsets from the widget size so the whole
+-- Derives the face size and bevel thickness from the widget size so the whole
 -- turtle fits, then centers it. Uses the module-level LAYOUT_BOUNDS (the
 -- layout is static), so no layout re-scan happens per geometry pass.
 function Board:computeGeometry()
@@ -102,7 +119,7 @@ function Board:computeGeometry()
     local usable_w = self.width - 2 * margin
     local usable_h = self.height - 2 * margin
 
-    -- Portrait tiles (th = TILE_ASPECT * tw) sized to fit both axes.
+    -- Portrait faces (th = TILE_ASPECT * tw) sized to fit both axes.
     local tw_w = usable_w / width_units
     local tw_h = (usable_h / height_units) / TILE_ASPECT
     local tw = math.max(1, math.floor(math.min(tw_w, tw_h)))
@@ -110,8 +127,12 @@ function Board:computeGeometry()
 
     self.tw = tw
     self.th = th
-    self.offx = math.floor(tw * LAYER_OFF_X)
-    self.offy = math.floor(th * LAYER_OFF_Y)
+    -- Outward bevels, rounded so the icon widget dimen stays integral (the
+    -- face then lands within half a pixel of the grid pitch — invisible).
+    self.bw = math.floor(tw * BEVEL_FRAC + 0.5)
+    self.bh = math.floor(th * BEVEL_FRAC + 0.5)
+    self.tile_w = tw + self.bw
+    self.tile_h = th + self.bh
 
     local bounds_w = width_units * tw
     local bounds_h = height_units * th
@@ -119,10 +140,13 @@ function Board:computeGeometry()
     self.origin_y = margin + math.floor((usable_h - bounds_h) / 2) - LAYOUT_BOUNDS.min_py * th
 end
 
--- Widget-local position of a tile's top-left corner.
+-- Widget-local position of a tile's FACE top-left corner. Layer L is shifted
+-- up-left by L*bw / L*bh (the bevel thickness), so a raised tile's face is
+-- inset from the tile directly beneath it and its outward bevels land exactly
+-- on that underlying tile's face edges — the visible step between layers.
 function Board:tilePos(x, y, layer)
-    local px = self.origin_x + (x - self.grid.x_min) * self.tw + layer * self.offx
-    local py = self.origin_y + (y - self.grid.y_min) * self.th - layer * self.offy
+    local px = self.origin_x + (x - self.grid.x_min) * self.tw - layer * self.bw
+    local py = self.origin_y + (y - self.grid.y_min) * self.th - layer * self.bh
     return math.floor(px), math.floor(py)
 end
 
@@ -150,9 +174,9 @@ function Board:rebuildTiles()
         if kind then
             local px, py = self:tilePos(p.x, p.y, p.layer)
             local w = IconWidget:new{
-                icon = "mahjong/" .. MahjongLogic.iconForKind(kind),
-                width = self.tw,
-                height = self.th,
+                icon = "mahjong/" .. MahjongLogic.iconForTile(self.board, p.x, p.y, p.layer),
+                width = self.tile_w,
+                height = self.tile_h,
                 overlap_offset = { px, py },
             }
             children[#children + 1] = w
