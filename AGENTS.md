@@ -297,15 +297,39 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   (`casualkochess.koplugin/*board.lua`) are NOT safe to copy verbatim here. (The current 3D board
   avoids the trap entirely: it extends `InputContainer`, not `FrameContainer`, and `getSize()` just
   returns `self.dimen`.)
+- **`OverlapGroup` children MUST be real widgets — no wrapper tables.** `OverlapGroup:init()`
+  calls `self:getSize()`, which iterates its children and calls `getSize()` on each one
+  (`overlapgroup.lua:27`). A plain table like `{ overlap_offset = { x = .. }, icon_widget }` is NOT
+  a widget, has no `getSize()`, and crashes on launch with
+  `overlapgroup.lua:27: attempt to call method 'getSize' (a nil value)`. The `overlap_offset` field
+  must live **directly on the child widget** (set it inside the child's `:new{}`) and must be an
+  **ARRAY** `{ px, py }` (accessed as `[1]`/`[2]`), NOT a `{x=.., y=..}` map. This bit the
+  US-09 feedback band twice; the board's tile widgets (`mahjongboard.lua`) show the correct form.
+- **`OverlapGroup` positions/centers via fields on each child:** `overlap_offset[1]/[2]` offsets a
+  child from the group's top-left; `overlap_align = "center"` (or `"right"`) centers a child
+  horizontally across the group's `size.w` (useful to center text across a full-width band
+  independently of a side icon). Only the first matching rule wins: `overlap_align` is checked
+  BEFORE `overlap_offset`, so you can't combine "center horizontally" with a vertical offset on one
+  widget — use `overlap_align = "center"` for the text and a separate `overlap_offset` child for the
+  icon (see `main.lua`'s flash band).
+- **`visible = false` is ignored by KOReader widgets — use `hide = true`.** `ImageWidget:paintTo`
+  skips painting when `self.hide` is truthy; a `visible` field does nothing and the widget still
+  paints. The US-09 flash band toggles `self.flash_band_icon.hide` to show/hide the warning icon.
+- **Mock fidelity pays off:** the headless suite's `OverlapGroup` stub was a lazy no-op that never
+  called `getSize()` on children, so the wrapper-table bug above passed tests and only crashed on
+  device. `tests/mock.lua` now mirrors the real `OverlapGroup:getSize()` (iterates children,
+  calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
+  `getSize`/`init` behavior or the suite can't catch layout crashes.
 
-## Mahjong plugin — implementation state (US-01..US-08 done)
+## Mahjong plugin — implementation state (US-01..US-09 done)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). Read `IMPLEMENTATION_PLAN.md` for
 the locked design and story list. Current state:
 
 - **Repo layout:** `AGENTS.md`, `IMPLEMENTATION_PLAN.md`, `mahjong.koplugin/` (the deliverable),
   `tests/` (official suite: `run.sh`, `mock.lua`, `us01_shell.lua`, `us03_icons.lua`,
-  `us06_board.lua`, `us06_paint.lua`, `board_updates.lua`, `hud_bar.lua`), `install_plugin.sh`
+  `us06_board.lua`, `us06_paint.lua`, `board_updates.lua`, `us07_gameplay.lua`,
+  `us08_features.lua`, `us09_score.lua`, `hud_bar.lua`), `install_plugin.sh`
   (device sync script), `example_app/casualkochess.koplugin/` (reference).
 - **US-01 (done):** `_meta.lua` + `main.lua` skeleton; menu entry under `sorting_hint="tools"`
   ("Mahjong Solitaire"); `Dispatcher` action `mahjong` → event `MahjongStart` with `general=true`.
@@ -548,6 +572,58 @@ the locked design and story list. Current state:
     undo restores the exact previous state (logic board, widgets, score, history), undo on empty
     history is a no-op, hint draws two overlays, shuffle preserves the multiset, and a dead board
     prompts rather than shuffling silently.
+- **US-09 (done):** real scoring + status feedback in `main.lua` + `mahjonglogic.lua`.
+  - Scoring lives in `mahjonglogic.lua` (pure, unit-tested): `SCORE_PER_PAIR` (10),
+    `CHAIN_BONUS` (5), `matchGroup(kind)` (the chain group: a suited/wind/dragon kind chains
+    with itself, flowers chain with any flower, seasons with any season — exactly the
+    match-rule grouping), and `pairPoints(prev_kind, kind)` (base 10, +5 when the new pair is
+    in the same group as the previous match). No timer bonus (elapsed-time tracking is not
+    implemented). Self-tests cover base/chain/cross-group/wildcard cases.
+  - `main.lua`: `self.last_match_kind` tracks the previous match's kind; each successful
+    `handleTileTap` match computes `pairPoints(prev_last, ka)`, stores `prev_last` in the
+    history record (`{ ..., score, prev_last }`), and `undo()` restores both the score and
+    `last_match_kind` so the chain survives undo. A shuffle does NOT reset the chain (a chain
+    is about consecutive matches, not positions). `startGame`/`resetGame` clear the chain.
+  - **Invalid-selection feedback (non-blocking):** tapping a non-free (blocked)
+    tile no longer vanishes silently — `flashMessage(text)` writes the message
+    into a **fixed-height feedback band** (`self.flash_band`/`self.flash_text`)
+    that sits **between the board and the toolbar** in `buildUILayout()`
+    (children: [1] status bar, [2] board, [3] band, [4] toolbar, [5] bottom
+    spacer). The band is a chip-style `FrameContainer` (rounded border,
+    screen-to-screen) whose `getSize` is overridden to the fixed strip height,
+    so the slot is always reserved and the board geometry never shifts when a
+    message shows/clears. **The band content is an `OverlapGroup`**, NOT a
+    `CenterContainer` — the text carries `overlap_align = "center"` (centered
+    across the FULL band width, independently of the icon) and the warning
+    triangle `IconWidget` is a second direct child with
+    `overlap_offset = { icon_x, icon_y }` (icon on the far left, vertically
+    aligned to the text's center; sized `0.72 × flash_text_h`). Two failed
+    attempts: a `CenterContainer` child crashed on missing `dimen`, and a
+    **wrapper table** `{ overlap_offset = ..., icon }` crashed `OverlapGroup`
+    `getSize` (children must be real widgets — see the Common-pitfalls entry).
+    The icon is hidden with `hide = true` (KOReader ignores `visible`).
+    It auto-clears after `FLASH_TIMEOUT` (2s) via
+    `UIManager:scheduleIn`; each call bumps a `self._flash_seq` token so a stale
+    clear timer (from a close/new game) is a no-op. Because it is NOT a modal
+    dialog, board taps keep working while a message is showing — an accidental
+    blocked-tile tap can be corrected immediately. The win dialog already
+    reports the total score ("You cleared the board! Score: %d").
+  - **US-09 acceptance covered by** `tests/us09_score.lua` (registered in `tests/run.sh`):
+    logic scoring rules, chain scoring through the real tap flow, HUD score chip tracking,
+    no-chain across different kinds, flower wildcard chains, undo restoring score + chain
+    state, blocked-tile band placement (index 3 of the layout, between board and toolbar),
+    the band clearing on timeout, non-blocking feedback (a tap right after a blocked tap
+    still selects a free tile), chain-inclusive win dialog score, and chain persisting
+    across a shuffle. Band-icon checks: the warning icon is hidden by default,
+    uses an array-form `overlap_offset` on the widget itself, shows with the
+    message, and hides again on clear.
+  - **Feedback-band test note:** `tests/us09_score.lua` asserts on
+    `mj.flash_text.text` (the band TextWidget) for the message and on
+    `mj[1][3] == mj.flash_band` for its layout position — the harness cannot
+    run `UIManager:scheduleIn`, so it calls `clearFlash()` directly to prove
+    the timeout path. Any layout change that moves the band must update
+    `us01_shell.lua`/`us06_board.lua`'s toolbar index (`mj[1][4]`, spacer
+    `mj[1][5]`).
 
 ### Verification workflow used so far
 

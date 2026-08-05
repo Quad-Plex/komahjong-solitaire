@@ -408,6 +408,37 @@ function MahjongLogic.hasMoves(board)
     return false
 end
 
+-- Scoring ---------------------------------------------------------------
+--
+-- US-09: base 10 points per matched pair, plus a +5 consecutive bonus when
+-- the pair belongs to the same tile group as the previous match (a chain).
+-- A timer bonus is not implemented (elapsed-time tracking is out of scope).
+local SCORE_PER_PAIR = 10
+local CHAIN_BONUS = 5
+MahjongLogic.SCORE_PER_PAIR = SCORE_PER_PAIR
+MahjongLogic.CHAIN_BONUS = CHAIN_BONUS
+
+-- The chain group of a kind: suited/wind/dragon kinds chain with themselves
+-- (group == the kind), flowers chain with any flower, seasons with any season.
+-- This is the same grouping the match rule uses (MATCH_GROUP).
+function MahjongLogic.matchGroup(kind)
+    return MATCH_GROUP[kind]
+end
+
+-- Points awarded for matching a pair of `kind`, given the kind of the
+-- previously matched pair (`prev_kind`, or nil for the first move). Base
+-- score, plus the chain bonus when both matches are in the same tile group.
+function MahjongLogic.pairPoints(prev_kind, kind)
+    local points = SCORE_PER_PAIR
+    if prev_kind then
+        local prev_group = MATCH_GROUP[prev_kind]
+        if prev_group and prev_group == MATCH_GROUP[kind] then
+            points = points + CHAIN_BONUS
+        end
+    end
+    return points
+end
+
 -- Removal / win / hint ---------------------------------------------------
 --
 -- US-07: pair removal, win detection, and a free matching-pair finder. These
@@ -884,6 +915,24 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.topTileAt(proj, 3, 2) == "east", "topTileAt returns a lone tile's kind")
     check(MahjongLogic.topTileAt(proj, 9, 9) == nil, "topTileAt returns nil for an empty cell")
     check(MahjongLogic.topTileAt({}, 4, 4) == nil, "topTileAt on an empty board returns nil")
+
+    -- Scoring (US-09) -------------------------------------------------
+    check(MahjongLogic.SCORE_PER_PAIR == 10, "base score is 10 per pair")
+    check(MahjongLogic.CHAIN_BONUS == 5, "chain bonus is 5")
+    check(MahjongLogic.pairPoints(nil, "b1") == 10, "first match scores the base 10")
+    check(MahjongLogic.pairPoints("b1", "b1") == 15, "consecutive same-kind match chains (+5)")
+    check(MahjongLogic.pairPoints("b2", "b1") == 10, "a different kind breaks the chain")
+    check(MahjongLogic.pairPoints("flower1", "flower3") == 15, "flower pairs chain with any flower")
+    check(MahjongLogic.pairPoints("season1", "season2") == 15, "season pairs chain with any season")
+    check(MahjongLogic.pairPoints("flower1", "season1") == 10, "a flower never chains with a season")
+    check(MahjongLogic.pairPoints("b1", "flower1") == 10, "a suited tile never chains with a flower")
+    check(MahjongLogic.pairPoints("east", "east") == 15, "consecutive winds chain")
+    check(MahjongLogic.matchGroup("b1") == "b1", "matchGroup of a suited kind is the kind")
+    check(MahjongLogic.matchGroup("east") == "east", "matchGroup of a wind is the kind")
+    check(MahjongLogic.matchGroup("red") == "red", "matchGroup of a dragon is the kind")
+    check(MahjongLogic.matchGroup("flower1") == "flower", "matchGroup of a flower is flower")
+    check(MahjongLogic.matchGroup("season1") == "season", "matchGroup of a season is season")
+
 
     io.write("All self-tests passed.\n")
     return true

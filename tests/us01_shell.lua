@@ -79,7 +79,8 @@ expect(on_stack == 1, "widget still on the stack exactly once after re-launch")
 -- The toolbar holds 4 action-button cells (icon button + hint label)
 -- separated by 3 HorizontalSpan gaps plus one edge spacer on each side
 -- (the stock HorizontalGroup ignores a `spacing` field, so real spacers).
-local toolbar = mj[1][3]
+-- Layout: [1] status bar, [2] board, [3] feedback band, [4] toolbar, [5] spacer.
+local toolbar = mj[1][4]
 local btns, gaps = {}, {}
 for i = 1, #toolbar do
     local b = toolbar[i]
@@ -107,7 +108,7 @@ for i, cell in ipairs({ toolbar[2], toolbar[4], toolbar[6], toolbar[8] }) do
     end
 end
 expect(labels_ok, "each toolbar cell carries a hint label under the icon")
-expect(type(mj[1][4]) == "table" and (mj[1][4].width or 0) > 0,
+expect(type(mj[1][5]) == "table" and (mj[1][5].width or 0) > 0,
     "a bottom spacer lifts the toolbar off the screen edge")
 local new_game_btn = btns[4]
 expect(type(new_game_btn.callback) == "function", "New Game button wired")

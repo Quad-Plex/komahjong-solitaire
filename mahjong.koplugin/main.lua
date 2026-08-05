@@ -10,7 +10,9 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local HorizontalSpan = require("ui/widget/horizontalspan")
+local OverlapGroup = require("ui/widget/overlapgroup")
 local ButtonWidget = require("ui/widget/button")
+local IconWidget = require("ui/widget/iconwidget")
 local TextWidget = require("ui/widget/textwidget")
 local ConfirmBox = require("ui/widget/confirmbox")
 local Font = require("ui/font")
@@ -47,9 +49,13 @@ end
 local PLUGIN_PATH = normalizePath(getPluginPath()):gsub("/+$", "")
 local ICON_DIR = "mahjong"
 
--- US-07 score stub: flat 10 points per matched pair. US-09 replaces this with
--- the full scoring model (base + chain bonus + timer bonus).
-local SCORE_PER_PAIR = 10
+-- US-09 scoring: base + chain bonus live in mahjonglogic.lua
+-- (MahjongLogic.pairPoints / SCORE_PER_PAIR / CHAIN_BONUS); main.lua only
+-- tracks the kind of the previous match for the chain. A timer bonus is not
+-- implemented (no elapsed-time tracking).
+-- FLASH_TIMEOUT: how long a non-blocking feedback message (e.g. "Tile is
+-- blocked") stays visible in the band between the board and the toolbar.
+local FLASH_TIMEOUT = 2
 
 -- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
 -- the tap area — with a square icon centered inside it, plus a small hint
@@ -132,7 +138,11 @@ local Mahjong = FrameContainer:extend{
     status_bar = nil,
     selected = nil, -- { x, y, layer, kind } of the currently selected tile
     score = 0,
-    history = nil, -- stack of { a, b, ka, kb, score }
+    last_match_kind = nil, -- kind of the last matched pair (chain scoring, US-09)
+    history = nil, -- stack of { a, b, ka, kb, score, prev_last }
+    _flash_seq = 0, -- monotonic token for the pending feedback-clear timer
+    flash_band = nil,  -- fixed-height band between the board and the toolbar
+    flash_text = nil,  -- the band's TextWidget (feedback messages appear here)
 }
 
 function Mahjong:init()
@@ -190,6 +200,7 @@ function Mahjong:startGame()
     self.board = MahjongLogic.newGame()
     self.selected = nil
     self.score = 0
+    self.last_match_kind = nil
     self.history = {}
     self:buildUILayout()
     self:updateStatus()
@@ -218,7 +229,23 @@ function Mahjong:buildUILayout()
     label_probe:free()
     local toolbar_h = toolbar_btn_h + label_h
     local bottom_gap = Screen:scaleBySize(12)
-    local board_h = self.full_height - status_h - toolbar_h - bottom_gap
+    -- Feedback band (US-09): a fixed-height strip between the board and the
+    -- toolbar where brief non-blocking messages appear. The slot is always
+    -- reserved so the board geometry stays stable when a message shows/clears.
+    -- Font is kept small (~0.8× HUD labels) so it reads as a subtle notice;
+    -- height is probed from the font so it fits any DPI.
+    local flash_font_size = Screen:scaleBySize(30)
+    local flash_probe = TextWidget:new{
+        text = "Ag",
+        padding = 0,
+        face = Font:getFace("smallinfofont", flash_font_size),
+    }
+    local flash_text_h = flash_probe:getSize().h
+    flash_probe:free()
+    local flash_pad_top = Screen:scaleBySize(4)
+    local flash_pad_bottom = Screen:scaleBySize(14)
+    local flash_h = flash_text_h + flash_pad_top + flash_pad_bottom
+    local board_h = self.full_height - status_h - flash_h - toolbar_h - bottom_gap
 
     self.board_view = MahjongBoard:new{
         board = self.board,
@@ -235,6 +262,68 @@ function Mahjong:buildUILayout()
         height = board_h,
         self.board_view,
     }
+
+    -- Non-blocking feedback: a plain (non-input) text band with a chip-style
+    -- border that extends screen-to-screen. Because it is not a dialog, taps
+    -- on the board keep working while a message is showing.  The warning
+    -- triangle icon sits on the far left; the text is centered across the
+    -- full band width.  Both appear/disappear together.
+    local band_edge_pad = Screen:scaleBySize(8)
+    local band_border = Screen:scaleBySize(1)
+    -- Icon sized to the band's text (a bit smaller than the cap height) and
+    -- vertically aligned with the text's vertical center, so the icon reads
+    -- as vertically centered in the band.
+    local icon_size = math.floor(flash_text_h * 0.72)
+    local icon_x = band_edge_pad + Screen:scaleBySize(4)
+    local icon_y = math.floor((flash_text_h - icon_size) / 2)
+    self.flash_band_icon = IconWidget:new{
+        icon = ICON_DIR .. "/warning",
+        width = icon_size,
+        height = icon_size,
+        hide = true,
+        -- OverlapGroup paints a child at overlap_offset[1]/[2] — this field
+        -- must live ON the child widget (see the board's tile widgets), and
+        -- it must be an ARRAY, not a {x=.., y=..} map.
+        overlap_offset = { icon_x, icon_y },
+    }
+    self.flash_text = TextWidget:new{
+        text = "",
+        padding = 0,
+        face = Font:getFace("smallinfofont", flash_font_size),
+        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+        -- OverlapGroup supports per-child overlap_align; "center" centers the
+        -- text across the FULL band width, independent of the icon position.
+        overlap_align = "center",
+    }
+    -- OverlapGroup iterates its children and calls getSize() on each one
+    -- (overlapgroup.lua getSize/init). Every child MUST be a real widget — a
+    -- plain wrapper table like { overlap_offset = ..., widget } has no
+    -- getSize() and crashes with "attempt to call method 'getSize' (a nil
+    -- value)". The icon and text go in directly, exactly like the board.
+    local band_overlay = OverlapGroup:new{
+        dimen = Geometry:new{ w = self.full_width, h = flash_h },
+        self.flash_text,
+        self.flash_band_icon,
+    }
+    self.flash_band = FrameContainer:new{
+        band_overlay,
+        bordersize = band_border,
+        color = Blitbuffer.COLOR_DARK_GRAY,
+        background = BACKGROUND_COLOR,
+        radius = Screen:scaleBySize(8),
+        padding = band_edge_pad,
+    }
+    -- getSize() is overridden below, so the real FrameContainer:getSize() —
+    -- which is the ONLY thing that populates the _padding_* fields — never
+    -- runs. paintTo would crash on nil _padding_left (framecontainer.lua:143);
+    -- mirror the padding assignments like HudBar does (AGENTS.md pitfall).
+    self.flash_band._padding_left = band_edge_pad
+    self.flash_band._padding_right = band_edge_pad
+    self.flash_band._padding_top = band_edge_pad
+    self.flash_band._padding_bottom = band_edge_pad
+    self.flash_band.getSize = function()
+        return Geometry:new{ w = self.full_width, h = flash_h }
+    end
 
     local toolbar = HorizontalGroup:new{
         HorizontalSpan:new{ width = toolbar_gap },
@@ -263,6 +352,7 @@ function Mahjong:buildUILayout()
         height = self.full_height,
         self.status_bar,
         board_area,
+        self.flash_band,
         toolbar,
         VerticalSpan:new{ width = bottom_gap },
     }
@@ -294,6 +384,7 @@ function Mahjong:resetGame()
     self.board = MahjongLogic.newGame()
     self.selected = nil
     self.score = 0
+    self.last_match_kind = nil
     self.history = {}
     self:buildUILayout()
     self:updateStatus()
@@ -313,7 +404,10 @@ end
 function Mahjong:handleTileTap(x, y, layer)
     local kind = MahjongLogic.tileAt(self.board, x, y, layer)
     if not kind then return end
-    if not MahjongLogic.isFree(self.board, x, y, layer) then return end
+    if not MahjongLogic.isFree(self.board, x, y, layer) then
+        self:flashMessage(_("Tile is blocked"))
+        return
+    end
 
     local sel = self.selected
     if sel then
@@ -329,9 +423,11 @@ function Mahjong:handleTileTap(x, y, layer)
         if ok then
             self.selected = nil
             self.board_view:removePair(a, b)
-            local points = SCORE_PER_PAIR
+            local prev_last = self.last_match_kind
+            local points = MahjongLogic.pairPoints(prev_last, ka)
+            self.last_match_kind = ka
             self.score = self.score + points
-            table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points })
+            table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last })
             self:updateStatus()
             self:checkGameState()
             return
@@ -398,6 +494,7 @@ function Mahjong:undo()
     self.board_view:addPair({ x = move.a.x, y = move.a.y, layer = move.a.layer, kind = move.ka },
                             { x = move.b.x, y = move.b.y, layer = move.b.layer, kind = move.kb })
     self.score = self.score - move.score
+    self.last_match_kind = move.prev_last
     self:updateStatus()
 end
 
@@ -452,6 +549,43 @@ function Mahjong:shuffleBoard(force, attempts)
     end
 end
 
+-- Brief NON-BLOCKING feedback (US-09): `text` appears in the fixed band
+-- between the board and the toolbar and auto-clears after FLASH_TIMEOUT.
+-- The band is a plain text widget (not a modal dialog), so the board keeps
+-- accepting taps while a message is showing — an accidental blocked-tile tap
+-- can be corrected immediately. Each call bumps a sequence token; a stale
+-- clear timer (e.g. from before a close/new game) is a no-op.
+function Mahjong:flashMessage(text)
+    local seq = self._flash_seq + 1
+    self._flash_seq = seq
+    if self.flash_text then
+        self.flash_text:setText(text)
+        if self.flash_band_icon then
+            -- ImageWidget:paintTo skips painting when `hide` is true (the
+            -- `visible` field is ignored by KOReader widgets).
+            self.flash_band_icon.hide = false
+        end
+        UIManager:setDirty(self, "ui")
+    end
+    UIManager:scheduleIn(FLASH_TIMEOUT, function()
+        if self._flash_seq == seq then
+            self:clearFlash()
+        end
+    end)
+end
+
+-- Clears the feedback band (called by the flash timer and on close).
+function Mahjong:clearFlash()
+    self._flash_seq = nil
+    if self.flash_text and self.flash_text.text and self.flash_text.text ~= "" then
+        self.flash_text:setText("")
+        if self.flash_band_icon then
+            self.flash_band_icon.hide = true
+        end
+        UIManager:setDirty(self, "ui")
+    end
+end
+
 -- The HUD bar reflects the pairs left, the number of currently-matching free
 -- pairs (legal moves available to tap), and the score — each in its own chip.
 function Mahjong:updateStatus()
@@ -470,6 +604,7 @@ function Mahjong:saveGameState()
 end
 
 function Mahjong:onCloseWidget()
+    self:clearFlash()
     self.selected = nil
     self.board_view = nil
     self.board = nil

@@ -154,6 +154,23 @@ function M.newContext()
             new = function(cls, o)
                 o = o or {}
                 setmetatable(o, { __index = cls })
+                -- Faithful to real OverlapGroup:init()/getSize(): it iterates
+                -- its children and calls getSize() on EACH one.  A plain
+                -- wrapper table (e.g. { overlap_offset = ..., widget }) is NOT
+                -- a widget and has no getSize -> mirror the real crash
+                -- "attempt to call method 'getSize' (a nil value)" so the
+                -- suite catches the bug instead of only the device doing so.
+                local size = { w = 0, h = 0 }
+                for _, w in ipairs(o) do
+                    local ws = w:getSize()
+                    if ws.h > size.h then size.h = ws.h end
+                    if ws.w > size.w then size.w = ws.w end
+                end
+                if o.dimen then
+                    if o.dimen.w then size.w = o.dimen.w end
+                    if o.dimen.h then size.h = o.dimen.h end
+                end
+                o._size = size
                 if o.init then o:init() end
                 return o
             end,

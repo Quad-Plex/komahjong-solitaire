@@ -17,18 +17,34 @@ A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch
 The plugin launches "Mahjong Solitaire" from the **Tools** menu and renders the
 full 144-tile Turtle board as an outward-bevel 3D stack. Core gameplay is in:
 tap two matching free tiles to remove them, win when the board is clear, and a
-dead board offers to reshuffle (US-01..US-08 done).
+dead board offers to reshuffle (US-01..US-09 done).
 
 Recent improvements:
+- **Scoring (US-09):** 10 points per matched pair, plus a +5 chain bonus when
+  the consecutive match is of the same tile group (same suited/wind/dragon
+  kind, or any flower after a flower / any season after a season). A blocked
+  tile tap now shows a brief non-blocking "Tile is blocked" message in the band
+  between the board and the toolbar — it never blocks a follow-up tap. A timer
+  bonus is not implemented (no elapsed-time tracking yet — see scoring rules
+  below).
 - **Undo / Hint / Shuffle:** the toolbar now has undo (restores the removed
-  pair and its score), a hint (highlights a matching free pair for 2s), and a
-  confirm-gated reshuffle; dead boards prompt to shuffle instead of shuffling
-  silently, with bounded auto-repeat.
+  pair, its score, and the chain state), a hint (highlights a matching free
+  pair for 2s), and a confirm-gated reshuffle; dead boards prompt to shuffle
+  instead of shuffling silently, with bounded auto-repeat.
 - **Visual Feedback:** Fixed selection overlay transparency (tile symbols remain visible).
 - **Bevel Logic:** Dynamic bevel restoration when neighbors are removed (no "floating" tiles).
 - **Rule Accuracy:** Improved free-tile detection to handle partial and half-grid overlaps correctly.
 
-Scoring, persistence and polish (US-09..US-11) are not implemented yet.
+Persistence and polish (US-10..US-11) are not implemented yet.
+
+## Scoring rules
+
+- **Base:** 10 points for every matched pair.
+- **Chain bonus:** +5 when the new pair belongs to the same tile group as the
+  immediately previous match — same suited/wind/dragon kind, or any flower
+  after a flower, any season after a season. The chain spans shuffles and
+  survives undo/redo correctly (undo restores the chain state).
+- **Timer bonus:** not implemented (elapsed-time tracking is deferred).
 
 ## Install on a Kindle
 
