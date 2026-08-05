@@ -88,7 +88,7 @@ kindle_majong/
 │   ├── US-12_win-summary_completed.md
 │   ├── US-13_stats-screen_completed.md
 │   ├── US-14_layout-registry_completed.md
-│   ├── US-15_spider-layout.md      # planned
+│   ├── US-15_spider-layout_completed.md
 │   ├── US-16_bridge-layout.md      # planned
 │   ├── US-17_pause_completed.md
 │   ├── US-18_penalties_completed.md
@@ -128,8 +128,8 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-14,
-US-17..US-20**. Planned: **US-15..US-16**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-15,
+US-17..US-20**. Planned: **US-16**.
 
 | Story | File | Status |
 |---|---|---|
@@ -147,7 +147,7 @@ US-17..US-20**. Planned: **US-15..US-16**.
 | US-12 — Win summary + best-score/best-time tracking | [US-12_win-summary_completed.md](implementation-plan/US-12_win-summary_completed.md) | ✅ completed |
 | US-13 — Stats screen (dedicated "Stats" button + floating card) | [US-13_stats-screen_completed.md](implementation-plan/US-13_stats-screen_completed.md) | ✅ completed |
 | US-14 — Layout registry + layout selection screen (architecture) | [US-14_layout-registry_completed.md](implementation-plan/US-14_layout-registry_completed.md) | ✅ completed |
-| US-15 — Spider layout | [US-15_spider-layout.md](implementation-plan/US-15_spider-layout.md) | planned |
+| US-15 — Spider layout | [US-15_spider-layout_completed.md](implementation-plan/US-15_spider-layout_completed.md) | ✅ completed |
 | US-16 — Bridge layout | [US-16_bridge-layout.md](implementation-plan/US-16_bridge-layout.md) | planned |
 | US-17 — Pause | [US-17_pause_completed.md](implementation-plan/US-17_pause_completed.md) | ✅ completed |
 | US-18 — Hint/shuffle score penalties | [US-18_penalties_completed.md](implementation-plan/US-18_penalties_completed.md) | ✅ completed |

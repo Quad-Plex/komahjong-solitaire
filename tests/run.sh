@@ -35,7 +35,7 @@ lua "$PLUGIN/mahjonglogic.lua"
 lua "$PLUGIN/mahjongstats.lua"
 
 echo "==> 4/4 headless harnesses"
-for t in us01_shell.lua us03_icons.lua us06_board.lua us06_paint.lua board_updates.lua us07_gameplay.lua us08_features.lua us09_score.lua us10_persistence.lua us11_timer.lua hud_bar.lua us12_stats.lua us13_stats.lua us14_layouts.lua us17_pause.lua us18_penalties.lua us19_autosolve.lua; do
+for t in us01_shell.lua us03_icons.lua us06_board.lua us06_paint.lua board_updates.lua us07_gameplay.lua us08_features.lua us09_score.lua us10_persistence.lua us11_timer.lua hud_bar.lua us12_stats.lua us13_stats.lua us14_layouts.lua us15_spider.lua us17_pause.lua us18_penalties.lua us19_autosolve.lua; do
     echo "-- tests/$t"
     lua "$t"
 done

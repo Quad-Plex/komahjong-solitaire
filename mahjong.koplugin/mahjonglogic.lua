@@ -188,6 +188,13 @@ local function buildLayoutFromSpec(spec)
                     add(x, y, s.layer)
                 end
             end
+        elseif s.kind == "set" then
+            -- Explicit point list: { {x=, y=}, ... } at a fixed layer. Used by
+            -- layouts (e.g. Spider) whose per-layer shape is too irregular for
+            -- rows/blocks to express compactly. (US-15)
+            for _, pt in ipairs(s.points) do
+                add(pt.x, pt.y, s.layer)
+            end
         else -- single tile
             add(s.x, s.y, s.layer)
         end
@@ -230,8 +237,64 @@ function MahjongLogic.layoutName(id)
     return (l and l.name) or id
 end
 
--- Turtle is the only registered layout in US-14; US-15/16 add more.
+-- Spider layout (US-15): the classic Spider board, transcribed from GNOME
+-- Mahjongg's `spider` map (4 levels, 144 tiles: 65/53/25/1). The shape is a
+-- wide diamond with nested hollow rings stepping up to a single peak tile.
+-- Coordinates are on the same half-grid as Turtle (x = 0.5..14.5, y = 0..7);
+-- the per-layer point sets use `kind = "set"` because the silhouette is too
+-- irregular for rows/blocks to express compactly.
+local SPIDER_SPEC = {
+    { layer = 0, kind = "set", points = {
+        {x = 3, y = 0}, {x = 4, y = 0}, {x = 6.5, y = 0}, {x = 8.5, y = 0}, {x = 11, y = 0}, {x = 12, y = 0},
+        {x = 4, y = 1}, {x = 7, y = 1}, {x = 8, y = 1}, {x = 11, y = 1},
+        {x = 1, y = 1.5}, {x = 5, y = 1.5}, {x = 10, y = 1.5}, {x = 14, y = 1.5},
+        {x = 2, y = 2}, {x = 6, y = 2}, {x = 7, y = 2}, {x = 8, y = 2}, {x = 9, y = 2}, {x = 13, y = 2},
+        {x = 3, y = 2.5}, {x = 4, y = 2.5}, {x = 11, y = 2.5}, {x = 12, y = 2.5},
+        {x = 5, y = 3}, {x = 6, y = 3}, {x = 7, y = 3}, {x = 8, y = 3}, {x = 9, y = 3}, {x = 10, y = 3},
+        {x = 4.5, y = 4}, {x = 5.5, y = 4}, {x = 6.5, y = 4}, {x = 7.5, y = 4},
+        {x = 8.5, y = 4}, {x = 9.5, y = 4}, {x = 10.5, y = 4},
+        {x = 0.5, y = 4.5}, {x = 1.5, y = 4.5}, {x = 2.5, y = 4.5}, {x = 3.5, y = 4.5},
+        {x = 11.5, y = 4.5}, {x = 12.5, y = 4.5}, {x = 13.5, y = 4.5}, {x = 14.5, y = 4.5},
+        {x = 5, y = 5}, {x = 6, y = 5}, {x = 7, y = 5}, {x = 8, y = 5}, {x = 9, y = 5}, {x = 10, y = 5},
+        {x = 4, y = 6}, {x = 6, y = 6}, {x = 7, y = 6}, {x = 8, y = 6}, {x = 9, y = 6}, {x = 11, y = 6},
+        {x = 3, y = 6.5}, {x = 12, y = 6.5},
+        {x = 1, y = 7}, {x = 2, y = 7}, {x = 7, y = 7}, {x = 8, y = 7}, {x = 13, y = 7}, {x = 14, y = 7},
+    } },
+    { layer = 1, kind = "set", points = {
+        {x = 3, y = 0}, {x = 4, y = 0}, {x = 6.5, y = 0}, {x = 8.5, y = 0}, {x = 11, y = 0}, {x = 12, y = 0},
+        {x = 4, y = 1}, {x = 11, y = 1},
+        {x = 1, y = 1.5}, {x = 5, y = 1.5}, {x = 10, y = 1.5}, {x = 14, y = 1.5},
+        {x = 2, y = 2}, {x = 7, y = 2}, {x = 8, y = 2}, {x = 13, y = 2},
+        {x = 3, y = 2.5}, {x = 4, y = 2.5}, {x = 11, y = 2.5}, {x = 12, y = 2.5},
+        {x = 6, y = 3}, {x = 7, y = 3}, {x = 8, y = 3}, {x = 9, y = 3},
+        {x = 5.5, y = 4}, {x = 6.5, y = 4}, {x = 7.5, y = 4}, {x = 8.5, y = 4}, {x = 9.5, y = 4},
+        {x = 0.5, y = 4.5}, {x = 1.5, y = 4.5}, {x = 2.5, y = 4.5}, {x = 3.5, y = 4.5},
+        {x = 11.5, y = 4.5}, {x = 12.5, y = 4.5}, {x = 13.5, y = 4.5}, {x = 14.5, y = 4.5},
+        {x = 6, y = 5}, {x = 7, y = 5}, {x = 8, y = 5}, {x = 9, y = 5},
+        {x = 4, y = 6}, {x = 7, y = 6}, {x = 8, y = 6}, {x = 11, y = 6},
+        {x = 3, y = 6.5}, {x = 12, y = 6.5},
+        {x = 1, y = 7}, {x = 2, y = 7}, {x = 7, y = 7}, {x = 8, y = 7}, {x = 13, y = 7}, {x = 14, y = 7},
+    } },
+    { layer = 2, kind = "set", points = {
+        {x = 4, y = 0}, {x = 11, y = 0},
+        {x = 1, y = 1.5}, {x = 5, y = 1.5}, {x = 10, y = 1.5}, {x = 14, y = 1.5},
+        {x = 3, y = 2.5}, {x = 12, y = 2.5},
+        {x = 7, y = 3}, {x = 8, y = 3},
+        {x = 6.5, y = 4}, {x = 7.5, y = 4}, {x = 8.5, y = 4},
+        {x = 0.5, y = 4.5}, {x = 2.5, y = 4.5}, {x = 12.5, y = 4.5}, {x = 14.5, y = 4.5},
+        {x = 7, y = 5}, {x = 8, y = 5},
+        {x = 7, y = 6}, {x = 8, y = 6},
+        {x = 3, y = 6.5}, {x = 12, y = 6.5},
+        {x = 1, y = 7}, {x = 14, y = 7},
+    } },
+    { layer = 3, kind = "set", points = {
+        {x = 7.5, y = 4.5},
+    } },
+}
+
+-- Turtle is registered in US-14; US-15 adds Spider.
 MahjongLogic.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
+MahjongLogic.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -951,14 +1014,15 @@ function MahjongLogic.runSelfTests()
         end
     end
 
-    -- Layout registry (US-14) ---------------------------------------------
-    -- The registry enumerates exactly {"turtle"} in US-14; the layout-
-    -- dependent functions accept an id and default to "turtle" so the
+    -- Layout registry (US-14/US-15) ---------------------------------------------
+    -- The registry now enumerates {"spider", "turtle"} (US-15 adds Spider); the
+    -- layout-dependent functions accept an id and default to "turtle" so the
     -- byte-identical Turtle results fall out of the parameterized paths.
     local ids = MahjongLogic.layoutIds()
-    check(#ids == 1 and ids[1] == "turtle",
-        "layoutIds returns exactly {turtle} (got " .. table.concat(ids, ",") .. ")")
+    check(#ids == 2 and ids[1] == "spider" and ids[2] == "turtle",
+        "layoutIds returns exactly {spider, turtle} (got " .. table.concat(ids, ",") .. ")")
     check(MahjongLogic.layoutName("turtle") == "Turtle", "layoutName returns the registered name")
+    check(MahjongLogic.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
     check(MahjongLogic.layoutName("nope") == "nope",
         "layoutName falls back to the id for an unknown layout")
     check(MahjongLogic.buildLayout("turtle") == MahjongLogic.buildLayout(),
@@ -984,7 +1048,7 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 2 and toy_ids[1] == "toy" and toy_ids[2] == "turtle",
+    check(#toy_ids == 3 and toy_ids[1] == "spider" and toy_ids[2] == "toy" and toy_ids[3] == "turtle",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -1022,7 +1086,51 @@ function MahjongLogic.runSelfTests()
     _bounds_cache["toy"] = nil
     _layout_key_cache["toy"] = nil
     _max_layer_cache["toy"] = nil
-    check(#MahjongLogic.layoutIds() == 1, "deregistering restores the {turtle}-only registry")
+    check(#MahjongLogic.layoutIds() == 2, "deregistering toy restores the {spider, turtle} registry")
+
+    -- Spider layout (US-15) -----------------------------------------------
+    -- The classic Spider board: 144 positions, 65/53/25/1 across 4 layers.
+    local spider = MahjongLogic.buildLayout("spider")
+    check(#spider == 144, "Spider layout has 144 positions (got " .. #spider .. ")")
+    local spider_layers = {}
+    local spider_seen = {}
+    for _, p in ipairs(spider) do
+        spider_layers[p.layer] = (spider_layers[p.layer] or 0) + 1
+        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
+        check(not spider_seen[key], "no duplicate Spider position " .. key)
+        spider_seen[key] = true
+    end
+    check(spider_layers[0] == 65, "Spider layer 0 has 65 tiles (got " .. tostring(spider_layers[0]) .. ")")
+    check(spider_layers[1] == 53, "Spider layer 1 has 53 tiles (got " .. tostring(spider_layers[1]) .. ")")
+    check(spider_layers[2] == 25, "Spider layer 2 has 25 tiles (got " .. tostring(spider_layers[2]) .. ")")
+    check(spider_layers[3] == 1, "Spider layer 3 has 1 tile (got " .. tostring(spider_layers[3]) .. ")")
+    check(MahjongLogic.maxLayer("spider") == 3, "maxLayer(spider) == 3")
+    local spider_bounds = MahjongLogic.gridBounds("spider")
+    check(spider_bounds.x_min == 0.5 and spider_bounds.x_max == 14.5
+        and spider_bounds.y_min == 0 and spider_bounds.y_max == 7,
+        "Spider grid bounds are x=0.5..14.5, y=0..7")
+    -- Spider deal + free tiles + hasMoves.
+    local sg = MahjongLogic.newGame("spider", 42)
+    check(MahjongLogic.tileCount(sg) == 144, "newGame('spider', 42) deals 144 tiles")
+    local sg_free = MahjongLogic.freeTiles(sg, "spider")
+    check(#sg_free > 0, "Spider board has free tiles")
+    check(MahjongLogic.hasMoves(sg, "spider"), "Spider board has at least one move")
+    check(MahjongLogic.isFree(sg, 7.5, 4.5, 3), "Spider's peak tile (7.5, 4.5, L3) is free")
+    -- Spider persistence round-trip.
+    local sp_pair = MahjongLogic.matchingFreePair(sg, "spider")
+    check(sp_pair ~= nil, "Spider board has a matching free pair to remove")
+    local sp_ok, sp_ka, sp_kb = MahjongLogic.removePair(sg, sp_pair.a, sp_pair.b)
+    check(sp_ok, "removePair works on a Spider board")
+    local sp_hist = {
+        { a = sp_pair.a, b = sp_pair.b, ka = sp_ka, kb = sp_kb, score = 10, prev_last = nil },
+    }
+    local sp_ser = MahjongLogic.serializeGameState(sg, sp_hist, 10, sp_ka, 99, 0, 0, "spider")
+    check(sp_ser.layout == "spider", "serialized Spider state carries layout=spider")
+    local sp_restored = MahjongLogic.deserializeGameState(sp_ser)
+    check(sp_restored ~= nil and sp_restored.layout == "spider",
+        "deserialize restores a Spider state")
+    check(MahjongLogic.tileCount(sp_restored.board) == 142,
+        "restored Spider board has 142 tiles after one removal")
 
     -- newGame: same seed is deterministic; different seed differs.
     local g1 = MahjongLogic.newGame(42)

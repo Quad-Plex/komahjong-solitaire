@@ -51,13 +51,18 @@ local function pickTurtle()
 end
 
 -- ---- Registry ---------------------------------------------------------------
-
+--
+-- US-14 registered Turtle; US-15 adds Spider. The registry now enumerates
+-- exactly {"spider", "turtle"} (sorted).
 local ids = Logic.layoutIds()
-expect(#ids == 1 and ids[1] == "turtle",
-    "registry enumerates exactly {turtle} (got " .. table.concat(ids, ",") .. ")")
-expect(Logic.layoutName("turtle") == "Turtle", "layoutName returns the registered name")
+expect(#ids == 2 and ids[1] == "spider" and ids[2] == "turtle",
+    "registry enumerates exactly {spider, turtle} (got " .. table.concat(ids, ",") .. ")")
+expect(Logic.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
+expect(Logic.layoutName("spider") == "Spider", "layoutName returns the registered Spider name")
 expect(Logic.layouts.turtle ~= nil and Logic.layouts.turtle.spec ~= nil,
     "the turtle registry entry exposes its spec")
+expect(Logic.layouts.spider ~= nil and Logic.layouts.spider.spec ~= nil,
+    "the spider registry entry exposes its spec")
 
 -- Passing "turtle" (or nil) returns byte-identical results: the parameterized
 -- paths are the old Turtle paths with the id threaded through.
@@ -103,8 +108,8 @@ local toy_spec = {
 }
 Logic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
 local toy_ids = Logic.layoutIds()
-expect(#toy_ids == 2 and toy_ids[1] == "toy" and toy_ids[2] == "turtle",
-    "registerLayout adds the id; layoutIds returns them sorted")
+expect(#toy_ids == 3 and toy_ids[1] == "spider" and toy_ids[2] == "toy" and toy_ids[3] == "turtle",
+    "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
 expect(#Logic.buildLayout("toy") == 5, "the toy layout has 5 positions")
 expect(Logic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
 expect(Logic.isLayoutPosition(0.5, 0.5, 1, "toy"),
@@ -343,11 +348,11 @@ end
 expect(not restored_via_picker,
     "a restored game does NOT show the picker (resumes directly)")
 
--- ---- Deregister the toy layout (restore the {turtle}-only registry) ----------
+-- ---- Deregister the toy layout (restore the {spider, turtle} registry) ----------
 
 Logic.layouts["toy"] = nil
-expect(#Logic.layoutIds() == 1 and Logic.layoutIds()[1] == "turtle",
-    "deregistering the toy layout restores the {turtle}-only registry")
+expect(#Logic.layoutIds() == 2 and Logic.layoutIds()[1] == "spider" and Logic.layoutIds()[2] == "turtle",
+    "deregistering the toy layout restores the {spider, turtle} registry")
 
 if failures == 0 then
     print("\nALL US-14 LAYOUT-REGISTRY CHECKS PASSED")

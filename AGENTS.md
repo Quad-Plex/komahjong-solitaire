@@ -321,12 +321,12 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
   `getSize`/`init` behavior or the suite can't catch layout crashes.
 
-## Mahjong plugin — current state and key contracts (US-01..14, US-17..20 shipped; US-15..16 planned)
+## Mahjong plugin — current state and key contracts (US-01..15, US-17..20 shipped; US-16 planned)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..14, US-17..20
-shipped, US-15..16 planned: Spider, Bridge). The full history of *why* things are the way they are
+per user story; `_completed` in the filename marks shipped stories — US-01..15, US-17..20
+shipped, US-16 planned: Bridge). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
 code.
