@@ -152,10 +152,25 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-18 — Hint/shuffle score penalties | [US-18_penalties_completed.md](implementation-plan/US-18_penalties_completed.md) | ✅ completed |
 | US-19 — Long-press Hint to auto-solve the board | [US-19_autosolve_completed.md](implementation-plan/US-19_autosolve_completed.md) | ✅ completed |
 | US-20 — Hint penalty per session + Pause in the bottom toolbar | [US-20_hint-session-and-pause-button_completed.md](implementation-plan/US-20_hint-session-and-pause-button_completed.md) | ✅ completed |
+| US-21 — Expand the layout picker grid to hold the full board set | [US-21_layout-picker-expansion.md](implementation-plan/US-21_layout-picker-expansion.md) | ⏳ planned |
+| US-22 — Ziggurat layout | [US-22_ziggurat-layout.md](implementation-plan/US-22_ziggurat-layout.md) | ⏳ planned |
+| US-23 — Cloud layout | [US-23_cloud-layout.md](implementation-plan/US-23_cloud-layout.md) | ⏳ planned |
+| US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout.md](implementation-plan/US-24_tictactoe-layout.md) | ⏳ planned |
+| US-25 — Red Dragon layout | [US-25_red-dragon-layout.md](implementation-plan/US-25_red-dragon-layout.md) | ⏳ planned |
+| US-26 — Overpass layout | [US-26_overpass-layout.md](implementation-plan/US-26_overpass-layout.md) | ⏳ planned |
+| US-27 — Pyramid's Walls layout | [US-27_pyramid-walls-layout.md](implementation-plan/US-27_pyramid-walls-layout.md) | ⏳ planned |
+| US-28 — Confounding Cross layout | [US-28_confounding-cross-layout.md](implementation-plan/US-28_confounding-cross-layout.md) | ⏳ planned |
+| US-29 — Taipei layout | [US-29_taipei-layout.md](implementation-plan/US-29_taipei-layout.md) | ⏳ planned |
 
-When a planned story ships, rename its file to add the `_completed` suffix (and re-run the
-story index/status table above). The stories must be read in order — later stories assume the
-earlier ones' contracts.
+The US-21..US-29 stories add the GNOME Mahjongg layouts now that the registry + picker
+(US-14) and two extra layouts (Spider, Bridge) are shipped. A full git checkout of the GNOME
+Mahjongg sources lives at `/tmp/gnome-mahjongg` (`data/maps/mahjongg.map`); each board above is
+transcribed from that map and verified to have exactly 144 positions (the deck size).
+US-21 (picker grid expansion) is the prerequisite for US-22..US-29 — the picker's fixed 2×3
+(6-slot) grid holds only 6 cards and must grow before all 11 layouts fit. When a planned story
+ships, rename its file to add the `_completed` suffix (and re-run the story index/status
+table above). The stories must be read in order — later stories assume the earlier ones'
+contracts.
 
 ## Agent workflow for each story
 
@@ -201,7 +216,9 @@ they are not lost. Revisited after US-10/11 — see status below.
 ## Later / optional enhancements (not in the current scope)
 
 - Half-tile-offset rendering for a true "stacked" look.
-- Additional layouts beyond Spider/Bridge (the registry + picker make this a data-only addition).
+- Additional layouts beyond Spider/Bridge (the registry + picker make this a data-only
+  addition). **Now tracked as US-22..US-29**, transcribed from the GNOME Mahjongg map at
+  `/tmp/gnome-mahjongg/data/maps/mahjongg.map`.
 - Keyboard/d-pad navigation for non-touch Kindles.
 - Dark/night-mode theme (KOReader night mode inverts the framebuffer; a proper dark theme needs
   dark tile SVGs + a theme setting).
