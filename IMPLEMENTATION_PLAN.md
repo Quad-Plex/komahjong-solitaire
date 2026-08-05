@@ -89,7 +89,7 @@ kindle_majong/
 │   ├── US-13_stats-screen_completed.md
 │   ├── US-14_layout-registry_completed.md
 │   ├── US-15_spider-layout_completed.md
-│   ├── US-16_bridge-layout.md      # planned
+│   ├── US-16_bridge-layout_completed.md
 │   ├── US-17_pause_completed.md
 │   ├── US-18_penalties_completed.md
 │   ├── US-19_autosolve_completed.md
@@ -112,7 +112,7 @@ kindle_majong/
 │   ├── us13_stats.lua            # stats button + floating stats card
 │   ├── us14_layouts.lua          # layout registry + picker (US-14)
 │   ├── us15_spider.lua           # Spider layout (planned)
-│   ├── us16_bridge.lua           # Bridge layout (planned)
+│   ├── us16_bridge.lua           # Bridge layout (shipped)
 │   ├── us17_pause.lua            # pause overlay
 │   ├── us18_penalties.lua        # hint/shuffle score penalties
 │   └── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
@@ -128,8 +128,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-15,
-US-17..US-20**. Planned: **US-16**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-20**.
 
 | Story | File | Status |
 |---|---|---|
@@ -148,7 +147,7 @@ US-17..US-20**. Planned: **US-16**.
 | US-13 — Stats screen (dedicated "Stats" button + floating card) | [US-13_stats-screen_completed.md](implementation-plan/US-13_stats-screen_completed.md) | ✅ completed |
 | US-14 — Layout registry + layout selection screen (architecture) | [US-14_layout-registry_completed.md](implementation-plan/US-14_layout-registry_completed.md) | ✅ completed |
 | US-15 — Spider layout | [US-15_spider-layout_completed.md](implementation-plan/US-15_spider-layout_completed.md) | ✅ completed |
-| US-16 — Bridge layout | [US-16_bridge-layout.md](implementation-plan/US-16_bridge-layout.md) | planned |
+| US-16 — Bridge layout | [US-16_bridge-layout_completed.md](implementation-plan/US-16_bridge-layout_completed.md) | ✅ completed |
 | US-17 — Pause | [US-17_pause_completed.md](implementation-plan/US-17_pause_completed.md) | ✅ completed |
 | US-18 — Hint/shuffle score penalties | [US-18_penalties_completed.md](implementation-plan/US-18_penalties_completed.md) | ✅ completed |
 | US-19 — Long-press Hint to auto-solve the board | [US-19_autosolve_completed.md](implementation-plan/US-19_autosolve_completed.md) | ✅ completed |
@@ -219,3 +218,14 @@ shipping, that cleanup landed too: the setting default, its settings-dialog togg
 and all test references to it were removed (the `tests/us10_persistence.lua` dialog
 section was rewritten to exercise toggle/Cancel/Reset via `hints` and `score_method`
 instead). `confirm_new_game` no longer exists anywhere in code, config, or tests.
+
+---
+
+## Reference / external sources
+
+The built-in layout specs (Turtle, Spider, Bridge) are transcribed from the upstream
+GNOME Mahjongg layout maps so the boards are byte-identical to the canonical game.
+A full git checkout of the GNOME Mahjongg sources is available on the dev machine at
+`/tmp/gnome-mahjongg` (map data lives at `/tmp/gnome-mahjongg/data/maps/mahjongg.map`).
+Use it to verify tile counts, grid extents, and per-layer breakdowns when adding or
+fixing a layout spec.

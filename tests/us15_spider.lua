@@ -33,8 +33,8 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-expect(#ids == 2 and ids[1] == "spider" and ids[2] == "turtle",
-    "registry enumerates {spider, turtle} (got " .. table.concat(ids, ",") .. ")")
+expect(#ids == 3 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle",
+    "registry enumerates {bridge, spider, turtle} (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("spider") == "Spider", "layoutName returns 'Spider'")
 expect(Logic.maxLayer("spider") == 3, "maxLayer(spider) == 3")
 
@@ -158,8 +158,8 @@ menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "first launch shows the layout picker")
-expect(#picker._card_rects == 2,
-    "picker lists 2 cards for {spider, turtle} (got " .. #picker._card_rects .. ")")
+expect(#picker._card_rects == 3,
+    "picker lists 3 cards for {bridge, spider, turtle} (got " .. #picker._card_rects .. ")")
 
 local has_spider_card = false
 local has_turtle_card = false

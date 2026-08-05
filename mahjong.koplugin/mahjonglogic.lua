@@ -292,9 +292,50 @@ local SPIDER_SPEC = {
     } },
 }
 
--- Turtle is registered in US-14; US-15 adds Spider.
+-- Turtle is registered in US-14; US-15 adds Spider; US-16 adds Bridge.
 MahjongLogic.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
 MahjongLogic.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
+
+-- Bridge layout (US-16): the classic "Four Bridges" board from GNOME
+-- Mahjongg's `bridges` map — two towers linked by a deck, 144 tiles across
+-- 4 layers (88/36/16/4). The shape is regular enough for rows/blocks (unlike
+-- Spider's irregular silhouette, which needs `set`).
+--   L0: bridge deck (88) — two wide towers with a connecting deck
+--   L1: four 3x3 towers (36)
+--   L2: four 2x2 towers (16)
+--   L3: four peak tiles (4) at (3.5,1.5), (8.5,1.5), (3.5,6.5), (8.5,6.5)
+-- Grid extents: x=0..12, y=0..8.
+local BRIDGE_SPEC = {
+    -- Layer 0: the bridge deck and outer towers.
+    { layer = 0, kind = "row",   x_min = 1,   x_max = 11, y = 0 },
+    { layer = 0, kind = "row",   x_min = 2,   x_max = 5,  y = 1 },
+    { layer = 0, kind = "row",   x_min = 7,   x_max = 10,  y = 1 },
+    { layer = 0, kind = "row",   x_min = 2,   x_max = 10, y = 2 },
+    { layer = 0, kind = "row",   x_min = 0,   x_max = 12, y = 3 },
+    { layer = 0, kind = "row",   x_min = 1.5, x_max = 3.5, y = 4 },
+    { layer = 0, kind = "row",   x_min = 8.5, x_max = 10.5, y = 4 },
+    { layer = 0, kind = "row",   x_min = 0,   x_max = 12, y = 5 },
+    { layer = 0, kind = "row",   x_min = 2,   x_max = 10, y = 6 },
+    { layer = 0, kind = "row",   x_min = 2,   x_max = 5,  y = 7 },
+    { layer = 0, kind = "row",   x_min = 7,   x_max = 10,  y = 7 },
+    { layer = 0, kind = "row",   x_min = 1,   x_max = 11, y = 8 },
+    -- Layer 1: four 3x3 towers.
+    { layer = 1, kind = "block", x_min = 2.5, x_max = 4.5, y_min = 0.5, y_max = 2.5 },
+    { layer = 1, kind = "block", x_min = 7.5, x_max = 9.5, y_min = 0.5, y_max = 2.5 },
+    { layer = 1, kind = "block", x_min = 2.5, x_max = 4.5, y_min = 5.5, y_max = 7.5 },
+    { layer = 1, kind = "block", x_min = 7.5, x_max = 9.5, y_min = 5.5, y_max = 7.5 },
+    -- Layer 2: four 2x2 towers.
+    { layer = 2, kind = "block", x_min = 3, x_max = 4, y_min = 1, y_max = 2 },
+    { layer = 2, kind = "block", x_min = 8, x_max = 9, y_min = 1, y_max = 2 },
+    { layer = 2, kind = "block", x_min = 3, x_max = 4, y_min = 6, y_max = 7 },
+    { layer = 2, kind = "block", x_min = 8, x_max = 9, y_min = 6, y_max = 7 },
+    -- Layer 3: four peak tiles.
+    { layer = 3, kind = "tile",  x = 3.5, y = 1.5 },
+    { layer = 3, kind = "tile",  x = 8.5, y = 1.5 },
+    { layer = 3, kind = "tile",  x = 3.5, y = 6.5 },
+    { layer = 3, kind = "tile",  x = 8.5, y = 6.5 },
+}
+MahjongLogic.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -1014,15 +1055,17 @@ function MahjongLogic.runSelfTests()
         end
     end
 
-    -- Layout registry (US-14/US-15) ---------------------------------------------
-    -- The registry now enumerates {"spider", "turtle"} (US-15 adds Spider); the
-    -- layout-dependent functions accept an id and default to "turtle" so the
-    -- byte-identical Turtle results fall out of the parameterized paths.
+    -- Layout registry (US-14/US-15/US-16) ---------------------------------------
+    -- The registry now enumerates {"bridge", "spider", "turtle"} (US-15 adds
+    -- Spider, US-16 adds Bridge); the layout-dependent functions accept an id
+    -- and default to "turtle" so the byte-identical Turtle results fall out of
+    -- the parameterized paths.
     local ids = MahjongLogic.layoutIds()
-    check(#ids == 2 and ids[1] == "spider" and ids[2] == "turtle",
-        "layoutIds returns exactly {spider, turtle} (got " .. table.concat(ids, ",") .. ")")
+    check(#ids == 3 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle",
+        "layoutIds returns exactly {bridge, spider, turtle} (got " .. table.concat(ids, ",") .. ")")
     check(MahjongLogic.layoutName("turtle") == "Turtle", "layoutName returns the registered name")
     check(MahjongLogic.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
+    check(MahjongLogic.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
     check(MahjongLogic.layoutName("nope") == "nope",
         "layoutName falls back to the id for an unknown layout")
     check(MahjongLogic.buildLayout("turtle") == MahjongLogic.buildLayout(),
@@ -1048,7 +1091,8 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 3 and toy_ids[1] == "spider" and toy_ids[2] == "toy" and toy_ids[3] == "turtle",
+    check(#toy_ids == 4 and toy_ids[1] == "bridge" and toy_ids[2] == "spider"
+        and toy_ids[3] == "toy" and toy_ids[4] == "turtle",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -1086,7 +1130,7 @@ function MahjongLogic.runSelfTests()
     _bounds_cache["toy"] = nil
     _layout_key_cache["toy"] = nil
     _max_layer_cache["toy"] = nil
-    check(#MahjongLogic.layoutIds() == 2, "deregistering toy restores the {spider, turtle} registry")
+    check(#MahjongLogic.layoutIds() == 3, "deregistering toy restores the {bridge, spider, turtle} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
     -- The classic Spider board: 144 positions, 65/53/25/1 across 4 layers.
@@ -1131,6 +1175,50 @@ function MahjongLogic.runSelfTests()
         "deserialize restores a Spider state")
     check(MahjongLogic.tileCount(sp_restored.board) == 142,
         "restored Spider board has 142 tiles after one removal")
+
+    -- Bridge layout (US-16) -----------------------------------------------
+    -- The classic Four Bridges board: 144 positions, 88/36/16/4 across 4 layers.
+    local bridge = MahjongLogic.buildLayout("bridge")
+    check(#bridge == 144, "Bridge layout has 144 positions (got " .. #bridge .. ")")
+    local bridge_layers = {}
+    local bridge_seen = {}
+    for _, p in ipairs(bridge) do
+        bridge_layers[p.layer] = (bridge_layers[p.layer] or 0) + 1
+        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
+        check(not bridge_seen[key], "no duplicate Bridge position " .. key)
+        bridge_seen[key] = true
+    end
+    check(bridge_layers[0] == 88, "Bridge layer 0 has 88 tiles (got " .. tostring(bridge_layers[0]) .. ")")
+    check(bridge_layers[1] == 36, "Bridge layer 1 has 36 tiles (got " .. tostring(bridge_layers[1]) .. ")")
+    check(bridge_layers[2] == 16, "Bridge layer 2 has 16 tiles (got " .. tostring(bridge_layers[2]) .. ")")
+    check(bridge_layers[3] == 4, "Bridge layer 3 has 4 tiles (got " .. tostring(bridge_layers[3]) .. ")")
+    check(MahjongLogic.maxLayer("bridge") == 3, "maxLayer(bridge) == 3")
+    local bridge_bounds = MahjongLogic.gridBounds("bridge")
+    check(bridge_bounds.x_min == 0 and bridge_bounds.x_max == 12
+        and bridge_bounds.y_min == 0 and bridge_bounds.y_max == 8,
+        "Bridge grid bounds are x=0..12, y=0..8")
+    -- Bridge deal + free tiles + hasMoves.
+    local bg = MahjongLogic.newGame("bridge", 42)
+    check(MahjongLogic.tileCount(bg) == 144, "newGame('bridge', 42) deals 144 tiles")
+    local bg_free = MahjongLogic.freeTiles(bg, "bridge")
+    check(#bg_free > 0, "Bridge board has free tiles")
+    check(MahjongLogic.hasMoves(bg, "bridge"), "Bridge board has at least one move")
+    check(MahjongLogic.isFree(bg, 3.5, 1.5, 3), "Bridge peak tile (3.5, 1.5, L3) is free")
+    check(MahjongLogic.isFree(bg, 8.5, 6.5, 3), "Bridge peak tile (8.5, 6.5, L3) is free")
+    -- Bridge persistence round-trip.
+    local bp_pair = MahjongLogic.matchingFreePair(bg, "bridge")
+    check(bp_pair ~= nil, "Bridge board has a matching free pair to remove")
+    local bp_ok, bp_ka, bp_kb = MahjongLogic.removePair(bg, bp_pair.a, bp_pair.b)
+    check(bp_ok, "removePair works on a Bridge board")
+    local bp_ser = MahjongLogic.serializeGameState(bg, {
+        { a = bp_pair.a, b = bp_pair.b, ka = bp_ka, kb = bp_kb, score = 10, prev_last = nil },
+    }, 10, bp_ka, 99, 0, 0, "bridge")
+    check(bp_ser.layout == "bridge", "serialized Bridge state carries layout=bridge")
+    local bp_restored = MahjongLogic.deserializeGameState(bp_ser)
+    check(bp_restored ~= nil and bp_restored.layout == "bridge",
+        "deserialize restores a Bridge state")
+    check(MahjongLogic.tileCount(bp_restored.board) == 142,
+        "restored Bridge board has 142 tiles after one removal")
 
     -- newGame: same seed is deterministic; different seed differs.
     local g1 = MahjongLogic.newGame(42)
