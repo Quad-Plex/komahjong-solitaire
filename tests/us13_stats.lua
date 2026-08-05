@@ -68,7 +68,10 @@ expect(multi._left_buttons[2].icon == "mahjong/stats"
     "the second left button is the Stats button with its callback")
 expect(multi._left_buttons[1].height == multi.HUD_H
         and multi._left_buttons[2].height == multi.HUD_H,
-    "left buttons are square and take the full HUD height")
+    "left buttons take the full HUD height")
+expect(multi._left_buttons[1].width == math.floor(multi.HUD_H * 0.6)
+        and multi._left_buttons[2].width == math.floor(multi.HUD_H * 0.6),
+    "left buttons are narrower than tall so a pair sits close together")
 
 -- ---- main.lua wiring: the HUD's Stats button opens the card --------------------
 

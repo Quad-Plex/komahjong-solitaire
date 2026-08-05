@@ -3,9 +3,9 @@
 -- A modal centered panel (the ConfirmBox pattern) instead of a full-screen
 -- page: a transparent full-screen InputContainer whose single child is a
 -- CenterContainer holding a white rounded FrameContainer. The game stays
--- visible around the panel. A tap outside the panel closes it (discarding
--- changes, exactly like Cancel); Save / Cancel / Reset act on the collected
--- `changes`.
+-- visible around the panel. A tap outside the panel (or the title-row close X)
+-- closes it and discards the collected changes; Save / Reset act on `changes`.
+-- There is no Cancel button — leaving without Save already cancels.
 --
 -- Row buttons: tapping a toggle/cycle button updates `changes`, re-renders
 -- the button label (rebuilding the label widget so the full truncation/wrap
@@ -300,27 +300,27 @@ function SettingsWidget:init()
     self._set_interval_enabled = setIntervalEnabled -- reused by resetToDefaults
     setIntervalEnabled() -- start greyed if a saved "move" mode is active
 
-    -- Bottom buttons: Reset / Save / Cancel -------------------------------
+    -- Bottom buttons: Reset / Save ------------------------------------------
+    -- (No Cancel button: a tap outside the panel or the title-row close X
+    -- already discards the collected changes, so Cancel would be redundant.)
     local bottom_w = Screen:scaleBySize(150)
     local reset_btn = makeButton(_("Reset"), bottom_w, Screen:scaleBySize(32))
     reset_btn.callback = function() self:resetToDefaults() end
     local save_btn = makeButton(_("Save"), bottom_w, Screen:scaleBySize(32))
     save_btn.callback = function() self:save() end
-    local cancel_btn = makeButton(_("Cancel"), bottom_w, Screen:scaleBySize(32))
-    cancel_btn.callback = function() self:cancel() end
 
     -- Title row: "Settings" centered, with a close X pinned at the panel's
     -- top-right corner (same grey-square style as the HUD's quit X). Tapping
-    -- it discards changes and closes, exactly like Cancel.
+    -- it discards the changes and closes.
     --
     -- The row spans the FULL inner width of the panel, not just the value
-    -- column: the panel is as wide as its widest child (the Reset/Save/Cancel
-    -- row), so a title row sized to the value column would be centered with
+    -- column: the panel is as wide as its widest child (the Reset/Save row),
+    -- so a title row sized to the value column would be centered with
     -- empty space to the right of the X. Sizing it to the widest child pins
     -- the X flush against the panel's inner right edge.
     local gap = Screen:scaleBySize(14)
     local content_w = max_label_w + label_gap + toggle_w
-    local title_row_w = math.max(content_w, 3 * bottom_w + 2 * gap)
+    local title_row_w = math.max(content_w, 2 * bottom_w + gap)
     local title_widget = TextWidget:new{
         text = _("Settings"),
         padding = 0,
@@ -375,8 +375,6 @@ function SettingsWidget:init()
                 reset_btn,
                 HorizontalSpan:new{ width = gap },
                 save_btn,
-                HorizontalSpan:new{ width = gap },
-                cancel_btn,
             },
             VerticalSpan:new{ width = top_pad },
         },
@@ -396,10 +394,10 @@ function SettingsWidget:init()
         panel,
     }
 
-    -- Full-screen tap gesture: a tap that misses the panel acts like Cancel.
-    -- (The buttons inside the panel match their own more-specific gesture and
-    -- consume the tap before this ever fires — the same pattern ConfirmBox
-    -- uses.)
+    -- Full-screen tap gesture: a tap that misses the panel discards the
+    -- collected changes and closes. (The buttons inside the panel match their
+    -- own more-specific gesture and consume the tap before this ever fires —
+    -- the same pattern ConfirmBox uses.)
     self.ges_events = {
         TapClose = {
             GestureRange:new{ ges = "tap", range = self.dimen },
@@ -441,13 +439,13 @@ function SettingsWidget:save()
     UIManager:close(self)
 end
 
--- Discards the changes and closes (Cancel button or a tap outside the panel).
+-- Discards the changes and closes (a tap outside the panel or the close X).
 function SettingsWidget:cancel()
     if self.onCancel then self.onCancel() end
     UIManager:close(self)
 end
 
--- A tap outside the floating panel dismisses the dialog (like Cancel).
+-- A tap outside the floating panel dismisses the dialog (discarding changes).
 -- `ges` is the second argument (the first is the gesture spec's `args`, nil
 -- here) — see the Input-handling pitfall in AGENTS.md.
 function SettingsWidget:onTapClose(_, ges)

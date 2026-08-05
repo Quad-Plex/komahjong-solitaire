@@ -339,6 +339,12 @@ def generate():
                             'stroke-linecap="round"/>'
                             '<path d="M19 5 L5 19" fill="none" stroke="#000000" stroke-width="4" '
                             'stroke-linecap="round"/></svg>')
+    # Pause button (US-17): Material Design "pause" glyph — two rounded bars,
+    # the HUD's middle left button that opens the pause overlay.
+    written["pause.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                            'viewBox="0 0 24 24" width="24">'
+                            '<path d="M0 0h24v24H0z" fill="none"/>'
+                            '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>')
     # HUD chip icons (hudbar.lua): Material Design glyphs — "layers" for the
     # Pairs-remaining chip and a star for the Score chip. The Free-pairs chip
     # reuses the lightbulb shipped above. Like the toolbar icons these are

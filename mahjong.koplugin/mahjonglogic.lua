@@ -429,6 +429,20 @@ local CHAIN_BONUS = 5
 MahjongLogic.SCORE_PER_PAIR = SCORE_PER_PAIR
 MahjongLogic.CHAIN_BONUS = CHAIN_BONUS
 
+-- US-18: using a hint or reshuffling costs points, so those helps are a real
+-- trade-off. The penalty is applied at USE time and is NOT part of the pair
+-- history, so undo() restores only the pair's points (never a penalty).
+local HINT_PENALTY = 5
+local SHUFFLE_PENALTY = 10
+MahjongLogic.HINT_PENALTY = HINT_PENALTY
+MahjongLogic.SHUFFLE_PENALTY = SHUFFLE_PENALTY
+
+-- Returns `score` minus `amount`, never going below 0 (a score can't go
+-- negative, no matter how many helps are used).
+function MahjongLogic.applyPenalty(score, amount)
+    return math.max(0, (score or 0) - (amount or 0))
+end
+
 -- The chain group of a kind: suited/wind/dragon kinds chain with themselves
 -- (group == the kind), flowers chain with any flower, seasons with any season.
 -- This is the same grouping the match rule uses (MATCH_GROUP).
@@ -575,9 +589,10 @@ end
 
 -- Serializes the current game for persistence. `history` is the UI's undo
 -- stack ({ a, b, ka, kb, score, prev_last } records), `last_match_kind` the
--- chain-scoring kind, `elapsed` the elapsed seconds. Returns a fresh table
+-- chain-scoring kind, `elapsed` the elapsed seconds, and `hints_used` /
+-- `shuffles_used` the per-game help counters (US-18). Returns a fresh table
 -- (no references into live state, so later mutations can't corrupt the save).
-function MahjongLogic.serializeGameState(board, history, score, last_match_kind, elapsed)
+function MahjongLogic.serializeGameState(board, history, score, last_match_kind, elapsed, hints_used, shuffles_used)
     local out_board = {}
     for key, kind in pairs(board) do
         out_board[key] = kind
@@ -597,6 +612,8 @@ function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
         score = score or 0,
         last = last_match_kind,
         elapsed = elapsed or 0,
+        hints = hints_used or 0,
+        shuffles = shuffles_used or 0,
     }
 end
 
@@ -670,6 +687,21 @@ function MahjongLogic.deserializeGameState(data)
         return nil
     end
 
+    -- US-18: per-game help counters. Absent on a pre-US-18 save -> 0 (a valid
+    -- older state restores fine); present but non-count invalidates.
+    local hints_used = data.hints
+    if hints_used == nil then
+        hints_used = 0
+    elseif type(hints_used) ~= "number" or hints_used < 0 or math.floor(hints_used) ~= hints_used then
+        return nil
+    end
+    local shuffles_used = data.shuffles
+    if shuffles_used == nil then
+        shuffles_used = 0
+    elseif type(shuffles_used) ~= "number" or shuffles_used < 0 or math.floor(shuffles_used) ~= shuffles_used then
+        return nil
+    end
+
     -- Copy the board so the restored game never aliases the stored table.
     local out_board = {}
     for key, kind in pairs(board) do out_board[key] = kind end
@@ -680,6 +712,8 @@ function MahjongLogic.deserializeGameState(data)
         score = score,
         last_match_kind = last,
         elapsed = elapsed,
+        hints_used = hints_used,
+        shuffles_used = shuffles_used,
     }
 end
 
@@ -1101,6 +1135,18 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.matchGroup("flower1") == "flower", "matchGroup of a flower is flower")
     check(MahjongLogic.matchGroup("season1") == "season", "matchGroup of a season is season")
 
+    -- US-18 penalties -------------------------------------------------
+    check(MahjongLogic.HINT_PENALTY == 5, "hint penalty is 5")
+    check(MahjongLogic.SHUFFLE_PENALTY == 10, "shuffle penalty is 10")
+    check(MahjongLogic.applyPenalty(100, MahjongLogic.HINT_PENALTY) == 95,
+        "applyPenalty subtracts the hint penalty")
+    check(MahjongLogic.applyPenalty(100, MahjongLogic.SHUFFLE_PENALTY) == 90,
+        "applyPenalty subtracts the shuffle penalty")
+    check(MahjongLogic.applyPenalty(3, 5) == 0, "applyPenalty floors at 0")
+    check(MahjongLogic.applyPenalty(0, 10) == 0, "applyPenalty(0, n) stays 0")
+    check(MahjongLogic.applyPenalty(5, 10) == 0, "applyPenalty never goes negative")
+    check(MahjongLogic.applyPenalty(nil, 5) == 0, "applyPenalty handles a nil score")
+
     -- Elapsed formatting (US-10).
     check(MahjongLogic.formatElapsed(0) == "00:00", "formatElapsed(0) is 00:00")
     check(MahjongLogic.formatElapsed(65) == "01:05", "formatElapsed(65) is 01:05")
@@ -1150,6 +1196,16 @@ function MahjongLogic.runSelfTests()
     p_restored.board["0,3.5,0"] = nil
     check(MahjongLogic.tileAt(p_board, 0, 3.5, 0) ~= nil,
         "restored board is a copy, not a reference to the saved table")
+
+    -- US-18: the per-game help counters ride along in the game state.
+    check(p_restored.hints_used == 0 and p_restored.shuffles_used == 0,
+        "a save without counters restores them as 0 (pre-US-18 compat)")
+    local p_serialized2 = MahjongLogic.serializeGameState(p_board, p_hist, 10, p_ka, 123, 3, 2)
+    check(p_serialized2.hints == 3 and p_serialized2.shuffles == 2,
+        "serialized state carries the hint/shuffle counters")
+    local p_restored2 = MahjongLogic.deserializeGameState(p_serialized2)
+    check(p_restored2 ~= nil and p_restored2.hints_used == 3 and p_restored2.shuffles_used == 2,
+        "restored state round-trips the hint/shuffle counters")
 
     -- Rejection paths ------------------------------------------------------
     check(MahjongLogic.deserializeGameState(nil) == nil, "deserialize rejects nil")
@@ -1226,6 +1282,22 @@ function MahjongLogic.runSelfTests()
     bad_elapsed.elapsed = -5
     check(MahjongLogic.deserializeGameState(bad_elapsed) == nil, "deserialize rejects negative elapsed")
     bad_elapsed.elapsed = p_serialized.elapsed
+
+    local bad_hints = p_serialized
+    bad_hints.hints = -1
+    check(MahjongLogic.deserializeGameState(bad_hints) == nil,
+        "deserialize rejects a negative hint count")
+    bad_hints.hints = p_serialized.hints
+    local bad_hints_fmt = p_serialized
+    bad_hints_fmt.hints = 1.5
+    check(MahjongLogic.deserializeGameState(bad_hints_fmt) == nil,
+        "deserialize rejects a fractional hint count")
+    bad_hints_fmt.hints = p_serialized.hints
+    local bad_shuffles = p_serialized
+    bad_shuffles.shuffles = "x"
+    check(MahjongLogic.deserializeGameState(bad_shuffles) == nil,
+        "deserialize rejects a non-numeric shuffle count")
+    bad_shuffles.shuffles = p_serialized.shuffles
 
     io.write("All self-tests passed.\n")
     return true

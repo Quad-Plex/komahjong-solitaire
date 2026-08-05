@@ -85,14 +85,15 @@ kindle_majong/
 │   ├── US-09_score_completed.md
 │   ├── US-10_persistence_completed.md
 │   ├── US-11_polish_completed.md
-│   ├── US-12_win-summary.md        # planned
-│   ├── US-13_stats-screen.md       # planned
+│   ├── US-12_win-summary_completed.md
+│   ├── US-13_stats-screen_completed.md
 │   ├── US-14_layout-registry.md    # planned
 │   ├── US-15_spider-layout.md      # planned
 │   ├── US-16_bridge-layout.md      # planned
-│   ├── US-17_pause.md              # planned
-│   ├── US-18_penalties.md          # planned
-│   └── US-19_autosolve_completed.md
+│   ├── US-17_pause_completed.md
+│   ├── US-18_penalties_completed.md
+│   ├── US-19_autosolve_completed.md
+│   └── US-20_hint-session-and-pause-button_completed.md
 ├── tests/                        # official test suite (tests/run.sh)
 │   ├── run.sh                    # luac -p + luacheck + logic self-tests + harnesses
 │   ├── mock.lua                  # shared KOReader stubs (fresh mock.newContext() per test)
@@ -107,13 +108,13 @@ kindle_majong/
 │   ├── us11_timer.lua            # timer refresh modes + interval settings
 │   ├── hud_bar.lua               # two-row HUD shape + setStats (preloaded by mock)
 │   ├── board_updates.lua         # incremental tile add/remove contract
-│   ├── us12_stats.lua            # win summary + lifetime stats (planned)
-│   ├── us13_stats_screen.lua     # stats button + floating stats card (planned)
+│   ├── us12_stats.lua            # win summary + lifetime stats
+│   ├── us13_stats.lua            # stats button + floating stats card
 │   ├── us14_layouts.lua          # layout registry + picker (planned)
 │   ├── us15_spider.lua           # Spider layout (planned)
 │   ├── us16_bridge.lua           # Bridge layout (planned)
-│   ├── us17_pause.lua            # pause overlay (planned)
-│   ├── us18_penalties.lua        # hint/shuffle score penalties (planned)
+│   ├── us17_pause.lua            # pause overlay
+│   ├── us18_penalties.lua        # hint/shuffle score penalties
 │   └── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
@@ -127,8 +128,8 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-11,
-US-19**. Planned: **US-12..US-18**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-13,
+US-17..US-20**. Planned: **US-14..US-16**.
 
 | Story | File | Status |
 |---|---|---|
@@ -143,14 +144,15 @@ US-19**. Planned: **US-12..US-18**.
 | US-09 — Score, pair counter, and status feedback | [US-09_score_completed.md](implementation-plan/US-09_score_completed.md) | ✅ completed |
 | US-10 — Persistence: save/restore game + settings | [US-10_persistence_completed.md](implementation-plan/US-10_persistence_completed.md) | ✅ completed |
 | US-11 — Polish and cross-device refinement | [US-11_polish_completed.md](implementation-plan/US-11_polish_completed.md) | ✅ completed |
-| US-12 — Win summary + best-score/best-time tracking | [US-12_win-summary.md](implementation-plan/US-12_win-summary.md) | planned |
-| US-13 — Stats screen (dedicated "Stats" button + floating card) | [US-13_stats-screen.md](implementation-plan/US-13_stats-screen.md) | planned |
+| US-12 — Win summary + best-score/best-time tracking | [US-12_win-summary_completed.md](implementation-plan/US-12_win-summary_completed.md) | ✅ completed |
+| US-13 — Stats screen (dedicated "Stats" button + floating card) | [US-13_stats-screen_completed.md](implementation-plan/US-13_stats-screen_completed.md) | ✅ completed |
 | US-14 — Layout registry + layout selection screen (architecture) | [US-14_layout-registry.md](implementation-plan/US-14_layout-registry.md) | planned |
 | US-15 — Spider layout | [US-15_spider-layout.md](implementation-plan/US-15_spider-layout.md) | planned |
 | US-16 — Bridge layout | [US-16_bridge-layout.md](implementation-plan/US-16_bridge-layout.md) | planned |
-| US-17 — Pause | [US-17_pause.md](implementation-plan/US-17_pause.md) | planned |
-| US-18 — Hint/shuffle score penalties | [US-18_penalties.md](implementation-plan/US-18_penalties.md) | planned |
+| US-17 — Pause | [US-17_pause_completed.md](implementation-plan/US-17_pause_completed.md) | ✅ completed |
+| US-18 — Hint/shuffle score penalties | [US-18_penalties_completed.md](implementation-plan/US-18_penalties_completed.md) | ✅ completed |
 | US-19 — Long-press Hint to auto-solve the board | [US-19_autosolve_completed.md](implementation-plan/US-19_autosolve_completed.md) | ✅ completed |
+| US-20 — Hint penalty per session + Pause in the bottom toolbar | [US-20_hint-session-and-pause-button_completed.md](implementation-plan/US-20_hint-session-and-pause-button_completed.md) | ✅ completed |
 
 When a planned story ships, rename its file to add the `_completed` suffix (and re-run the
 story index/status table above). The stories must be read in order — later stories assume the

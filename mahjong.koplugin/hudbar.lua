@@ -125,9 +125,11 @@ function HudBar:init()
     local quit_w = self.right_icon and self.right_icon_tap_callback and self.HUD_H or 0
 
     -- Left buttons: the new `left_icons` list (one button per entry) or the
-    -- legacy single `left_icon` fields (US-13). Each is a square HUD_H-wide
-    -- button pinned to the far left with a slim rounded border, so a row of
-    -- them reads as controls distinct from the quit X.
+    -- legacy single `left_icon` fields (US-13). Each is a slim rounded-border
+    -- button pinned to the far left, so a row of them reads as controls
+    -- distinct from the quit X. The buttons are a touch narrower than tall
+    -- (0.6 x HUD_H) so a pair of them (settings + stats) sits close together
+    -- without squeezing the stat chips in the middle.
     local left_specs = {}
     if self.left_icons and #self.left_icons > 0 then
         left_specs = self.left_icons
@@ -136,7 +138,8 @@ function HudBar:init()
             { icon = self.left_icon, size_ratio = 0.45, callback = self.left_icon_tap_callback },
         }
     end
-    local left_w = #left_specs * self.HUD_H
+    local left_btn_w = math.floor(self.HUD_H * 0.6)
+    local left_w = #left_specs * left_btn_w
     local content_w = self.full_width - quit_w - left_w
 
     local available_for_chips = content_w - edge_pad - right_pad - (2 * chip_gap)
@@ -167,14 +170,14 @@ function HudBar:init()
         }
     end
 
-    -- Left buttons (gear / stats / ...): one square HUD_H x HUD_H button per
-    -- entry, sized 45% of the bar height (matches the pre-US-13 gear).
+    -- Left buttons (gear / stats / ...): one left_btn_w x HUD_H button per
+    -- entry, icon sized 45% of the bar height (matches the pre-US-13 gear).
     local left_buttons = {}
     for _, spec in ipairs(left_specs) do
         local btn_icon = math.floor(self.HUD_H * (spec.size_ratio or 0.45))
         left_buttons[#left_buttons + 1] = ButtonWidget:new{
             icon = spec.icon,
-            width = self.HUD_H,
+            width = left_btn_w,
             height = self.HUD_H,
             icon_width = btn_icon,
             icon_height = btn_icon,

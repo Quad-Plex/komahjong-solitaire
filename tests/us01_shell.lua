@@ -76,8 +76,8 @@ expect(on_stack == 1, "widget still on the stack exactly once after re-launch")
 
 -- ---- New Game ------------------------------------------------------------
 
--- The toolbar holds 4 action-button cells (icon button + hint label)
--- separated by 3 HorizontalSpan gaps plus one edge spacer on each side
+-- The toolbar holds 5 action-button cells (icon button + hint label)
+-- separated by 4 HorizontalSpan gaps plus one edge spacer on each side
 -- (the stock HorizontalGroup ignores a `spacing` field, so real spacers).
 -- Layout: [1] status bar, [2] board, [3] feedback band, [4] toolbar, [5] spacer.
 local toolbar = mj[1][4]
@@ -92,17 +92,17 @@ for i = 1, #toolbar do
         gaps[#gaps + 1] = b
     end
 end
-expect(#btns == 4, "toolbar holds exactly 4 action buttons")
-expect(#gaps == 5 and gaps[1].width > 0 and gaps[5].width > 0
-        and toolbar[1] == gaps[1] and toolbar[#toolbar] == gaps[5],
-    "five spacers: three between the buttons plus edge gaps at both screen sides")
+expect(#btns == 5, "toolbar holds exactly 5 action buttons")
+expect(#gaps == 6 and gaps[1].width > 0 and gaps[6].width > 0
+        and toolbar[1] == gaps[1] and toolbar[#toolbar] == gaps[6],
+    "six spacers: four between the buttons plus edge gaps at both screen sides")
 local all_bordered = true
 for _, b in ipairs(btns) do
     if not b.padding or not b.radius then all_bordered = false end
 end
 expect(all_bordered, "toolbar buttons are rounded bordered rectangles (bigger tap areas)")
 local labels_ok = true
-for i, cell in ipairs({ toolbar[2], toolbar[4], toolbar[6], toolbar[8] }) do
+for i, cell in ipairs({ toolbar[2], toolbar[4], toolbar[6], toolbar[8], toolbar[10] }) do
     if type(cell[2]) ~= "table" or type(cell[2].text) ~= "string" or #cell[2].text == 0 then
         labels_ok = false
     end
@@ -110,6 +110,9 @@ end
 expect(labels_ok, "each toolbar cell carries a hint label under the icon")
 expect(type(mj[1][5]) == "table" and (mj[1][5].width or 0) > 0,
     "a bottom spacer lifts the toolbar off the screen edge")
+local pause_btn = btns[5]
+expect(pause_btn.icon == "mahjong/pause" and type(pause_btn.callback) == "function",
+    "the fifth toolbar button is Pause and is wired")
 local new_game_btn = btns[4]
 expect(type(new_game_btn.callback) == "function", "New Game button wired")
 ctx.last_confirm = nil

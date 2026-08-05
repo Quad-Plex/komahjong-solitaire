@@ -196,7 +196,9 @@ end
 expect(ta ~= nil, "shuffled board still has a playable pair")
 mj6:handleTileTap(ta.x, ta.y, ta.layer)
 mj6:handleTileTap(tb.x, tb.y, tb.layer)
-expect(mj6.score == 25, "chain bonus applies across a shuffle (10 + 15 = 25)")
+-- The second same-kind pair chains (+15), but the user-initiated shuffle in
+-- between cost SHUFFLE_PENALTY (10), so the net is 10 + 15 - 10 = 15 (US-18).
+expect(mj6.score == 15, "chain bonus applies across a shuffle (10 + 15 - 10 = 15)")
 
 if failures == 0 then
     print("\nALL US-09 SCORE/STATUS CHECKS PASSED")

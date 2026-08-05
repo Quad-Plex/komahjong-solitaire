@@ -321,13 +321,12 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
   `getSize`/`init` behavior or the suite can't catch layout crashes.
 
-## Mahjong plugin — current state and key contracts (US-01..13, US-19 shipped; US-14..18 planned)
+## Mahjong plugin — current state and key contracts (US-01..13, US-17..20 shipped; US-14..16 planned)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..13, US-19 shipped,
-US-14..18 planned: layout registry + picker, Spider, Bridge, pause, hint/shuffle score
-penalties). The full history of *why* things are the way they are
+per user story; `_completed` in the filename marks shipped stories — US-01..13, US-17..20
+shipped, US-14..16 planned: layout registry + picker, Spider, Bridge). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
 code.
@@ -346,10 +345,12 @@ mahjong.koplugin/            # the deliverable
 ├── mahjongboard.lua         # 3D board widget (InputContainer): IconWidgets in an
 │                            #   OverlapGroup, per-layer up-left shift, hit-test, overlays
 ├── hudbar.lua               # 2-row top bar: left buttons (gear + stats, left_icons API) +
-│                            #   title + 3 stat chips + quit X
+│                            #   title + 3 stat chips + quit X (Pause lives in the bottom toolbar)
 ├── mahjongsettings.lua      # floating settings dialog (CenterContainer card over the game)
 ├── mahjongstatswidget.lua   # floating stats screen (US-13): the same card pattern, lists
 │                            #   lifetime stats + Reset-after-confirm
+├── mahjongpause.lua         # pause overlay (US-17): floating card with a Resume button; the
+│                            #   full-screen tap gesture consumes taps (no tap-outside dismiss)
 └── icons/*.svg              # generated tile faces + UI glyphs (gen_icons.py owns them all)
 tests/                       # official suite (tests/run.sh): mock.lua + usNN_*.lua harnesses
 tools/                       # gen_icons.py, check_icons.py, preview.py (icon QA, not in suite)
@@ -415,8 +416,17 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    run-id token; `stopTimer` freezes `elapsed_base`. No timer score bonus.
 9. **Scoring:** base 10 per pair (`SCORE_PER_PAIR`), +5 chain bonus (`CHAIN_BONUS`) when the new
    pair is in the same `matchGroup` as the previous match; flowers chain with flowers, seasons
-   with seasons. `score_method="basic"` disables the chain. US-18 will subtract hint/shuffle
-   penalties.
+   with seasons. `score_method="basic"` disables the chain. **US-18 penalties:** a hint shown
+   costs `HINT_PENALTY` (5) and a user-initiated shuffle costs `SHUFFLE_PENALTY` (10), applied at
+   use time via `MahjongLogic.applyPenalty(score, amount)` (floors at 0); the bounded auto-repeat
+   re-shuffles and the auto-solver's mid-solve shuffles never re-charge. **US-20:** the hint
+   penalty is charged once per *hint session* — a session runs from the first hint after a pair
+   was cleared until the next pair is cleared (`applyMatch` resets `_last_hint`), so cycling
+   presses and re-hints on the same board are free; only the press that starts a session pays.
+   Penalties are NOT in the pair history, so `undo()` subtracts only the pair's points (floored)
+   and never refunds a penalty. Per-game `hints_used` / `shuffles_used` counters are persisted in
+   the game state (`serializeGameState`/`deserializeGameState` fields `hints`/`shuffles`,
+   absent = 0) and shown in the win summary when non-zero.
 10. **Dirtying:** a nested subwidget's `setDirty` alone never repaints (US-07's "zero effect"
     bug) — the window-level widget must be dirtied (`UIManager:setDirty(self, "ui")`), or use
     the `"all"` sentinel from inside the board.
@@ -443,6 +453,16 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
      close stops it (token-bumped pending steps no-op). Flash has a persistent `setFlash` vs the
      auto-clearing `flashMessage`, and `clearFlash` bumps the token (never nils it — the old
      `nil + 1` crashed on a second flash after a cleared band).
+ 13. **Pause (US-17):** the bottom toolbar's fifth button (`mahjong/pause` icon, kept as
+     `self.pause_button`) calls `pauseGame()` — `stopAutoSolve()` + `stopTimer()` (freezes
+     `elapsed_base`) then drops `mahjongpause.lua`, a floating card in the settings/stats pattern
+     but with NO tap-outside dismiss: its full-screen `TapClose` handler returns true and does
+     nothing, so every stray tap is consumed and the board/toolbar/HUD are unreachable. Only the
+     Resume button (or the framework closing the overlay) runs `onResume` → `startTimer()`;
+     `PauseWidget:resume()` is `_resumed`-guarded and `onCloseWidget()` falls back to it, so the
+     clock restarts exactly once no matter the close path. `Mahjong:onCloseWidget()` closes a
+     still-open overlay before the final idempotent `stopTimer()`/`saveGameState()` (closing
+     while paused saves).
 
 ### Test harness notes (and verification workflow)
 

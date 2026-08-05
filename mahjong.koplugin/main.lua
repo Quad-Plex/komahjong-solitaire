@@ -26,6 +26,7 @@ local MahjongBoard = require("mahjongboard")
 local HudBar = require("hudbar")
 local SettingsWidget = require("mahjongsettings")
 local StatsWidget = require("mahjongstatswidget")
+local PauseWidget = require("mahjongpause")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -219,8 +220,13 @@ local Mahjong = FrameContainer:extend{
     flash_text = nil,  -- the band's TextWidget (feedback messages appear here)
     _auto_solve_token = 0, -- monotonic token invalidating pending auto-solve arms/steps
     _auto_solve_active = false, -- true while the long-press solver is running (US-19)
-    _last_hint = nil, -- the last hinted pair { a, b }, so repeated Hint presses cycle (US-08)
+    _last_hint = nil, -- the last hinted pair { a, b }, so repeated Hint presses cycle (US-08);
+                      -- also gates the once-per-session hint penalty (US-20)
     hint_button = nil, -- the toolbar Hint ButtonWidget (exposes hold callbacks, US-19)
+    pause_button = nil, -- the toolbar Pause ButtonWidget (US-17/US-20)
+    hints_used = 0, -- per-game hints actually shown (US-18; persisted in the game state)
+    shuffles_used = 0, -- per-game user-initiated shuffles (US-18; persisted)
+    _pause_dlg = nil, -- the pause overlay while it is up (US-17)
 }
 
 function Mahjong:init()
@@ -329,6 +335,9 @@ function Mahjong:startGame()
         self.score = restored.score
         self.last_match_kind = restored.last_match_kind
         self.elapsed_base = restored.elapsed
+        -- US-18: the per-game help counters ride along in the saved state.
+        self.hints_used = restored.hints_used or 0
+        self.shuffles_used = restored.shuffles_used or 0
         -- A restored game has no fresh deal; the pair count for the win
         -- summary comes from the restored undo stack (US-12).
         self.pairs_matched = #restored.history
@@ -338,6 +347,8 @@ function Mahjong:startGame()
         self.score = 0
         self.last_match_kind = nil
         self.elapsed_base = 0
+        self.hints_used = 0
+        self.shuffles_used = 0
         self.pairs_matched = 0
         -- US-12: a fresh deal is a new game for the lifetime stats.
         self:noteNewGame()
@@ -370,7 +381,8 @@ function Mahjong:saveGameState()
     else
         local data = MahjongLogic.serializeGameState(
             self.board, self.history, self.score,
-            self.last_match_kind, self:getElapsed())
+            self.last_match_kind, self:getElapsed(),
+            self.hints_used, self.shuffles_used)
         self.settings:saveSetting("game", data)
     end
     self.settings:flush()
@@ -512,6 +524,30 @@ function Mahjong:openStats()
     dlg:show()
 end
 
+-- Pause (US-17) --------------------------------------------------------------
+
+function Mahjong:pauseGame()
+    -- A won game has no play left to pause (defensive: the win dialog already
+    -- covers that screen, so the HUD pause button is unreachable anyway).
+    if MahjongLogic.isWin(self.board) then return end
+    -- US-19: a running solver must not keep moving tiles behind the overlay.
+    self:stopAutoSolve()
+    -- Freeze the clock (freezes elapsed_base) and stop the polling loop; the
+    -- overlay below consumes every tap, so no tile can be selected or moved
+    -- while paused. Resume restarts via the overlay's onResume hook.
+    self:stopTimer()
+    local dlg = PauseWidget:new{
+        parent = self,
+        onResume = function()
+            self._pause_dlg = nil
+            self:startTimer()
+            self:updateTimerDisplay()
+        end,
+    }
+    self._pause_dlg = dlg
+    dlg:show()
+end
+
 function Mahjong:buildUILayout()
     self.status_bar = self:createStatusBar()
     local status_h = self.status_bar:getSize().h
@@ -522,8 +558,8 @@ function Mahjong:buildUILayout()
     -- the row off the screen edge; the board fills what remains.
     local toolbar_btn_h = Screen:scaleBySize(48)
     local toolbar_gap = Screen:scaleBySize(6)
-    -- 5 gaps: one at each edge + 3 between the 4 buttons.
-    local toolbar_btn_w = math.floor((self.full_width - 5 * toolbar_gap) / 4)
+    -- 6 gaps: one at each edge + 4 between the 5 buttons.
+    local toolbar_btn_w = math.floor((self.full_width - 6 * toolbar_gap) / 5)
     -- Probe the hint-label height so the toolbar row reserves room for it.
     local label_probe = TextWidget:new{
         text = "Ag",
@@ -665,6 +701,14 @@ function Mahjong:buildUILayout()
         function() self:disarmAutoSolve() end)
     self.hint_button = hint_button
 
+    -- US-17/US-20: Pause moved off the cluttered HUD top bar into the bottom
+    -- action-button row (the fifth button). The pause overlay still freezes the
+    -- clock and blocks every tap until Resume.
+    local pause_cell, pause_button = createToolbarButton(
+        "mahjong/pause", _("Pause"), toolbar_btn_w, toolbar_btn_h,
+        function() self:pauseGame() end)
+    self.pause_button = pause_button
+
     local toolbar = HorizontalGroup:new{
         HorizontalSpan:new{ width = toolbar_gap },
         createToolbarButton("chevron.left", _("Undo"), toolbar_btn_w, toolbar_btn_h,
@@ -687,6 +731,8 @@ function Mahjong:buildUILayout()
             end
         end),
         HorizontalSpan:new{ width = toolbar_gap },
+        pause_cell,
+        HorizontalSpan:new{ width = toolbar_gap },
     }
 
     local main_vgroup = VerticalGroup:new{
@@ -703,9 +749,10 @@ function Mahjong:buildUILayout()
 end
 
 function Mahjong:createStatusBar()
-    -- HUD top bar (hudbar.lua): two left buttons (settings gear + stats card,
-    -- US-13) + title + three stat chips (Pairs / Free / Score) + the quit X
-    -- (right). updateStatus() pushes the values via setStats().
+    -- HUD top bar (hudbar.lua): two left buttons (settings gear + stats card
+    -- (US-13)) + title + three stat chips (Pairs / Free / Score) + the quit X
+    -- (right). Pause (US-17) lives in the bottom toolbar (US-20). updateStatus()
+    -- pushes the values via setStats().
     return HudBar:new{
         title                  = _("Mahjong Solitaire"),
         left_icons = {
@@ -738,6 +785,8 @@ function Mahjong:resetGame()
     self.last_match_kind = nil
     self.history = {}
     self.pairs_matched = 0
+    self.hints_used = 0
+    self.shuffles_used = 0
     self:refreshScoreMethod()
     self.elapsed_base = 0
     self._timer_running = false
@@ -809,6 +858,10 @@ function Mahjong:applyMatch(a, b)
     local ok, ka, kb = MahjongLogic.removePair(self.board, a, b)
     if not ok then return false end
     self.selected = nil
+    -- US-20: clearing a pair ends the current hint session — the next hint
+    -- press starts a new one and pays HINT_PENALTY once again. (Auto-solve
+    -- steps call applyMatch too, so a solved board also resets the session.)
+    self._last_hint = nil
     self.board_view:removePair(a, b)
     local prev_last = self.last_match_kind
     local points
@@ -892,6 +945,14 @@ function Mahjong:showWinDialog()
         string.format(_("Best time: %s%s"), best_time_str, best_time_marker),
         string.format(_("Current streak: %d"), self.stats.current_streak),
     }
+    -- US-18: the per-game help counters are shown only when they matter, so a
+    -- clean win keeps the summary short.
+    if (self.hints_used or 0) > 0 then
+        summary_lines[#summary_lines + 1] = string.format(_("Hints used: %d"), self.hints_used)
+    end
+    if (self.shuffles_used or 0) > 0 then
+        summary_lines[#summary_lines + 1] = string.format(_("Shuffles: %d"), self.shuffles_used)
+    end
     UIManager:show(ConfirmBox:new{
         text = table.concat(summary_lines, "\n"),
         ok_text = _("Play again"),
@@ -918,7 +979,9 @@ function Mahjong:undo()
     MahjongLogic.undoPair(self.board, move.a, move.b, move.ka, move.kb)
     self.board_view:addPair({ x = move.a.x, y = move.a.y, layer = move.a.layer, kind = move.ka },
                             { x = move.b.x, y = move.b.y, layer = move.b.layer, kind = move.kb })
-    self.score = self.score - move.score
+    -- US-18: undo restores only the pair's points (the move's score is
+    -- subtracted, floored at 0) — a hint/shuffle penalty is never refunded.
+    self.score = MahjongLogic.applyPenalty(self.score, move.score)
     self.pairs_matched = math.max(0, (self.pairs_matched or 0) - 1)
     self.last_match_kind = move.prev_last
     self:updateStatus()
@@ -937,6 +1000,11 @@ function Mahjong:showHint()
     end
     if not self:getSetting("hints", SETTINGS_DEFAULTS.hints) then return end
     local board_view = self.board_view
+    -- US-20: a hint session runs from the first hint after a pair was cleared
+    -- until the next pair is cleared (applyMatch resets _last_hint). Presses
+    -- that continue an active session (cycling, or re-hinting the same board)
+    -- are free; only the press that STARTS a session pays HINT_PENALTY.
+    local was_session = self._last_hint ~= nil
     -- Drop the previous hint's overlays first so cycling presses never leave a
     -- stale highlight behind (clearOverlay is a no-op if the tile is gone).
     if self._last_hint then
@@ -972,6 +1040,18 @@ function Mahjong:showHint()
     end
     local pair = pairs[idx % #pairs + 1]
     self._last_hint = pair
+    -- US-18: a hint that is ACTUALLY shown costs HINT_PENALTY (the dead-board
+    -- shuffle offer above is not a hint and charges nothing). The penalty is
+    -- applied at use time, not part of the pair history, so undo restores only
+    -- the pair's points. US-20: the penalty is charged ONCE per hint session —
+    -- only when this press starts a fresh session (no hint shown since the last
+    -- cleared pair). Cycling presses within the same session re-charge nothing.
+    if not was_session then
+        self.hints_used = (self.hints_used or 0) + 1
+        self.score = MahjongLogic.applyPenalty(self.score, MahjongLogic.HINT_PENALTY)
+    end
+    self:updateStatus()
+    self:saveGameState()
     board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint")
     board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint")
     -- Clear hints after 2 seconds.
@@ -983,12 +1063,22 @@ function Mahjong:showHint()
     end)
 end
 
--- Reshuffles the tiles remaining on the board in place.
-function Mahjong:shuffleBoard(force, attempts)
+-- Reshuffles the tiles remaining on the board in place. `charge` is nil/true on
+-- a USER-INITIATED shuffle (Shuffle button, the no-moves prompt, the dead-board
+-- hint offer): it costs SHUFFLE_PENALTY once (US-18). The bounded auto-repeat
+-- re-shuffles that guarantee a playable board pass false, so they never
+-- re-charge. (The auto-solver's mid-solve shuffles call MahjongLogic directly
+-- and never charge — only the player pays.)
+function Mahjong:shuffleBoard(force, attempts, charge)
     attempts = attempts or 10
+    if charge == nil then charge = true end
     local do_shuffle = function()
         MahjongLogic.shuffleBoard(self.board)
         self:clearSelection()
+        if charge then
+            self.shuffles_used = (self.shuffles_used or 0) + 1
+            self.score = MahjongLogic.applyPenalty(self.score, MahjongLogic.SHUFFLE_PENALTY)
+        end
         self.board_view:updateBoard()
         self:updateStatus()
         self:updateTimerDisplay()
@@ -997,7 +1087,7 @@ function Mahjong:shuffleBoard(force, attempts)
         -- of times (a board whose remaining kinds can never pair must not loop).
         if attempts > 0 and not MahjongLogic.hasMoves(self.board)
             and MahjongLogic.tileCount(self.board) > 0 then
-            self:shuffleBoard(true, attempts - 1)
+            self:shuffleBoard(true, attempts - 1, false)
         end
     end
 
@@ -1183,6 +1273,15 @@ function Mahjong:onCloseWidget()
     -- US-19: cancel a pending long-press arm / running solve (bumps the token
     -- so no stale step can fire into a closed widget).
     self:stopAutoSolve()
+    -- US-17: if the pause overlay is up, drop it first (its onCloseWidget
+    -- restarts the clock, which the final stopTimer below re-freezes). This is
+    -- the "closing while paused still saves" path: saveGameState below always
+    -- runs, and stopTimer is idempotent so it never double-freezes.
+    if self._pause_dlg then
+        local dlg = self._pause_dlg
+        self._pause_dlg = nil
+        UIManager:close(dlg)
+    end
     self:saveGameState()
     self:saveStats()
     self:stopTimer()

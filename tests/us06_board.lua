@@ -208,9 +208,9 @@ expect(tapped ~= nil and tapped[1] == 6.5 and tapped[2] == 3.5 and tapped[3] == 
 local new_game_btn = nil
 for i = 1, #mj[1][4] do
     local b = mj[1][4][i]
-    if type(b) == "table" and b.bordersize then
+    if type(b) == "table" and b.bordersize and b.icon == "plus" then
         new_game_btn = b
-    elseif type(b) == "table" and b[1] and b[1].bordersize then
+    elseif type(b) == "table" and b[1] and b[1].bordersize and b[1].icon == "plus" then
         new_game_btn = b[1] -- a toolbar cell: VerticalGroup{ button, label }
     end
 end
