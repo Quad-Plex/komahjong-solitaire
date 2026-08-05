@@ -9,7 +9,8 @@ A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch
 - `install_plugin.sh` — syncs the plugin to a Kindle mounted at `D:\`
 - `tools/` — icon generator + icon QA tools (see Development)
 - `tests/` — official headless test suite (`tests/run.sh`)
-- `IMPLEMENTATION_PLAN.md` — locked design and user stories
+- `IMPLEMENTATION_PLAN.md` — locked design overview + story index
+- `implementation-plan/` — one file per user story (`_completed` = shipped)
 - `AGENTS.md` — KOReader plugin development notes
 
 ## Status
