@@ -102,6 +102,12 @@ function MahjongLogic.isSeason(kind)
     return MATCH_GROUP[kind] == "season"
 end
 
+-- True if `kind` is one of the 42 valid tile kinds. Used to validate
+-- deserialized state (US-10): a tampered/corrupt value must be rejected.
+function MahjongLogic.isKind(kind)
+    return CATEGORY[kind] ~= nil
+end
+
 -- Deck ------------------------------------------------------------------
 
 -- Returns a fresh 144-tile deck: a plain array of kind IDs ("b1", "east", ...).
@@ -439,6 +445,13 @@ function MahjongLogic.pairPoints(prev_kind, kind)
     return points
 end
 
+-- Formats elapsed seconds as "mm:ss" (zero-padded), e.g. 65 -> "01:05".
+-- The HUD feedback band shows this permanently (US-10).
+function MahjongLogic.formatElapsed(seconds)
+    seconds = math.max(0, math.floor(seconds or 0))
+    return string.format("%02d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
 -- Removal / win / hint ---------------------------------------------------
 --
 -- US-07: pair removal, win detection, and a free matching-pair finder. These
@@ -529,6 +542,130 @@ function MahjongLogic.shuffleBoard(board, rng)
     return board
 end
 
+-- Persistence ------------------------------------------------------------
+--
+-- US-10: the whole game state is serialized to a plain Lua table that
+-- LuaSettings can write to disk. The board is stored as-is (a flat
+-- posKey -> kind table, which is what makes this story a plain table), and
+-- the undo history is flattened to compact 10-field arrays
+-- { ax, ay, al, bx, by, bl, ka, kb, score, prev_last } instead of nested
+-- tables, so a mid-game save stays small.
+--
+-- A valid mid-game state satisfies `tileCount(board) + 2 * #history == 144`
+-- (every move removes exactly 2 tiles and pushes exactly one history entry);
+-- deserializeGameState enforces that plus per-field checks, and returns nil
+-- for anything a real game could not have produced.
+
+-- Serializes the current game for persistence. `history` is the UI's undo
+-- stack ({ a, b, ka, kb, score, prev_last } records), `last_match_kind` the
+-- chain-scoring kind, `elapsed` the elapsed seconds. Returns a fresh table
+-- (no references into live state, so later mutations can't corrupt the save).
+function MahjongLogic.serializeGameState(board, history, score, last_match_kind, elapsed)
+    local out_board = {}
+    for key, kind in pairs(board) do
+        out_board[key] = kind
+    end
+    local out_history = {}
+    for _, m in ipairs(history or {}) do
+        out_history[#out_history + 1] = {
+            m.a.x, m.a.y, m.a.layer,
+            m.b.x, m.b.y, m.b.layer,
+            m.ka, m.kb, m.score, m.prev_last,
+        }
+    end
+    return {
+        v = 1,
+        board = out_board,
+        history = out_history,
+        score = score or 0,
+        last = last_match_kind,
+        elapsed = elapsed or 0,
+    }
+end
+
+-- Validates and restores a serialized game state. Returns
+-- { board, history, score, last_match_kind, elapsed } with the history
+-- un-flattened back to the UI's record shape, or nil if the state is
+-- corrupt/invalid (the caller then silently starts a new game).
+function MahjongLogic.deserializeGameState(data)
+    if type(data) ~= "table" or data.v ~= 1 then return nil end
+
+    local board = data.board
+    if type(board) ~= "table" then return nil end
+    local history = data.history
+    if type(history) ~= "table" then return nil end
+
+    -- Board: every key must be a canonical position of the Turtle layout,
+    -- every kind valid, count even.
+    local n = 0
+    local board_keys = {}
+    for key, kind in pairs(board) do
+        if not MahjongLogic.isKind(kind) then return nil end
+        local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
+        if not x then return nil end
+        x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
+        if not MahjongLogic.isLayoutPosition(x, y, layer) then return nil end
+        board_keys[key] = true
+        n = n + 1
+    end
+    if n % 2 ~= 0 then return nil end
+
+    -- History: flat records, positions valid + distinct, kinds valid and
+    -- matching (a removed pair must have matched), positions not on the board.
+    local out_history = {}
+    for _, m in ipairs(history) do
+        if type(m) ~= "table" then return nil end
+        local ax, ay, al, bx, by, bl = m[1], m[2], m[3], m[4], m[5], m[6]
+        local ka, kb, ms, ml = m[7], m[8], m[9], m[10]
+        if type(ax) ~= "number" or type(ay) ~= "number" or type(al) ~= "number"
+            or type(bx) ~= "number" or type(by) ~= "number" or type(bl) ~= "number" then
+            return nil
+        end
+        if not MahjongLogic.isLayoutPosition(ax, ay, al)
+            or not MahjongLogic.isLayoutPosition(bx, by, bl) then
+            return nil
+        end
+        if ax == bx and ay == by and al == bl then return nil end
+        if not MahjongLogic.isKind(ka) or not MahjongLogic.isKind(kb) then return nil end
+        if not MahjongLogic.matches(ka, kb) then return nil end
+        if board_keys[MahjongLogic.posKey(ax, ay, al)]
+            or board_keys[MahjongLogic.posKey(bx, by, bl)] then
+            return nil
+        end
+        if type(ms) ~= "number" or ms < 0 then return nil end
+        if ml ~= nil and not MahjongLogic.isKind(ml) then return nil end
+        out_history[#out_history + 1] = {
+            a = { x = ax, y = ay, layer = al },
+            b = { x = bx, y = by, layer = bl },
+            ka = ka, kb = kb, score = ms, prev_last = ml,
+        }
+    end
+    if n + 2 * #out_history ~= 144 then return nil end
+
+    local score = data.score
+    if type(score) ~= "number" or score < 0 then return nil end
+    local last = data.last
+    if last ~= nil and not MahjongLogic.isKind(last) then return nil end
+    local elapsed = data.elapsed
+    if elapsed == nil then
+        elapsed = 0
+    elseif type(elapsed) ~= "number" or elapsed < 0 then
+        return nil
+    end
+
+    -- Copy the board so the restored game never aliases the stored table.
+    local out_board = {}
+    for key, kind in pairs(board) do out_board[key] = kind end
+
+    return {
+        board = out_board,
+        history = out_history,
+        score = score,
+        last_match_kind = last,
+        elapsed = elapsed,
+    }
+end
+
 -- Flat projection grid -----------------------------------------------------
 --
 -- The UI renders the 3D board as a flat grid: each (x, y) cell shows the
@@ -568,6 +705,20 @@ function MahjongLogic.topTileAt(board, x, y)
         if kind then return kind end
     end
     return nil
+end
+
+-- True if (x, y, layer) is one of the 144 Turtle positions. Used to validate
+-- deserialized state (US-10): a position that is not part of the layout was
+-- not produced by a real game.
+local _layout_key_cache = nil
+function MahjongLogic.isLayoutPosition(x, y, layer)
+    if not _layout_key_cache then
+        _layout_key_cache = {}
+        for _, p in ipairs(MahjongLogic.buildLayout()) do
+            _layout_key_cache[MahjongLogic.posKey(p.x, p.y, p.layer)] = true
+        end
+    end
+    return _layout_key_cache[MahjongLogic.posKey(x, y, layer)] == true
 end
 
 -- Self-tests --------------------------------------------------------------
@@ -933,6 +1084,131 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.matchGroup("flower1") == "flower", "matchGroup of a flower is flower")
     check(MahjongLogic.matchGroup("season1") == "season", "matchGroup of a season is season")
 
+    -- Elapsed formatting (US-10).
+    check(MahjongLogic.formatElapsed(0) == "00:00", "formatElapsed(0) is 00:00")
+    check(MahjongLogic.formatElapsed(65) == "01:05", "formatElapsed(65) is 01:05")
+    check(MahjongLogic.formatElapsed(599) == "09:59", "formatElapsed(599) is 09:59")
+    check(MahjongLogic.formatElapsed(-3) == "00:00", "formatElapsed clamps negatives")
+    check(MahjongLogic.formatElapsed(3600) == "60:00", "formatElapsed rolls past 59:59")
+
+    -- Persistence round-trip (US-10) ------------------------------------
+    check(MahjongLogic.isKind("b1") and MahjongLogic.isKind("east") and MahjongLogic.isKind("flower2"),
+        "isKind accepts real kinds")
+    check(not MahjongLogic.isKind("xyz") and not MahjongLogic.isKind(nil) and not MahjongLogic.isKind(42),
+        "isKind rejects garbage")
+    check(MahjongLogic.isLayoutPosition(6.5, 3.5, 4) and MahjongLogic.isLayoutPosition(0, 3.5, 0),
+        "isLayoutPosition accepts real Turtle positions (cap, head)")
+    check(not MahjongLogic.isLayoutPosition(99, 99, 0) and not MahjongLogic.isLayoutPosition(2, 2, 9),
+        "isLayoutPosition rejects positions outside the Turtle")
+
+    -- Play a small real game (remove one matching free pair) and round-trip it.
+    local p_board = MahjongLogic.newGame(42)
+    local p_pair = MahjongLogic.matchingFreePair(p_board)
+    local p_ok, p_ka, p_kb = MahjongLogic.removePair(p_board, p_pair.a, p_pair.b)
+    check(p_ok, "persistence test: removePair works on a real board")
+    local p_hist = {
+        { a = p_pair.a, b = p_pair.b, ka = p_ka, kb = p_kb, score = 10, prev_last = nil },
+    }
+    local p_serialized = MahjongLogic.serializeGameState(p_board, p_hist, 10, p_ka, 123)
+    check(type(p_serialized) == "table" and p_serialized.v == 1, "serializeGameState returns a versioned table")
+    check(p_serialized.board[MahjongLogic.posKey(p_pair.a.x, p_pair.a.y, p_pair.a.layer)] == nil,
+        "serialized board does not include the removed tile")
+    check(#p_serialized.history == 1 and p_serialized.history[1][7] == p_ka,
+        "serialized history is a flat 10-field record")
+    local p_restored = MahjongLogic.deserializeGameState(p_serialized)
+    check(p_restored ~= nil, "deserializeGameState accepts a valid mid-game state")
+    check(MahjongLogic.tileCount(p_restored.board) == MahjongLogic.tileCount(p_board),
+        "restored board has the same tile count")
+    local p_same = true
+    for k, v in pairs(p_board) do
+        if p_restored.board[k] ~= v then p_same = false break end
+    end
+    check(p_same, "restored board matches the saved board")
+    check(p_restored.score == 10 and p_restored.last_match_kind == p_ka and p_restored.elapsed == 123,
+        "restored score/last/elapsed match")
+    check(#p_restored.history == 1 and p_restored.history[1].ka == p_ka
+        and p_restored.history[1].score == 10,
+        "restored history is back in the UI record shape")
+    -- The restored board is a COPY (mutations must not corrupt the source).
+    p_restored.board["0,3.5,0"] = nil
+    check(MahjongLogic.tileAt(p_board, 0, 3.5, 0) ~= nil,
+        "restored board is a copy, not a reference to the saved table")
+
+    -- Rejection paths ------------------------------------------------------
+    check(MahjongLogic.deserializeGameState(nil) == nil, "deserialize rejects nil")
+    check(MahjongLogic.deserializeGameState({}) == nil, "deserialize rejects an empty table (no version)")
+    local bad_v = p_serialized
+    bad_v.v = 2
+    check(MahjongLogic.deserializeGameState(bad_v) == nil, "deserialize rejects an unknown version")
+    bad_v.v = 1
+
+    local bad_key = p_serialized
+    bad_key.board = { ["999,999,0"] = "b1" }
+    check(MahjongLogic.deserializeGameState(bad_key) == nil, "deserialize rejects a non-layout position")
+    bad_key.board = p_serialized.board
+
+    local bad_kind = p_serialized
+    bad_kind.board = { [MahjongLogic.posKey(2, 2, 0)] = "nope" }
+    check(MahjongLogic.deserializeGameState(bad_kind) == nil, "deserialize rejects an invalid kind")
+    bad_kind.board = p_serialized.board
+
+    local bad_key_fmt = p_serialized
+    bad_key_fmt.board = { ["a,b,c"] = "b1" }
+    check(MahjongLogic.deserializeGameState(bad_key_fmt) == nil, "deserialize rejects a malformed key")
+    bad_key_fmt.board = p_serialized.board
+
+    local bad_odd = p_serialized
+    bad_odd.board = {}
+    check(MahjongLogic.deserializeGameState(bad_odd) == nil, "deserialize rejects an odd/empty-with-history count")
+    bad_odd.board = p_serialized.board
+
+    local bad_hist = p_serialized
+    local h0 = p_serialized.history[1]
+    bad_hist.history = { { h0[1], h0[2], h0[3], h0[1], h0[2], h0[3], h0[7], h0[8], 10, nil } }
+    check(MahjongLogic.deserializeGameState(bad_hist) == nil,
+        "deserialize rejects a history pair with the same tile twice")
+    bad_hist.history = { { 1, 1, 0, 2, 2, 0, "b1", "b2", 10, nil } }
+    check(MahjongLogic.deserializeGameState(bad_hist) == nil,
+        "deserialize rejects history positions outside the layout")
+    bad_hist.history = { { h0[1], h0[2], h0[3], h0[4], h0[5], h0[6], "b1", "c1", 10, nil } }
+    check(MahjongLogic.deserializeGameState(bad_hist) == nil,
+        "deserialize rejects a history pair whose kinds never matched")
+    bad_hist.history = p_serialized.history
+
+    local bad_overlap = p_serialized
+    -- Take two positions that are actually on the saved board and mark them as
+    -- a "removed" pair in history: a removed tile can never also be on the board.
+    local in_board_key = next(p_board)
+    local other_key = next(p_board, in_board_key)
+    local ox, oy, ol = in_board_key:match("^([%d%.]+),([%d%.]+),(%d+)$")
+    local bx2, by2, bl2 = other_key:match("^([%d%.]+),([%d%.]+),(%d+)$")
+    bad_overlap.history = {
+        { tonumber(ox), tonumber(oy), tonumber(ol),
+          tonumber(bx2), tonumber(by2), tonumber(bl2), "b1", "b1", 10, nil },
+    }
+    check(MahjongLogic.deserializeGameState(bad_overlap) == nil,
+        "deserialize rejects history overlapping the board")
+    bad_overlap.history = p_serialized.history
+
+    local bad_count = p_serialized
+    bad_count.history = {}
+    check(MahjongLogic.deserializeGameState(bad_count) == nil, "deserialize rejects count + 2*history != 144")
+    bad_count.history = p_serialized.history
+
+    local bad_score = p_serialized
+    bad_score.score = -1
+    check(MahjongLogic.deserializeGameState(bad_score) == nil, "deserialize rejects a negative score")
+    bad_score.score = p_serialized.score
+
+    local bad_last = p_serialized
+    bad_last.last = "not-a-kind"
+    check(MahjongLogic.deserializeGameState(bad_last) == nil, "deserialize rejects an invalid chain kind")
+    bad_last.last = p_serialized.last
+
+    local bad_elapsed = p_serialized
+    bad_elapsed.elapsed = -5
+    check(MahjongLogic.deserializeGameState(bad_elapsed) == nil, "deserialize rejects negative elapsed")
+    bad_elapsed.elapsed = p_serialized.elapsed
 
     io.write("All self-tests passed.\n")
     return true

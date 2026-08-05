@@ -221,9 +221,12 @@ end
 -- US-07 removes from the logic board first, then calls removePair here so only
 -- the two affected widgets are freed and the hit-test table is updated.
 
--- Removes a single rendered tile. Returns true if it was present. Any overlay
--- sitting on the tile is dropped too. Repaints the board.
-function Board:removeTile(x, y, layer)
+-- Drops a single rendered tile (widget, hit-test entry, and any overlay
+-- sitting on it) WITHOUT refreshing neighbours or syncing the overlap group —
+-- removeTile / removePair batch those so a pair's widgets are dropped before
+-- any neighbour icon is recomputed. The logic board must already be updated
+-- by the caller. Returns true if the tile was present.
+function Board:dropTileWidget(x, y, layer)
     local key = MahjongLogic.posKey(x, y, layer)
     local w = self.tile_widgets[key]
     if not w then return false end
@@ -249,8 +252,7 @@ function Board:removeTile(x, y, layer)
         end
     end
 
-    -- drop any overlay that was sitting on this tile (no repaint here;
-    -- the one from removeTile below covers it)
+    -- drop any overlay that was sitting on this tile
     local ov = self.overlays[key]
     if ov then
         self.overlays[key] = nil
@@ -262,31 +264,44 @@ function Board:removeTile(x, y, layer)
         end
         ov:free()
     end
+    return true
+end
 
-    -- Update same-layer neighbors whose bevels might have been occluded by
-    -- this tile. Bevels (right/bottom) are only hidden by tiles to the
-    -- east/south, so removing this tile can only expose bevels of tiles to
-    -- its west/north.
+-- Recomputes the icons of a tile's same-layer west/north neighbours: the only
+-- tiles whose bevels can change when this tile is removed (its removal exposes
+-- their right/bottom bevels) or added (it hides them). The tile itself may
+-- already be gone — refreshTileIcon skips tiles without a widget.
+function Board:refreshWestNorthNeighbours(x, y, layer)
     for dy = -0.5, 0.5, 0.5 do
         self:refreshTileIcon(x - 1, y + dy, layer)
     end
     for dx = -0.5, 0.5, 0.5 do
         self:refreshTileIcon(x + dx, y - 1, layer)
     end
+end
 
+-- Removes a single rendered tile. Returns true if it was present. Any overlay
+-- sitting on the tile is dropped too. Repaints the board.
+function Board:removeTile(x, y, layer)
+    if not self:dropTileWidget(x, y, layer) then return false end
+    self:refreshWestNorthNeighbours(x, y, layer)
     self:syncOverlapGroup()
     return true
 end
 
 -- Re-resolves the icon for the tile at (x, y, layer) and replaces its widget
 -- if the icon (i.e. its bevel variants) has changed. Used after a neighbor
--- is removed or added.
+-- is removed or added. A widget whose tile is no longer on the board (e.g. a
+-- half-removed pair) is skipped: removeTile/removePair batch the drops, so
+-- the widget has already been freed.
 function Board:refreshTileIcon(x, y, layer)
     local key = MahjongLogic.posKey(x, y, layer)
     local w = self.tile_widgets[key]
     if not w then return end
 
-    local new_icon = "mahjong/" .. MahjongLogic.iconForTile(self.board, x, y, layer)
+    local icon = MahjongLogic.iconForTile(self.board, x, y, layer)
+    if not icon then return end
+    local new_icon = "mahjong/" .. icon
     if w.icon == new_icon then return end
 
     local px, py = self:tilePos(x, y, layer)
@@ -352,12 +367,7 @@ function Board:addTile(x, y, layer, kind)
     })
 
     -- Update same-layer neighbors whose bevels might now be occluded.
-    for dy = -0.5, 0.5, 0.5 do
-        self:refreshTileIcon(x - 1, y + dy, layer)
-    end
-    for dx = -0.5, 0.5, 0.5 do
-        self:refreshTileIcon(x + dx, y - 1, layer)
-    end
+    self:refreshWestNorthNeighbours(x, y, layer)
 
     self:syncOverlapGroup()
     return true
@@ -374,9 +384,19 @@ end
 -- Removes a matched pair (a and b are { x, y, layer } tables) with a single
 -- call, keeping z-order. Returns true if both tiles were present. The logic
 -- board is expected to have been updated by the caller before this.
+--
+-- Both widgets are dropped BEFORE any neighbour icon is refreshed: by the time
+-- this runs the logic board no longer has the pair, so if the two tiles are
+-- adjacent (one west/north of the other) the first removal's neighbour refresh
+-- would find the second tile's still-present widget with a nil kind and crash
+-- on "mahjong/" .. nil. Batching the drops keeps every refreshTileIcon call on
+-- a tile that is genuinely on the board.
 function Board:removePair(a, b)
-    local ra = self:removeTile(a.x, a.y, a.layer)
-    local rb = self:removeTile(b.x, b.y, b.layer)
+    local ra = self:dropTileWidget(a.x, a.y, a.layer)
+    local rb = self:dropTileWidget(b.x, b.y, b.layer)
+    if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
+    if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
+    self:syncOverlapGroup()
     return ra and rb
 end
 

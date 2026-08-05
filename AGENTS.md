@@ -329,7 +329,8 @@ the locked design and story list. Current state:
 - **Repo layout:** `AGENTS.md`, `IMPLEMENTATION_PLAN.md`, `mahjong.koplugin/` (the deliverable),
   `tests/` (official suite: `run.sh`, `mock.lua`, `us01_shell.lua`, `us03_icons.lua`,
   `us06_board.lua`, `us06_paint.lua`, `board_updates.lua`, `us07_gameplay.lua`,
-  `us08_features.lua`, `us09_score.lua`, `hud_bar.lua`), `install_plugin.sh`
+  `us08_features.lua`, `us09_score.lua`, `us10_persistence.lua`, `us11_timer.lua`,
+  `hud_bar.lua`), `install_plugin.sh`
   (device sync script), `example_app/casualkochess.koplugin/` (reference).
 - **US-01 (done):** `_meta.lua` + `main.lua` skeleton; menu entry under `sorting_hint="tools"`
   ("Mahjong Solitaire"); `Dispatcher` action `mahjong` → event `MahjongStart` with `general=true`.
@@ -353,9 +354,12 @@ the locked design and story list. Current state:
     vertically centers the title, chips and X (no `CenterContainer` gymnastics needed).
     The quit X is a `ButtonWidget` (icon-only, `bordersize = 0`, background = the bar
     color so only the bold X shows) with `callback = right_icon_tap_callback` → `ConfirmBox`
-    ("Exit Mahjong Solitaire?") → `saveGameState()` stub + `UIManager:close(self, "full")`.
+    ("Exit Mahjong Solitaire?") → `saveGameState()` + `UIManager:close(self, "full")`.
     The bar keeps `title`/`right_icon`/`right_icon_size_ratio`/`right_icon_tap_callback`
     fields, so `tests/us01_shell.lua`/`us06_board.lua` still read `status_bar.right_icon_tap_callback`.
+    Since US-10 the bar also carries `left_icon`/`left_icon_size_ratio`/
+    `left_icon_tap_callback`: a square rounded-bordered gear (`appbar.settings`) pinned at
+    the far left that opens the settings dialog.
     `HudBar` overrides `getSize()` (returns `Geom:new{w=full_width, h=HUD_H}`) — it MUST set
     the `_padding_left/right/top/bottom` fields in `init()` or every paint crashes with the
     framecontainer `_padding_*` nil error (see the pitfall above). Both `VerticalGroup` and
@@ -365,8 +369,8 @@ the locked design and story list. Current state:
     `UIManager:setDirty(self, "ui")`.
   - `handleEvent()`: dispatcher guard (`onMahjongStart`) then the `_window_stack` check, then
     forward to `FrameContainer.handleEvent`.
-  - `onCloseWidget()`: cleanup stub (clears `self.board`). `saveGameState()` is an intentional
-    empty stub (persistence is US-10); it carries `-- luacheck: no unused args` above it.
+  - `onCloseWidget()`: cleanup stub (clears `self.board`). Since US-10 it saves the game
+    state first, then stops the timer (see US-10 below).
   - `createToolbarButton` is a module-local function (not a method) — it never used `self`.
 - **US-03 (done):** 42 tile kinds + 144-tile deck + flower/season match rule in `mahjonglogic.lua`
   (`createDeck`, `matches`); **171 SVGs** in `icons/` — 42 faces × 4 bevel variants
@@ -504,8 +508,10 @@ the locked design and story list. Current state:
 - **HUD bar (done, 2-row):** the top of the screen is now a stylized `HudBar`
   (`mahjong.koplugin/hudbar.lua`, `require("hudbar")` in `main.lua`) instead of a
   `TitleBarWidget`. It is a full-width `VerticalGroup` of two rows:
-  - **Row 1:** the title text (left) and the quit X (far right) — a `ButtonWidget`
-    with `bordersize = 0`, `background = BAR_BG` so only the icon shows.
+  - **Row 1:** the title text (left), the settings gear (far left, US-10) and the quit X
+    (far right) — `ButtonWidget`s with `bordersize = 0`, `background = BAR_BG` so only the
+    icon shows. The gear (`appbar.settings`) is a square rounded-bordered button whose
+    `left_icon_tap_callback` opens the settings dialog (`openSettings`).
   - **Row 2:** the three stat chips side by side: **Pairs** (`mahjong/hud_pairs`, a
     Material "layers" glyph), **Free** (`mahjong/lightbulb`), **Score**
     (`mahjong/hud_score`, a Material "star" glyph). Each chip is a rounded white pill
@@ -577,8 +583,9 @@ the locked design and story list. Current state:
     `CHAIN_BONUS` (5), `matchGroup(kind)` (the chain group: a suited/wind/dragon kind chains
     with itself, flowers chain with any flower, seasons with any season — exactly the
     match-rule grouping), and `pairPoints(prev_kind, kind)` (base 10, +5 when the new pair is
-    in the same group as the previous match). No timer bonus (elapsed-time tracking is not
-    implemented). Self-tests cover base/chain/cross-group/wildcard cases.
+    in the same group as the previous match). No timer bonus (elapsed time is tracked
+    and displayed — see US-10 — but never affects the score). Self-tests cover
+    base/chain/cross-group/wildcard cases.
   - `main.lua`: `self.last_match_kind` tracks the previous match's kind; each successful
     `handleTileTap` match computes `pairPoints(prev_last, ka)`, stores `prev_last` in the
     history record (`{ ..., score, prev_last }`), and `undo()` restores both the score and
@@ -624,6 +631,150 @@ the locked design and story list. Current state:
     the timeout path. Any layout change that moves the band must update
     `us01_shell.lua`/`us06_board.lua`'s toolbar index (`mj[1][4]`, spacer
     `mj[1][5]`).
+- **US-10 (done):** persistence (save/restore game + settings), a settings dialog, and an
+  elapsed-time display, in `main.lua` + `mahjonglogic.lua` + `mahjongsettings.lua`.
+  - **State save/restore:** everything lives in one `LuaSettings` file
+    (`DataStorage:getSettingsDir() .. "/mahjong.lua"`); the whole game state is the
+    `"game"` key, the settings are their own keys (`hints`, `confirm_new_game`,
+    `score_method`, `layout`). `setSetting()` flushes immediately.
+  - `MahjongLogic.serializeGameState(board, history, score, last_match_kind, elapsed)`
+    returns a compact versioned table (`v=1`): the board stays a flat `posKey -> kind`
+    table and the undo history is flattened to 10-field arrays
+    `{ ax, ay, al, bx, by, bl, ka, kb, score, prev_last }`. `deserializeGameState(data)`
+    validates EVERYTHING (version, valid kinds via `isKind`, canonical Turtle positions via
+    `isLayoutPosition`, even tile count, matching history kinds, history not overlapping the
+    board, `tileCount + 2*#history == 144`, non-negative score/elapsed, valid chain kind) and
+    returns the state in the UI's record shape — or nil. Both are pure Lua with self-tests
+    (round-trip, copy-not-alias, and a rejection path per validation rule).
+  - `main.lua`: `saveGameState()` is called after every match (US-10), on undo, after a
+    shuffle, and on `onCloseWidget()`. A **won (empty) board is NOT saved** — `saveGameState`
+    clears the `"game"` key instead, so reopening after a win deals a fresh board.
+    `restoreGameState()` reads the key, deserializes, and silently clears + starts fresh on
+    corrupt data (garbage value, invalid layout position, impossible count, etc.).
+    `startGame()` restores the saved board/history/score/chain/elapsed or deals a fresh game;
+    `resetGame()` immediately re-saves the fresh board so the old game can't resurrect.
+    Persistence does NOT save anything else (no per-tile history of moves beyond undo; the
+    chain survives a close/reopen because `last_match_kind` is serialized).
+  - **Settings dialog (`mahjongsettings.lua`):** a **floating window** (the ConfirmBox
+    pattern), not a full-screen page: a transparent full-screen `InputContainer` whose single
+    child is a `CenterContainer` holding a white rounded `FrameContainer` card, so the game
+    stays visible around the panel. A `TapClose` full-screen gesture dismisses the dialog
+    (like Cancel) when the tap misses the card (`onTapClose` tests `ges.pos:notIntersectWith(self._panel_geom)`
+    — the card's on-screen rect computed from its centered size). **`onShow` re-dirties the
+    dialog with a refresh function covering `_panel_geom`** (the ConfirmBox trick): `UIManager:show`
+    dirties the widget but enqueues NO refresh, and if the settings gear's own tap left a small
+    "fast" refresh in the queue, `_repaint` paints the panel into the framebuffer yet skips the
+    full-screen refresh — the dialog stayed invisible until an interaction forced a refresh.
+    One row per setting — an
+    On/Off toggle button for **Hints** and **Confirm new game**, a Chain → Basic cycling
+    button for **Score**, a **Timer update** mode button (Periodic → On interaction),
+    and a **Timer interval** button — plus a bottom
+    Reset / Save / Cancel row. The **informational Layout (Turtle) row was removed**
+    (layout is still round-tripped via `changes`/save, but its UI will be handled
+    differently later). A **close X** (grey square, `mahjong/close`, the HUD quit-X
+    style) is pinned at the panel's top-right corner in the "Settings" title row
+    (`self._close_btn`), and tapping it discards changes and closes — exactly like
+    Cancel (it calls `self:cancel()`, so the owner's `onCancel` restarts the paused
+    timer loop). The **title row spans the FULL inner width of the panel**
+    (`title_row_w = max(value-column width, 3×Reset/Save/Cancel + 2×gap)`), NOT just
+    the value column — the panel is as wide as its widest child (the bottom button
+    row), so a title row sized to the value column alone would get centered with
+    empty space to the right of the X. Sizing it to the widest child pins the X flush
+    against the panel's inner right edge. Changes are collected in a `changes` table and ONLY written to
+    `LuaSettings` on Save (Cancel discards, Reset restores the defaults); `onApply` refreshes
+    `score_method` + the HUD after Save, `onCancel` lets the owner resume what `openSettings`
+    paused. **Each row button's callback updates `changes`, re-renders the label via
+    `setButtonText()` (see below), and MUST call
+    `UIManager:setDirty(self, "ui")` on the dialog** — setDirty on a subwidget never flags a
+    window, so without it the button highlights on tap but the value stays stale on screen
+    until a Save+reopen (this was the "no visual change" bug). Opened from the HUD's left
+    settings gear (`main.lua:openSettings`), which also calls `stopTimer()` first and relies
+    on `onApply`/`onCancel` to `startTimer()` again — otherwise the US-11 polling loop flashes
+    a full-screen refresh behind the floating panel every tick. `hints=false` disables the
+    Hint button; `confirm_new_game=false` makes the New Game button skip its `ConfirmBox`;
+    `score_method="basic"` makes every pair worth a flat `SCORE_PER_PAIR` (no chain bonus).
+    - **Settings polish (label re-alignment + no cut-off values):** every toggle button is
+      sized at init to fit the **widest value on a single line** — `init()` measures every
+      possible value ("On"/"Off"/"Basic"/"Chain (+5 bonus)"/"Periodic"/"On interaction"/"N s")
+      with a throwaway `TextWidget` in the exact font the `Button` renders them with (`cfont`
+      **20 bold**, passed explicitly to `makeButton` as `text_font_face`/`text_font_size`/
+      `text_font_bold`), adds the button padding/borders plus ~12px breathing room, and gives
+      every value button that shared `toggle_w` — so nothing wraps, truncates, or gets cut off
+      when a value changes, and the button column is uniform. The row **labels are right-aligned**
+      to the widest label (each row is `[alignment HorizontalSpan, label, label_gap span,
+      control]`, where the leading span is `max_label_w - label_w`), so the button column starts
+      at the same x on every row instead of staggering with the label lengths.
+    - **`setButtonText()` rebuilds the label** (free the old `label_widget`, then re-run
+      `Button:init`) instead of using `Button:setText` — KOReader's `Button:setText` has a
+      **fast path** that pushes the new text into the button's EXISTING `label_widget`; when
+      that label is a single-line `TextWidget` (e.g. after showing the short "Basic") and the
+      new value is long ("Chain (+5 bonus)"), the fast path renders the long text as **one
+      truncated line cut off at the end of the button** (the score-toggle bug). Rebuilding
+      always reruns the full truncation/wrap logic, so the value renders exactly like it did
+      the first time the button was built. Mock fallback: store `.text` (the suite asserts on
+      it).
+    - **Timer interval is greyed out + non-interactive in "On interaction" mode:** an interval
+      is meaningless in `move` mode, so the mode button's callback calls `setIntervalEnabled()`
+      which `Button:disable()`s / `Button:enable()`s the interval button (grey label, taps
+      ignored — `onTapSelectButton` only fires the callback when `enabled`); the callback body
+      also guards `if not enabled then return` (the mock drives callbacks directly). The dialog
+      starts in the disabled state if a saved `move` mode is active; Reset re-enables it. The
+      enable/disable helper is stored as `self._set_interval_enabled` so `resetToDefaults` can
+      reuse it.
+  - **Elapsed-time display:** a `UIManager:scheduleIn` polling loop (the kochess
+    `pollingLoop` pattern; originally `TIMER_TICK = 1`, now a US-11 setting — see the
+    "updated by US-11" note below) drives a permanently visible mm:ss in the RIGHT
+    part of the feedback band (`main.lua:updateTimerDisplay` / `MahjongLogic.formatElapsed`).
+    It is a third child of the band's `OverlapGroup` with an array-form `overlap_offset`
+    right-aligned to the band edge and a fixed-width slot (probed from a `"00:00"`
+    `TextWidget`) so the number doesn't drift. `startTimer` bumps a run-id token;
+    `stopTimer` (on close) freezes `elapsed_base = getElapsed()`. Elapsed seconds are saved in
+    the state (`elapsed`), so the clock survives close/reopen. No score bonus.
+  - **US-10 board bug fixed en route:** `Board:removePair` used to call `removeTile(a)` then
+    `removeTile(b)`. The caller updates the shared logic board BEFORE the view, so the second
+    tile is already gone from `board` while its widget is still present; when the pair tiles
+    are adjacent (one west/north of the other) the first removal's neighbour-icon refresh hit
+    that stale widget and crashed on `"mahjong/" .. nil`. `removePair` now drops BOTH widgets
+    (new `dropTileWidget`) before refreshing neighbours (new `refreshWestNorthNeighbours`,
+    shared by `removeTile`/`addTile`), and `refreshTileIcon` guards against a nil icon.
+  - **US-10 acceptance covered by** `tests/us10_persistence.lua` (registered in `tests/run.sh`):
+    settings defaults + set/get + cross-instance round-trip, save-after-every-match contents,
+    restore in a fresh instance (identical board/score/chain/history, positions preserved),
+    undo-after-restore, New Game replacing the saved state, corrupt-state handling (garbage and
+    invalid-table both deal fresh AND clear the key), won-board-not-saved, settings dialog
+    (toggle collect / Save persists / Cancel discards / Reset restores / score cycle + onApply),
+    score cycling Basic back to the full "Chain (+5 bonus)" label, uniform toggle-button width
+    + right-aligned row labels (`[pad, label, gap, button]` shape), the Layout row being gone,
+    the in-panel close X acting like Cancel (discards + notifies the owner), `confirm_new_game=false`
+    skipping the prompt, and the mm:ss band display.
+    The mock's `luasettings` stub is an in-memory store shared across `open()` calls in a ctx
+    (`ctx.settings_store`, `ctx.flushes`), so a later plugin instance reads back what an earlier
+    one saved.
+  - **Elapsed-time display (updated by US-11):** the permanently visible mm:ss in the RIGHT
+    part of the feedback band repaints either periodically (`timer_update = "interval"`, the
+    default) or only on board interaction (`timer_update = "move"`), chosen in the settings
+    dialog. The elapsed seconds ALWAYS accrue (`getElapsed()` diffs against `os.time()`) and
+    are saved with the game state; the mode only controls when the DISPLAY repaints. In
+    "interval" mode a kochess-style `UIManager:scheduleIn` polling loop repaints every
+    `timer_interval` seconds (default **5**, was 1 in US-10 — a 1 Hz e-ink repaint was
+    overkill); the dialog offers `{1,2,5,10,15,30,60}`. In "move" mode no loop is armed and
+    `updateTimerDisplay()` is instead called from the interaction handlers (select/deselect/
+    match/undo/shuffle/new-game) so an idle board never forces an e-ink refresh.
+    `timerInterval()` clamps invalid stored values (non-numeric or < 1) back to the default 5.
+    `openSettings`'s `onApply` restarts the loop (`stopTimer` → `startTimer`) so a changed
+    mode/interval takes effect immediately.
+- **US-11 (done):** timer refresh mode + interval settings (see the updated elapsed-time
+  display note above). New settings keys `timer_update` ("interval"/"move") and
+  `timer_interval` (seconds), with two new settings-dialog rows ("Timer update" cycles
+  Periodic → On interaction; "Timer interval" cycles the offered values) that are collected,
+  saved with the rest, and restored by Reset like every other row. `tests/us11_timer.lua`
+  (registered in `tests/run.sh`) captures `scheduleIn`/`nextTick` on the mock uimanager to
+  assert the loop's reschedule delay, and drives the dialog rows; coverage: defaults not
+  written, interval loop uses 5 / a stored 2 / a saved-then-onApply 30, move mode arms no loop
+  yet runs the clock, move mode refreshes the mm:ss on select/match/undo, dialog cycle/Save/
+  Cancel/Reset, the interval row being greyed out + tap-ignored in "On interaction" mode (and
+  re-enabled in Periodic mode / on Reset, including when the dialog opens with a saved `move`
+  mode), onApply re-arming, and interval clamping.
 
 ### Verification workflow used so far
 

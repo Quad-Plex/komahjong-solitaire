@@ -34,7 +34,7 @@ echo "==> 3/4 logic self-tests (mahjonglogic.lua)"
 lua "$PLUGIN/mahjonglogic.lua"
 
 echo "==> 4/4 headless harnesses"
-for t in us01_shell.lua us03_icons.lua us06_board.lua us06_paint.lua board_updates.lua us07_gameplay.lua us08_features.lua us09_score.lua hud_bar.lua; do
+for t in us01_shell.lua us03_icons.lua us06_board.lua us06_paint.lua board_updates.lua us07_gameplay.lua us08_features.lua us09_score.lua us10_persistence.lua us11_timer.lua hud_bar.lua; do
     echo "-- tests/$t"
     lua "$t"
 done

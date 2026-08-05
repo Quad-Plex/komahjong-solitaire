@@ -83,6 +83,12 @@ function M.newContext()
         scaleBySize = function(_, px) return px end,
     }
 
+    -- LuaSettings (US-10): in-memory store shared across every open() in a
+    -- test context, so a plugin instance can save a game and a later instance
+    -- (or a SettingsWidget) can read it back. flush() just counts.
+    ctx.settings_store = {}
+    ctx.flushes = 0
+
     local uimanager = {
         _window_stack = ctx.window_stack,
         isWidgetShown = function(_, w)
@@ -139,6 +145,28 @@ function M.newContext()
         ["datastorage"] = {
             getDataDir = function() return ctx.data_dir or (M.ROOT .. "/tests/.tmp") end,
             getSettingsDir = function() return ctx.data_dir or (M.ROOT .. "/tests/.tmp") end,
+        },
+        ["luasettings"] = {
+            open = function(_, _path)
+                local store = ctx.settings_store
+                local s = {
+                    readSetting = function(_, key, default)
+                        local v = store[key]
+                        if v == nil then return default end
+                        return v
+                    end,
+                    saveSetting = function(_, key, value)
+                        store[key] = value
+                    end,
+                    delSetting = function(_, key)
+                        store[key] = nil
+                    end,
+                    flush = function()
+                        ctx.flushes = ctx.flushes + 1
+                    end,
+                }
+                return s
+            end,
         },
         ["dispatcher"] = {
             registerAction = function(_, id, spec)
@@ -250,7 +278,7 @@ function M.newContext()
     -- module to another (e.g. main.lua requires hudbar) resolves regardless
     -- of the order tests call ctx.loadPlugin(). The module bodies only run
     -- when require()'d; ctx.loadPlugin() (below) loads the same file.
-    for _, name in ipairs({ "mahjonglogic", "mahjongboard", "hudbar", "main" }) do
+    for _, name in ipairs({ "mahjonglogic", "mahjongboard", "hudbar", "mahjongsettings", "main" }) do
         local path = M.ROOT .. "/mahjong.koplugin/" .. name .. ".lua"
         local chunk, err = loadfile(path)
         assert(chunk, "cannot preload plugin module " .. name .. ": " .. tostring(err))

@@ -35,6 +35,9 @@ local HudBar = FrameContainer:extend{
     name = "hudbar",
     full_width = Screen:getWidth(),
     title = nil,
+    left_icon = nil,
+    left_icon_size_ratio = 0.9,
+    left_icon_tap_callback = nil,
     right_icon = nil,
     right_icon_size_ratio = 0.9,
     right_icon_tap_callback = nil,
@@ -43,7 +46,7 @@ local HudBar = FrameContainer:extend{
     stats = { pairs = 0, free = 0, score = 0 },
     _value_widgets = nil, -- { pairs=, free=, score= } value TextWidgets
     _chip_layouts = nil,  -- the three chips' layouts (size caches)
-    _bar_layout = nil,    -- the outer HorizontalGroup holding left_vertical_group + quit_button
+    _bar_layout = nil,    -- the outer HorizontalGroup holding left_button + left_vertical_group + quit_button
 }
 
 -- One stat chip: rounded pill, icon (left), bold value (center),
@@ -118,7 +121,8 @@ function HudBar:init()
 
     -- Square quit button width = height = HUD_H
     local quit_w = self.right_icon and self.right_icon_tap_callback and self.HUD_H or 0
-    local content_w = self.full_width - quit_w
+    local settings_w = self.left_icon and self.left_icon_tap_callback and self.HUD_H or 0
+    local content_w = self.full_width - quit_w - settings_w
 
     local available_for_chips = content_w - edge_pad - right_pad - (2 * chip_gap)
     local chip_w = math.floor(available_for_chips / 3)
@@ -145,6 +149,27 @@ function HudBar:init()
             margin = 0,
             background = QUIT_BG,
             callback = self.right_icon_tap_callback,
+        }
+    end
+
+    -- Settings button: square (HUD_H x HUD_H), pinned to the far left, with a
+    -- slim rounded border so it reads as a control distinct from the quit X.
+    local settings_button = nil
+    if self.left_icon and self.left_icon_tap_callback then
+        local gear_icon = math.floor(self.HUD_H * 0.45)
+        settings_button = ButtonWidget:new{
+            icon = self.left_icon,
+            width = self.HUD_H,
+            height = self.HUD_H,
+            icon_width = gear_icon,
+            icon_height = gear_icon,
+            bordersize = Screen:scaleBySize(1),
+            radius = Screen:scaleBySize(4),
+            padding = 0,
+            margin = 0,
+            background = CHIP_BG,
+            color = CHIP_BORDER,
+            callback = self.left_icon_tap_callback,
         }
     end
 
@@ -179,8 +204,13 @@ function HudBar:init()
         VerticalSpan:new{ height = Screen:scaleBySize(4) },
     }
 
-    -- Full bar: HorizontalGroup holding left_vertical_group and quit_button (pinned to right edge)
-    local bar_children = { left_vertical_group }
+    -- Full bar: HorizontalGroup holding settings_button + left_vertical_group +
+    -- quit_button (settings pinned left, quit pinned right).
+    local bar_children = {}
+    if settings_button then
+        bar_children[#bar_children + 1] = settings_button
+    end
+    bar_children[#bar_children + 1] = left_vertical_group
     if quit_button then
         bar_children[#bar_children + 1] = quit_button
     end
