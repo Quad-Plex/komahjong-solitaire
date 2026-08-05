@@ -321,11 +321,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
   `getSize`/`init` behavior or the suite can't catch layout crashes.
 
-## Mahjong plugin — current state and key contracts (US-01..11 shipped, US-12..18 planned)
+## Mahjong plugin — current state and key contracts (US-01..11, US-19 shipped; US-12..18 planned)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
-of truth for the locked design, the shipped stories (US-01..11) and the planned ones (US-12..18:
-win summary/bests, stats screen, layout registry + picker, Spider, Bridge, pause,
+of truth for the locked design, the shipped stories (US-01..11, US-19) and the planned ones
+(US-12..18: win summary/bests, stats screen, layout registry + picker, Spider, Bridge, pause,
 hint/shuffle score penalties). The full history of *why* things are the way they are (rejected
 designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md` and the code comments — this section is
 only the load-bearing facts an agent needs before touching the code.
@@ -413,13 +413,25 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 10. **Dirtying:** a nested subwidget's `setDirty` alone never repaints (US-07's "zero effect"
     bug) — the window-level widget must be dirtied (`UIManager:setDirty(self, "ui")`), or use
     the `"all"` sentinel from inside the board.
-11. **Settings dialog (`mahjongsettings.lua`)** is the canonical floating-card pattern (reuse it
-    for the US-13 stats screen and any other dialog): transparent full-screen `InputContainer` →
-    `CenterContainer` → white rounded `FrameContainer`; `TapClose` dismisses on a tap outside
-    `_panel_geom`; `onShow` re-dirties a refresh function over `_panel_geom` (else the panel may
-    stay invisible); row buttons `setDirty(self, "ui")`; toggle labels are rebuilt via
-    `setButtonText` (Button:setText truncates long values — the score-toggle bug); value buttons
-    are sized to the widest value; timer-interval button greys out in "On interaction" mode.
+ 11. **Settings dialog (`mahjongsettings.lua`)** is the canonical floating-card pattern (reuse it
+     for the US-13 stats screen and any other dialog): transparent full-screen `InputContainer` →
+     `CenterContainer` → white rounded `FrameContainer`; `TapClose` dismisses on a tap outside
+     `_panel_geom`; `onShow` re-dirties a refresh function over `_panel_geom` (else the panel may
+     stay invisible); row buttons `setDirty(self, "ui")`; toggle labels are rebuilt via
+     `setButtonText` (Button:setText truncates long values — the score-toggle bug); value buttons
+     are sized to the widest value; timer-interval button greys out in "On interaction" mode.
+ 12. **Long-press auto-solve (US-19):** KOReader `Button` fires `hold_callback` ~0.5 s after
+     contact (the device-global `ges_hold_interval_ms`), NOT per-widget, so a ~10 s hold is
+     implemented as arm/cancel: the Hint button is a `LongPressButton` (a `ButtonWidget` subclass
+     that surfaces the normally-hidden `hold_release` via `onHoldReleaseSelectButton` →
+     `hold_release_callback`), `armAutoSolve` schedules a `UIManager:scheduleIn(10, ...)` and
+     `disarmAutoSolve` cancels it on early release. The solver drives the shared
+     `applyMatch(a, b)` helper (extracted from `handleTileTap`) once per `AUTO_SOLVE_STEP_SECONDS`;
+     `matchingFreePair` + `applyMatch` are reused for scoring/history/save so an auto-solved game
+     is indistinguishable from a played one. Any board tap / short Hint tap / Undo / New Game /
+     close stops it (token-bumped pending steps no-op). Flash has a persistent `setFlash` vs the
+     auto-clearing `flashMessage`, and `clearFlash` bumps the token (never nils it — the old
+     `nil + 1` crashed on a second flash after a cleared band).
 
 ### Test harness notes (and verification workflow)
 

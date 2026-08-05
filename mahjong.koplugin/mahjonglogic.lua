@@ -495,19 +495,31 @@ function MahjongLogic.isWin(board)
     return MahjongLogic.tileCount(board) == 0
 end
 
--- A matching free pair on the board, as { a = { x, y, layer, kind },
--- b = { x, y, layer, kind } }, or nil if no move exists. Used for the no-moves
--- check and the US-08 hint.
-function MahjongLogic.matchingFreePair(board)
+-- All distinct matching free pairs, as an array of { a = { x, y, layer, kind },
+-- b = { x, y, layer, kind } } tables in free-tile scan order. Each unordered
+-- pair of free tiles that matches counts once (so three free flowers = three
+-- entries). Used by the US-08 hint to cycle through the available options on
+-- repeated presses; the scan order is deterministic (freeTiles walks the
+-- memoized layout, bottom layer first), so consecutive hints move forward.
+function MahjongLogic.matchingFreePairs(board)
     local free = MahjongLogic.freeTiles(board)
+    local pairs = {}
     for i = 1, #free - 1 do
         for j = i + 1, #free do
             if MahjongLogic.matches(free[i].kind, free[j].kind) then
-                return { a = free[i], b = free[j] }
+                pairs[#pairs + 1] = { a = free[i], b = free[j] }
             end
         end
     end
-    return nil
+    return pairs
+end
+
+-- The first matching free pair on the board, as { a = { x, y, layer, kind },
+-- b = { x, y, layer, kind } }, or nil if no move exists. Used for the no-moves
+-- check, the auto-solver (US-19) and the logic self-tests; the hint uses
+-- matchingFreePairs to cycle through options.
+function MahjongLogic.matchingFreePair(board)
+    return MahjongLogic.matchingFreePairs(board)[1]
 end
 
 -- The number of distinct matching free pairs currently available — i.e. how
@@ -949,6 +961,22 @@ function MahjongLogic.runSelfTests()
     local mp3 = boardWith{ {2,2,0,"c1"}, {4,2,0,"c2"}, {6,2,0,"c3"} }
     check(MahjongLogic.matchingFreePair(mp3) == nil, "matchingFreePair returns nil when no move exists")
     check(MahjongLogic.matchingFreePair({}) == nil, "matchingFreePair returns nil on an empty board")
+
+    -- All matching free pairs (US-08 hint cycling): each unordered matching
+    -- pair counts once, in deterministic free-tile scan order.
+    local mfp1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"}, {8,2,0,"c1"} }
+    local all_pairs = MahjongLogic.matchingFreePairs(mfp1)
+    check(#all_pairs == 2, "matchingFreePairs lists both distinct matching pairs")
+    local mfp1_keys = {}
+    for _, p in ipairs(all_pairs) do
+        mfp1_keys[#mfp1_keys + 1] = MahjongLogic.posKey(p.a.x, p.a.y, p.a.layer)
+            .. "/" .. MahjongLogic.posKey(p.b.x, p.b.y, p.b.layer)
+    end
+    check(mfp1_keys[1] ~= mfp1_keys[2], "matchingFreePairs does not repeat a pair")
+    check(#MahjongLogic.matchingFreePairs(boardWith{ {2,2,0,"flower1"}, {4,2,0,"flower2"},
+            {6,2,0,"flower3"} }) == 3,
+        "matchingFreePairs honors the flower wildcard (3 flowers -> 3 pairs)")
+    check(#MahjongLogic.matchingFreePairs(mp3) == 0, "matchingFreePairs is empty when no move exists")
 
     -- Free-pair counter (US-08 status line).
     check(MahjongLogic.countFreePairs(mp3) == 0, "countFreePairs is 0 when no free pair matches")

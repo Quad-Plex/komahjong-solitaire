@@ -59,6 +59,13 @@ local ICON_DIR = "mahjong"
 -- blocked") stays visible in the band between the board and the toolbar.
 local FLASH_TIMEOUT = 2
 
+-- US-19: holding the Hint button for AUTO_SOLVE_HOLD_SECONDS starts an
+-- automated solver that plays matching pairs until the board is cleared;
+-- AUTO_SOLVE_STEP_SECONDS paces how fast the pairs are removed so each move
+-- is visible on the e-ink refresh.
+local AUTO_SOLVE_HOLD_SECONDS = 10
+local AUTO_SOLVE_STEP_SECONDS = 0.4
+
 -- Settings keys (persisted via LuaSettings in the KOReader settings dir).
 -- score_method: "chain" (default, +5 for consecutive same-group matches) or
 -- "basic" (flat 10 per pair). layout is "turtle" (the only one today).
@@ -78,6 +85,24 @@ local SETTINGS_DEFAULTS = {
 -- Smallest interval the timer loop will honor (dialog offers 1..60).
 local MIN_TIMER_INTERVAL = 1
 
+-- A ButtonWidget that surfaces the "long-press released" event. KOReader's
+-- Button registers a "hold" gesture (fires ~ges_hold_interval_ms after
+-- contact) that calls `hold_callback`, and it consumes the matching
+-- "hold_release" internally with no callback exposed. The auto-solver needs
+-- to cancel its 10 s arm if the finger lifts early, so this subclass forwards
+-- the release. In real KOReader it is a subclass of the stock Button; the test
+-- harness stubs `ui/widget/button` with an equivalent class.
+local LongPressButton = ButtonWidget:extend{
+    hold_release_callback = nil,
+}
+
+function LongPressButton:onHoldReleaseSelectButton()
+    if self.hold_release_callback then
+        self.hold_release_callback()
+    end
+    return ButtonWidget.onHoldReleaseSelectButton(self)
+end
+
 -- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
 -- the tap area — with a square icon centered inside it, plus a small hint
 -- label beneath. Padding keeps the icon off the button edges, bordersize draws
@@ -86,12 +111,17 @@ local MIN_TIMER_INTERVAL = 1
 -- caption (Undo / Hint / Shuffle / New Game). The cells are separated by
 -- HorizontalSpan spacers in buildUILayout() (the stock HorizontalGroup ignores
 -- any `spacing` field).
-local function createToolbarButton(icon, label, w, h, cb)
+--
+-- Optional `hold_cb` / `hold_release_cb` turn the button into a LongPressButton
+-- (long-press arm + release hook, used by the Hint button's auto-solver).
+-- Returns the cell (the VerticalGroup) and the ButtonWidget itself (so tests
+-- can reach the hold callbacks).
+local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_cb)
     local pad = Screen:scaleBySize(6)
     local border = Screen:scaleBySize(1)
     local radius = Screen:scaleBySize(4)
     local icon_h = h - 2 * pad - 2 * border
-    local button = ButtonWidget:new{
+    local button_opts = {
         icon = icon,
         width = w,
         icon_width = icon_h,
@@ -102,17 +132,25 @@ local function createToolbarButton(icon, label, w, h, cb)
         radius = radius,
         callback = cb,
     }
+    if hold_cb or hold_release_cb then
+        button_opts.hold_callback = hold_cb
+        button_opts.hold_release_callback = hold_release_cb
+        button_opts = LongPressButton:new(button_opts)
+    else
+        button_opts = ButtonWidget:new(button_opts)
+    end
     local label_widget = TextWidget:new{
         text = label,
         padding = 0,
         face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
     }
-    return VerticalGroup:new{
+    local cell = VerticalGroup:new{
         align = "center",
-        button,
+        button_opts,
         label_widget,
     }
+    return cell, button_opts
 end
 
 -- Binary copy in pure Lua (no shell subprocess).
@@ -171,6 +209,10 @@ local Mahjong = FrameContainer:extend{
     _flash_seq = 0, -- monotonic token for the pending feedback-clear timer
     flash_band = nil,  -- fixed-height band between the board and the toolbar
     flash_text = nil,  -- the band's TextWidget (feedback messages appear here)
+    _auto_solve_token = 0, -- monotonic token invalidating pending auto-solve arms/steps
+    _auto_solve_active = false, -- true while the long-press solver is running (US-19)
+    _last_hint = nil, -- the last hinted pair { a, b }, so repeated Hint presses cycle (US-08)
+    hint_button = nil, -- the toolbar Hint ButtonWidget (exposes hold callbacks, US-19)
 }
 
 function Mahjong:init()
@@ -260,6 +302,7 @@ function Mahjong:startGame()
         self.elapsed_base = 0
     end
     self.selected = nil
+    self._last_hint = nil -- the hint cycle starts fresh for this session
     self._timer_running = false
     self:buildUILayout()
     self:updateStatus()
@@ -553,13 +596,22 @@ function Mahjong:buildUILayout()
         return Geometry:new{ w = self.full_width, h = flash_h }
     end
 
+    -- US-19: the Hint button is a LongPressButton — a short tap hints, holding
+    -- it for AUTO_SOLVE_HOLD_SECONDS arms the auto-solver. Keep a reference so
+    -- the test harness can drive the hold callbacks.
+    local hint_cell, hint_button = createToolbarButton(
+        "mahjong/lightbulb", _("Hint"), toolbar_btn_w, toolbar_btn_h,
+        function() self:showHint() end,
+        function() self:armAutoSolve() end,
+        function() self:disarmAutoSolve() end)
+    self.hint_button = hint_button
+
     local toolbar = HorizontalGroup:new{
         HorizontalSpan:new{ width = toolbar_gap },
         createToolbarButton("chevron.left", _("Undo"), toolbar_btn_w, toolbar_btn_h,
             function() self:undo() end),
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("mahjong/lightbulb", _("Hint"), toolbar_btn_w, toolbar_btn_h,
-            function() self:showHint() end),
+        hint_cell,
         HorizontalSpan:new{ width = toolbar_gap },
         createToolbarButton("mahjong/shuffle", _("Shuffle"), toolbar_btn_w, toolbar_btn_h,
             function() self:shuffleBoard() end),
@@ -616,6 +668,9 @@ function Mahjong:createStatusBar()
 end
 
 function Mahjong:resetGame()
+    -- US-19: a New Game cancels a pending long-press arm or an active solve.
+    self:stopAutoSolve()
+    self._last_hint = nil -- a fresh board resets the hint cycle
     self.board = MahjongLogic.newGame()
     self.selected = nil
     self.score = 0
@@ -646,6 +701,12 @@ end
 --   * tapping a different, non-matching free tile -> switch the selection.
 
 function Mahjong:handleTileTap(x, y, layer)
+    -- US-19: a board tap while the auto-solver is running interrupts it. The
+    -- tap itself is consumed so it cannot fight the solver for a tile.
+    if self._auto_solve_active then
+        self:stopAutoSolve()
+        return
+    end
     local kind = MahjongLogic.tileAt(self.board, x, y, layer)
     if not kind then return end
     if not MahjongLogic.isFree(self.board, x, y, layer) then
@@ -663,27 +724,7 @@ function Mahjong:handleTileTap(x, y, layer)
         -- A matching free tile removes both.
         local a = { x = sel.x, y = sel.y, layer = sel.layer }
         local b = { x = x, y = y, layer = layer }
-        local ok, ka, kb = MahjongLogic.removePair(self.board, a, b)
-        if ok then
-            self.selected = nil
-            self.board_view:removePair(a, b)
-            local prev_last = self.last_match_kind
-            local points
-            if self.score_method == "chain" then
-                points = MahjongLogic.pairPoints(prev_last, ka)
-            else
-                points = MahjongLogic.SCORE_PER_PAIR
-            end
-            self.last_match_kind = ka
-            self.score = self.score + points
-            table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last })
-            self:updateStatus()
-            -- In "move" timer mode (US-11) interactions are what refresh the
-            -- mm:ss display; harmless extra freshness in "interval" mode too.
-            self:updateTimerDisplay()
-            -- Save after every move (US-10) so a mid-game exit/kill never
-            -- loses more than the current pair.
-            self:saveGameState()
+        if self:applyMatch(a, b) then
             self:checkGameState()
             return
         end
@@ -691,6 +732,33 @@ function Mahjong:handleTileTap(x, y, layer)
 
     -- First tap, or switching from a different tile.
     self:setSelection(x, y, layer, kind)
+end
+
+-- Applies a matched pair to the game: removes it from the logic board and the
+-- rendered board, scores it (chain bonus for consecutive same-group matches),
+-- records it in the undo history, refreshes the HUD and the mm:ss display, and
+-- persists. Returns true when the pair was applied. `a`/`b` are { x, y, layer }
+-- tables. Shared by the tap path (handleTileTap) and the auto-solver (US-19)
+-- so an auto-solved game scores and saves exactly like a hand-played one.
+function Mahjong:applyMatch(a, b)
+    local ok, ka, kb = MahjongLogic.removePair(self.board, a, b)
+    if not ok then return false end
+    self.selected = nil
+    self.board_view:removePair(a, b)
+    local prev_last = self.last_match_kind
+    local points
+    if self.score_method == "chain" then
+        points = MahjongLogic.pairPoints(prev_last, ka)
+    else
+        points = MahjongLogic.SCORE_PER_PAIR
+    end
+    self.last_match_kind = ka
+    self.score = self.score + points
+    table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last })
+    self:updateStatus()
+    self:updateTimerDisplay()
+    self:saveGameState()
+    return true
 end
 
 function Mahjong:setSelection(x, y, layer, kind)
@@ -741,6 +809,11 @@ end
 -- US-08: Undo, hint, and shuffle ---------------------------------------------
 
 function Mahjong:undo()
+    -- US-19: undoing mid-solve stops the solver first so the next scheduled
+    -- step cannot immediately replay a tile.
+    if self._auto_solve_active then
+        self:stopAutoSolve()
+    end
     local move = table.remove(self.history)
     if not move then return end
 
@@ -755,10 +828,26 @@ function Mahjong:undo()
     self:saveGameState()
 end
 
+-- Repeated Hint presses cycle through the available matching pairs instead of
+-- always highlighting the same first one (the hint stays on each pair for the
+-- usual 2 s, then the next press moves to the pair AFTER it, wrapping around).
 function Mahjong:showHint()
+    -- US-19: a short tap while the auto-solver runs stops it (the solver also
+    -- highlights pairs as it plays, so a hint would be redundant).
+    if self._auto_solve_active then
+        self:stopAutoSolve()
+    end
     if not self:getSetting("hints", SETTINGS_DEFAULTS.hints) then return end
-    local pair = MahjongLogic.matchingFreePair(self.board)
-    if not pair then
+    local board_view = self.board_view
+    -- Drop the previous hint's overlays first so cycling presses never leave a
+    -- stale highlight behind (clearOverlay is a no-op if the tile is gone).
+    if self._last_hint then
+        board_view:clearOverlay(self._last_hint.a.x, self._last_hint.a.y, self._last_hint.a.layer)
+        board_view:clearOverlay(self._last_hint.b.x, self._last_hint.b.y, self._last_hint.b.layer)
+    end
+    local pairs = MahjongLogic.matchingFreePairs(self.board)
+    if #pairs == 0 then
+        self._last_hint = nil
         -- In theory checkGameState already caught this, but user can tap Hint
         -- on a dead board before the shuffle prompt is accepted.
         UIManager:show(ConfirmBox:new{
@@ -768,10 +857,26 @@ function Mahjong:showHint()
         })
         return
     end
-    self.board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint")
-    self.board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint")
+    -- Cycle: highlight the pair AFTER the one just shown (wrapping around). If
+    -- the board changed under the previous hint (a match/shuffle moved or
+    -- removed it), the scan finds nothing and we start over at the first pair.
+    local idx = 0
+    if self._last_hint then
+        for i, p in ipairs(pairs) do
+            if p.a.x == self._last_hint.a.x and p.a.y == self._last_hint.a.y
+                and p.a.layer == self._last_hint.a.layer
+                and p.b.x == self._last_hint.b.x and p.b.y == self._last_hint.b.y
+                and p.b.layer == self._last_hint.b.layer then
+                idx = i
+                break
+            end
+        end
+    end
+    local pair = pairs[idx % #pairs + 1]
+    self._last_hint = pair
+    board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint")
+    board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint")
     -- Clear hints after 2 seconds.
-    local board_view = self.board_view
     UIManager:scheduleIn(2, function()
         if board_view == self.board_view then
             board_view:clearOverlay(pair.a.x, pair.a.y, pair.a.layer)
@@ -809,6 +914,108 @@ function Mahjong:shuffleBoard(force, attempts)
     end
 end
 
+-- US-19: long-press auto-solve -------------------------------------------------
+--
+-- Holding the Hint button for AUTO_SOLVE_HOLD_SECONDS starts a solver that
+-- plays out matching free pairs one at a time until the board is cleared.
+-- KOReader's `hold` gesture fires ~0.5 s after contact (the device-global
+-- ges_hold_interval_ms), so it cannot be configured to fire at 10 s itself:
+-- the hold callback ARMS a 10 s timer and the release hook DISARMS it if the
+-- finger lifts early. The solver reuses the exact tap-path scoring/history/
+-- save code (applyMatch), so an auto-solved game is indistinguishable from a
+-- hand-played one. A board tap, a short Hint tap, Undo, or New Game stops it.
+
+function Mahjong:armAutoSolve()
+    if not self:getSetting("hints", SETTINGS_DEFAULTS.hints) then return end
+    if MahjongLogic.isWin(self.board) then return end
+    local token = self._auto_solve_token + 1
+    self._auto_solve_token = token
+    self:setFlash(_("Keep holding to auto-solve…"))
+    UIManager:scheduleIn(AUTO_SOLVE_HOLD_SECONDS, function()
+        if self._auto_solve_token == token then
+            self:startAutoSolve()
+        end
+    end)
+end
+
+-- The finger lifted: cancel the pending 10 s arm. This also fires on the very
+-- release that ends the successful hold — by then the solve is already running
+-- (startAutoSolve bumped the token), so only a pending arm is cancelled.
+function Mahjong:disarmAutoSolve()
+    self._auto_solve_token = self._auto_solve_token + 1
+    if not self._auto_solve_active then
+        self:clearFlash()
+    end
+end
+
+function Mahjong:startAutoSolve()
+    if self._auto_solve_active then return end
+    self._auto_solve_token = self._auto_solve_token + 1
+    self._auto_solve_active = true
+    -- The solver replays pairs far faster than a human, so start a clean undo
+    -- history: a mid-solve shuffle moves tiles to different positions, which
+    -- would scramble a long shared history under a later undo.
+    self.history = {}
+    self:clearSelection()
+    self:setFlash(_("Auto-solving…"))
+    self:autoSolveStep()
+end
+
+-- Stops the solver (and any pending arm). Called from board/hint taps, undo,
+-- New Game, and close. Safe to call when nothing is running.
+function Mahjong:stopAutoSolve()
+    if not self._auto_solve_active then
+        self._auto_solve_token = self._auto_solve_token + 1
+        return
+    end
+    self._auto_solve_active = false
+    self._auto_solve_token = self._auto_solve_token + 1
+    self:clearFlash()
+end
+
+function Mahjong:autoSolveStep()
+    if not self._auto_solve_active then return end
+    if MahjongLogic.isWin(self.board) then
+        self._auto_solve_active = false
+        self:clearFlash()
+        self:showWinDialog()
+        return
+    end
+    local pair = MahjongLogic.matchingFreePair(self.board)
+    if not pair then
+        -- Dead board mid-solve: shuffle and carry on (mirrors the manual
+        -- no-moves prompt). History is cleared first so the shuffle can't
+        -- scramble it under a later undo; a bounded retry loop covers the
+        -- (rare) shuffled board that is still dead.
+        self.history = {}
+        self:clearSelection()
+        local attempts = 10
+        repeat
+            MahjongLogic.shuffleBoard(self.board)
+            pair = MahjongLogic.matchingFreePair(self.board)
+            attempts = attempts - 1
+        until pair or attempts == 0
+        self.board_view:updateBoard()
+        if not pair then
+            self:stopAutoSolve()
+            return
+        end
+    end
+    self:applyMatch(pair.a, pair.b)
+    if MahjongLogic.isWin(self.board) then
+        -- Cleared: handle the win immediately instead of scheduling a
+        -- redundant no-op step (this is also the branch a stale step lands
+        -- in, though none is scheduled once _auto_solve_active is cleared).
+        self._auto_solve_active = false
+        self:clearFlash()
+        self:showWinDialog()
+        return
+    end
+    UIManager:scheduleIn(AUTO_SOLVE_STEP_SECONDS, function()
+        self:autoSolveStep()
+    end)
+end
+
 -- Brief NON-BLOCKING feedback (US-09): `text` appears in the fixed band
 -- between the board and the toolbar and auto-clears after FLASH_TIMEOUT.
 -- The band is a plain text widget (not a modal dialog), so the board keeps
@@ -816,7 +1023,21 @@ end
 -- can be corrected immediately. Each call bumps a sequence token; a stale
 -- clear timer (e.g. from before a close/new game) is a no-op.
 function Mahjong:flashMessage(text)
-    local seq = self._flash_seq + 1
+    self:setFlash(text)
+    local seq = self._flash_seq
+    UIManager:scheduleIn(FLASH_TIMEOUT, function()
+        if self._flash_seq == seq then
+            self:clearFlash()
+        end
+    end)
+end
+
+-- Sets a PERSISTENT message in the feedback band (no auto-clear): used while
+-- the auto-solve arm/solve is active, where the text must stay until the
+-- finger lifts or the solve stops (US-19). Bumps the sequence token so any
+-- pending auto-clear for a previous message becomes a no-op.
+function Mahjong:setFlash(text)
+    local seq = (self._flash_seq or 0) + 1
     self._flash_seq = seq
     if self.flash_text then
         self.flash_text:setText(text)
@@ -827,16 +1048,14 @@ function Mahjong:flashMessage(text)
         end
         UIManager:setDirty(self, "ui")
     end
-    UIManager:scheduleIn(FLASH_TIMEOUT, function()
-        if self._flash_seq == seq then
-            self:clearFlash()
-        end
-    end)
 end
 
--- Clears the feedback band (called by the flash timer and on close).
+-- Clears the feedback band (called by the flash timer, the auto-solve paths,
+-- and on close). Bumps the sequence token instead of niling it so the next
+-- setFlash never has to add to a nil (the old `self._flash_seq + 1` crashed on
+-- a second flash after a cleared one).
 function Mahjong:clearFlash()
-    self._flash_seq = nil
+    self._flash_seq = (self._flash_seq or 0) + 1
     if self.flash_text and self.flash_text.text and self.flash_text.text ~= "" then
         self.flash_text:setText("")
         if self.flash_band_icon then
@@ -860,6 +1079,9 @@ function Mahjong:updateStatus()
 end
 
 function Mahjong:onCloseWidget()
+    -- US-19: cancel a pending long-press arm / running solve (bumps the token
+    -- so no stale step can fire into a closed widget).
+    self:stopAutoSolve()
     self:saveGameState()
     self:stopTimer()
     self:clearFlash()

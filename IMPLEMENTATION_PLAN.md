@@ -93,7 +93,8 @@ kindle_majong/
 │   ├── us15_spider.lua           # Spider layout (planned)
 │   ├── us16_bridge.lua           # Bridge layout (planned)
 │   ├── us17_pause.lua            # pause overlay (planned)
-│   └── us18_penalties.lua        # hint/shuffle score penalties (planned)
+│   ├── us18_penalties.lua        # hint/shuffle score penalties (planned)
+│   └── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
@@ -383,6 +384,13 @@ reason to replay.
   time each record is set. Keep "Play again" / "Close" (Play again still calls `resetGame()` until
   US-14 reroutes it through the layout picker).
 - Bests are computed from the real game (score + `getElapsed()`), so they are genuine records.
+- **Auto-solve games never count toward stats (US-19 note):** a board cleared by the long-press
+  Hint auto-solver is considered "cheated". The auto-solve win must NOT call `recordWin` or
+  `startGame`'s previous-won logic — it records no win, no bests, no streak change, and does not
+  bump `games_played`. Only the normal `showWinDialog()` path (a human play-through) records a
+  win. Implementation touchpoints: the auto-solver reaches `showWinDialog()` too, so gate the
+  stats recording on a `self.game_was_autosolved` flag that US-19's `startAutoSolve` sets and the
+  normal win path never does (or route auto-solve wins through a dedicated win dialog path).
 
 **Acceptance:**
 - Self-tests: `startGame` bumps games_played and breaks a stale streak only when the previous game
@@ -536,6 +544,39 @@ As a player, I want hints and shuffles to cost points, so using them is a real t
 
 **Acceptance:** Manual — use a hint and shuffle, watch the Score chip drop; the win summary
 reflects the net score.
+
+### US-19 — Long-press Hint to auto-solve the board
+
+As a player, I want to watch the machine clear the board when I'm stuck, by holding the Hint
+button for ~10 seconds, so the game finishes itself.
+
+- KOReader's `Button` already supports long-press via `hold_callback` (the `hold` gesture fires
+  ~`ges_hold_interval_ms`, ~0.5 s, after contact), but the ~10 s requirement cannot be expressed
+  in the gesture system (that interval is device-global). Instead:
+  - `main.lua` adds a `LongPressButton = ButtonWidget:extend{}` that surfaces the normally-hidden
+    `hold_release` event (`onHoldReleaseSelectButton` override → `hold_release_callback`).
+  - The Hint button's `hold_callback` (`armAutoSolve`) shows a persistent "Keep holding to
+    auto-solve…" band message and arms a `UIManager:scheduleIn(AUTO_SOLVE_HOLD_SECONDS=10, ...)`;
+    `hold_release_callback` (`disarmAutoSolve`) cancels the arm if the finger lifts first.
+  - `startAutoSolve` runs a solver (`autoSolveStep`) that reuses the exact tap-path code — a new
+    `applyMatch(a, b)` helper extracted from `handleTileTap` (scoring, chain bonus, history,
+    HUD + mm:ss refresh, save) — removing one matching free pair per `AUTO_SOLVE_STEP_SECONDS`
+    (0.55 s) step until the board is empty, then shows the normal win dialog. A dead board
+    mid-solve shuffles (bounded retries) and continues. History is cleared at solve start and
+    before a mid-solve shuffle so undo can't restore tiles to positions that moved under a
+    shuffle.
+  - Any board tap, a short Hint tap, Undo, New Game, or close stops the solver (token-bumped
+    pending steps become no-ops). The `hints` setting gates the arm like it gates `showHint`.
+  - Flash refactor: `setFlash` (persistent, used by the solver) split out of `flashMessage`
+    (auto-clearing); `clearFlash` bumps the sequence token instead of niling it, fixing a latent
+    `nil + 1` crash on a second flash after a cleared band.
+- `tests/us19_autosolve.lua` (registered in `tests/run.sh`): arm/10 s-cancel, full board clear +
+  win dialog + history/score, board-tap/short-tap/undo stop the solve (pending step no-ops),
+  hints-off arms nothing, second-flash-after-clear regression.
+
+**Acceptance:** Manual — hold Hint for ~10 s; the band says "Auto-solving…" and the board clears
+one pair at a time; tapping the board interrupts; a held-then-quickly-released press does
+nothing.
 
 ## Deferred optimizations (P3 — marked for later)
 

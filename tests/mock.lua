@@ -241,13 +241,26 @@ function M.newContext()
                 }
             end,
         },
-        ["ui/widget/button"] = {
-            new = function(_, o)
+        ["ui/widget/button"] = (function()
+            -- A proper class (not a bare table) so main.lua can subclass it
+            -- (LongPressButton for the US-19 auto-solve hold hook). The real
+            -- Button handles the "hold"/"hold_release" gestures; the stubs
+            -- mirror the callbacks so a subclass override can call through.
+            local btn = input_container:extend{}
+            btn.new = function(self, o)
                 o = o or {}
                 o.getSize = function() return { w = o.width or 32, h = o.height or 32 } end
-                return o
-            end,
-        },
+                return setmetatable(o, { __index = self })
+            end
+            btn.onHoldSelectButton = function(self)
+                if self.hold_callback then self.hold_callback() end
+            end
+            btn.onHoldReleaseSelectButton = function(self)
+                if self.hold_release_callback then self.hold_release_callback() end
+                return true
+            end
+            return btn
+        end)(),
         ["ui/widget/titlebar"] = {
             new = function(_, o)
                 o = o or {}

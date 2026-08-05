@@ -80,6 +80,62 @@ expect(mapCount(mj_hint.board_view.overlays) == 2, "hint draws two overlays")
 -- We can't easily test the scheduled clear headlessly without mocking scheduleIn more deeply,
 -- but we verified the setOverlay call.
 
+-- ---- Hint cycling (US-08 follow-up) ----------------------------------------
+--
+-- Repeated Hint presses cycle through the distinct matching pairs instead of
+-- always highlighting the first one: press 1/2/3 highlight three different
+-- pairs, press 4 wraps back to the first.
+
+local function hintedPair(mj)
+    local keys = {}
+    for k in pairs(mj.board_view.overlays) do keys[#keys + 1] = k end
+    table.sort(keys)
+    return table.concat(keys, "/")
+end
+
+local mj_cycle = Mahjong:new()
+mj_cycle.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"c1"}, {8,2,0,"c1"},
+    {2,4,0,"d1"}, {4,4,0,"d1"},
+}
+mj_cycle:buildUILayout()
+mj_cycle:showHint()
+local h1 = hintedPair(mj_cycle)
+mj_cycle:showHint()
+local h2 = hintedPair(mj_cycle)
+mj_cycle:showHint()
+local h3 = hintedPair(mj_cycle)
+mj_cycle:showHint()
+local h4 = hintedPair(mj_cycle)
+expect(h1 ~= "" and h2 ~= "" and h3 ~= "", "each hint press highlights two tiles")
+expect(h2 ~= h1, "a second hint press cycles to a different pair")
+expect(h3 ~= h1 and h3 ~= h2, "a third hint press cycles to a third pair")
+expect(h4 == h1, "the hint cycle wraps back to the first pair")
+
+-- The previous hint's overlays are cleared before the next one is drawn, so
+-- repeated presses never stack highlights.
+expect(mapCount(mj_cycle.board_view.overlays) == 2,
+    "cycling hints keep exactly one pair highlighted at a time")
+
+-- If the board changes under the hinted pair (it is matched away), the next
+-- hint starts the cycle over instead of resuming at a stale position.
+local mj_stale = Mahjong:new()
+mj_stale.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"c1"}, {8,2,0,"c1"},
+}
+mj_stale:buildUILayout()
+mj_stale:showHint()
+local stale_h1 = hintedPair(mj_stale)
+mj_stale:handleTileTap(2, 2, 0) -- select
+mj_stale:handleTileTap(4, 2, 0) -- match the hinted pair away
+expect(mapCount(mj_stale.board_view.overlays) == 0,
+    "removing the hinted pair drops its overlay")
+mj_stale:showHint()
+expect(hintedPair(mj_stale) ~= "" and hintedPair(mj_stale) ~= stale_h1,
+    "a hint after the board changed starts the cycle over cleanly")
+
 -- ---- Shuffle (US-08) -------------------------------------------------------
 
 local mj_shuf = Mahjong:new()
