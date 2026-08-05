@@ -21,9 +21,11 @@ local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
 local _ = require("gettext")
 local MahjongLogic = require("mahjonglogic")
+local MahjongStats = require("mahjongstats")
 local MahjongBoard = require("mahjongboard")
 local HudBar = require("hudbar")
 local SettingsWidget = require("mahjongsettings")
+local StatsWidget = require("mahjongstatswidget")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -201,6 +203,12 @@ local Mahjong = FrameContainer:extend{
     history = nil, -- stack of { a, b, ka, kb, score, prev_last }
     settings = nil, -- LuaSettings handle (US-10)
     score_method = "chain", -- "chain" or "basic" (settings, defaulted for tests)
+    stats = nil, -- lifetime stats record (US-12), loaded in init()
+    game_won = false, -- true once the CURRENT game is won by the player (US-12)
+    game_was_autosolved = false, -- set by startAutoSolve; gates stats recording (US-12/US-19)
+    pairs_matched = 0, -- pairs removed this game (72 on a full win; the auto-solver
+                       -- replays pairs into a cleared history, so this is tracked
+                       -- apart from the undo stack) (US-12)
     elapsed_base = 0, -- elapsed seconds at last stop (US-10)
     _timer_running = false,
     _timer_started_at = nil,
@@ -232,6 +240,10 @@ function Mahjong:init()
     installIconsIfNeeded()
     -- US-10: one LuaSettings file for both the game state and the settings.
     self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/mahjong.lua")
+    -- US-12: lifetime stats live under their own "stats" key (saveStats), so a
+    -- win or a restore never touches them. A corrupt/missing record silently
+    -- falls back to a fresh one (MahjongStats.load sanitizes).
+    self.stats = MahjongStats.load(self.settings:readSetting("stats", nil))
 end
 
 -- Settings helpers (mirror the kochess example). setSetting persists
@@ -249,6 +261,29 @@ end
 
 function Mahjong:refreshScoreMethod()
     self.score_method = self:getSetting("score_method", SETTINGS_DEFAULTS.score_method)
+end
+
+-- US-12: lifetime stats are persisted under their own "stats" key, separate
+-- from the "game" key (a win or a restore never touches the game save). Every
+-- mutation flushes immediately so a win or a new game survives an abrupt exit.
+function Mahjong:saveStats()
+    if not self.settings or not self.stats then return end
+    self.settings:saveSetting("stats", self.stats)
+    self.settings:flush()
+end
+
+-- US-12: every fresh deal (plugin launch with no saved game, or a New Game)
+-- is recorded in the lifetime stats: games_played bumps, and when the PREVIOUS
+-- game was abandoned (not won) the winning streak resets. `self.game_won` still
+-- holds the previous game's outcome at this point (set by showWinDialog); it is
+-- cleared for the new game afterwards, along with the auto-solve flag.
+function Mahjong:noteNewGame()
+    if self.stats then
+        MahjongStats.startGame(self.stats, self.game_won)
+        self:saveStats()
+    end
+    self.game_won = false
+    self.game_was_autosolved = false
 end
 
 function Mahjong:addToMainMenu(menu_items)
@@ -294,12 +329,18 @@ function Mahjong:startGame()
         self.score = restored.score
         self.last_match_kind = restored.last_match_kind
         self.elapsed_base = restored.elapsed
+        -- A restored game has no fresh deal; the pair count for the win
+        -- summary comes from the restored undo stack (US-12).
+        self.pairs_matched = #restored.history
     else
         self.board = MahjongLogic.newGame()
         self.history = {}
         self.score = 0
         self.last_match_kind = nil
         self.elapsed_base = 0
+        self.pairs_matched = 0
+        -- US-12: a fresh deal is a new game for the lifetime stats.
+        self:noteNewGame()
     end
     self.selected = nil
     self._last_hint = nil -- the hint cycle starts fresh for this session
@@ -446,6 +487,24 @@ function Mahjong:openSettings()
             self:updateTimerDisplay()
         end,
         onCancel = function()
+            self:startTimer()
+            self:updateTimerDisplay()
+        end,
+    }
+    dlg:show()
+end
+
+-- Stats screen (US-13) -------------------------------------------------------
+
+function Mahjong:openStats()
+    -- Freeze the clock and stop the polling loop while the card is up (the
+    -- same reason openSettings does): a periodic full-screen refresh (US-11
+    -- "interval" mode) would flash every tick behind the panel. Any close
+    -- (tap-outside or the panel's X) resumes via onClose.
+    self:stopTimer()
+    local dlg = StatsWidget:new{
+        parent = self,
+        onClose = function()
             self:startTimer()
             self:updateTimerDisplay()
         end,
@@ -644,15 +703,17 @@ function Mahjong:buildUILayout()
 end
 
 function Mahjong:createStatusBar()
-    -- HUD top bar (hudbar.lua): settings gear (left) + title + three stat
-    -- chips (Pairs / Free / Score) + the quit X (right), replacing the old
-    -- TitleBarWidget text subtitle. updateStatus() pushes the values via
-    -- setStats().
+    -- HUD top bar (hudbar.lua): two left buttons (settings gear + stats card,
+    -- US-13) + title + three stat chips (Pairs / Free / Score) + the quit X
+    -- (right). updateStatus() pushes the values via setStats().
     return HudBar:new{
         title                  = _("Mahjong Solitaire"),
-        left_icon              = "appbar.settings",
-        left_icon_size_ratio   = 0.9,
-        left_icon_tap_callback = function() self:openSettings() end,
+        left_icons = {
+            { icon = "appbar.settings", size_ratio = 0.45,
+              callback = function() self:openSettings() end },
+            { icon = "mahjong/stats", size_ratio = 0.45,
+              callback = function() self:openStats() end },
+        },
         right_icon             = "mahjong/close",
         right_icon_size_ratio  = 0.9,
         right_icon_tap_callback = function()
@@ -676,9 +737,13 @@ function Mahjong:resetGame()
     self.score = 0
     self.last_match_kind = nil
     self.history = {}
+    self.pairs_matched = 0
     self:refreshScoreMethod()
     self.elapsed_base = 0
     self._timer_running = false
+    -- US-12: a New Game (or "Play again" from the win dialog) is a new game for
+    -- the lifetime stats; the streak survives a win and resets on an abandon.
+    self:noteNewGame()
     self:buildUILayout()
     self:updateStatus()
     self:updateTimerDisplay()
@@ -754,6 +819,7 @@ function Mahjong:applyMatch(a, b)
     end
     self.last_match_kind = ka
     self.score = self.score + points
+    self.pairs_matched = (self.pairs_matched or 0) + 1
     table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last })
     self:updateStatus()
     self:updateTimerDisplay()
@@ -794,9 +860,40 @@ function Mahjong:checkGameState()
     end
 end
 
+-- US-12: the win screen is a summary — score, elapsed time, pairs matched,
+-- best score/best time (with "New best!" the first time each record is set),
+-- and the current winning streak. Only a human play-through records stats: the
+-- long-press auto-solver (US-19) reaches this dialog too, and its wins record
+-- no win, no bests, no streak change, and no games_played bump.
 function Mahjong:showWinDialog()
+    -- Freeze the clock before reading it (the summary uses the final elapsed,
+    -- and stopping the polling loop also stops periodic refreshes flashing
+    -- behind the modal dialog — same reason openSettings pauses the timer).
+    self:stopTimer()
+    local elapsed = self:getElapsed()
+    local pairs = self.pairs_matched or 0
+    local new_best_score, new_best_time = false, false
+    if not self.game_was_autosolved then
+        new_best_score, new_best_time = MahjongStats.recordWin(
+            self.stats, self.score, elapsed, pairs)
+        self:saveStats()
+        self.game_won = true
+    end
+    local best_time_str = self.stats.best_time
+            and MahjongLogic.formatElapsed(self.stats.best_time) or "—"
+    local best_score_marker = new_best_score and " " .. _("(New best!)") or ""
+    local best_time_marker = new_best_time and " " .. _("(New best!)") or ""
+    local summary_lines = {
+        _("You cleared the board!"),
+        string.format(_("Score: %d"), self.score),
+        string.format(_("Time: %s"), MahjongLogic.formatElapsed(elapsed)),
+        string.format(_("Pairs matched: %d"), pairs),
+        string.format(_("Best score: %d%s"), self.stats.best_score, best_score_marker),
+        string.format(_("Best time: %s%s"), best_time_str, best_time_marker),
+        string.format(_("Current streak: %d"), self.stats.current_streak),
+    }
     UIManager:show(ConfirmBox:new{
-        text = string.format(_("You cleared the board! Score: %d"), self.score),
+        text = table.concat(summary_lines, "\n"),
         ok_text = _("Play again"),
         ok_callback = function() self:resetGame() end,
         cancel_text = _("Close"),
@@ -822,6 +919,7 @@ function Mahjong:undo()
     self.board_view:addPair({ x = move.a.x, y = move.a.y, layer = move.a.layer, kind = move.ka },
                             { x = move.b.x, y = move.b.y, layer = move.b.layer, kind = move.kb })
     self.score = self.score - move.score
+    self.pairs_matched = math.max(0, (self.pairs_matched or 0) - 1)
     self.last_match_kind = move.prev_last
     self:updateStatus()
     self:updateTimerDisplay()
@@ -952,6 +1050,9 @@ function Mahjong:startAutoSolve()
     if self._auto_solve_active then return end
     self._auto_solve_token = self._auto_solve_token + 1
     self._auto_solve_active = true
+    -- US-12: a board the solver clears is considered "cheated" — its win must
+    -- never record a win/best/streak (showWinDialog gates on this flag).
+    self.game_was_autosolved = true
     -- The solver replays pairs far faster than a human, so start a clean undo
     -- history: a mid-solve shuffle moves tiles to different positions, which
     -- would scramble a long shared history under a later undo.
@@ -1083,6 +1184,7 @@ function Mahjong:onCloseWidget()
     -- so no stale step can fire into a closed widget).
     self:stopAutoSolve()
     self:saveGameState()
+    self:saveStats()
     self:stopTimer()
     self:clearFlash()
     self.selected = nil

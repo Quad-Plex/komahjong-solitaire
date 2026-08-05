@@ -35,7 +35,8 @@ local HudBar = FrameContainer:extend{
     name = "hudbar",
     full_width = Screen:getWidth(),
     title = nil,
-    left_icon = nil,
+    left_icons = nil, -- list of { icon=, size_ratio=, callback= } left buttons (US-13)
+    left_icon = nil,  -- legacy single left button (kept for compat)
     left_icon_size_ratio = 0.9,
     left_icon_tap_callback = nil,
     right_icon = nil,
@@ -46,7 +47,8 @@ local HudBar = FrameContainer:extend{
     stats = { pairs = 0, free = 0, score = 0 },
     _value_widgets = nil, -- { pairs=, free=, score= } value TextWidgets
     _chip_layouts = nil,  -- the three chips' layouts (size caches)
-    _bar_layout = nil,    -- the outer HorizontalGroup holding left_button + left_vertical_group + quit_button
+    _left_buttons = nil,  -- the left ButtonWidgets (settings gear, stats, ...)
+    _bar_layout = nil,    -- the outer HorizontalGroup holding left buttons + left_vertical_group + quit_button
 }
 
 -- One stat chip: rounded pill, icon (left), bold value (center),
@@ -121,8 +123,21 @@ function HudBar:init()
 
     -- Square quit button width = height = HUD_H
     local quit_w = self.right_icon and self.right_icon_tap_callback and self.HUD_H or 0
-    local settings_w = self.left_icon and self.left_icon_tap_callback and self.HUD_H or 0
-    local content_w = self.full_width - quit_w - settings_w
+
+    -- Left buttons: the new `left_icons` list (one button per entry) or the
+    -- legacy single `left_icon` fields (US-13). Each is a square HUD_H-wide
+    -- button pinned to the far left with a slim rounded border, so a row of
+    -- them reads as controls distinct from the quit X.
+    local left_specs = {}
+    if self.left_icons and #self.left_icons > 0 then
+        left_specs = self.left_icons
+    elseif self.left_icon and self.left_icon_tap_callback then
+        left_specs = {
+            { icon = self.left_icon, size_ratio = 0.45, callback = self.left_icon_tap_callback },
+        }
+    end
+    local left_w = #left_specs * self.HUD_H
+    local content_w = self.full_width - quit_w - left_w
 
     local available_for_chips = content_w - edge_pad - right_pad - (2 * chip_gap)
     local chip_w = math.floor(available_for_chips / 3)
@@ -152,26 +167,27 @@ function HudBar:init()
         }
     end
 
-    -- Settings button: square (HUD_H x HUD_H), pinned to the far left, with a
-    -- slim rounded border so it reads as a control distinct from the quit X.
-    local settings_button = nil
-    if self.left_icon and self.left_icon_tap_callback then
-        local gear_icon = math.floor(self.HUD_H * 0.45)
-        settings_button = ButtonWidget:new{
-            icon = self.left_icon,
+    -- Left buttons (gear / stats / ...): one square HUD_H x HUD_H button per
+    -- entry, sized 45% of the bar height (matches the pre-US-13 gear).
+    local left_buttons = {}
+    for _, spec in ipairs(left_specs) do
+        local btn_icon = math.floor(self.HUD_H * (spec.size_ratio or 0.45))
+        left_buttons[#left_buttons + 1] = ButtonWidget:new{
+            icon = spec.icon,
             width = self.HUD_H,
             height = self.HUD_H,
-            icon_width = gear_icon,
-            icon_height = gear_icon,
+            icon_width = btn_icon,
+            icon_height = btn_icon,
             bordersize = Screen:scaleBySize(1),
             radius = Screen:scaleBySize(4),
             padding = 0,
             margin = 0,
             background = CHIP_BG,
             color = CHIP_BORDER,
-            callback = self.left_icon_tap_callback,
+            callback = spec.callback,
         }
     end
+    self._left_buttons = left_buttons
 
     -- Row 1: Centered title in content_w
     local title_w = title_widget:getSize().w
@@ -204,11 +220,11 @@ function HudBar:init()
         VerticalSpan:new{ height = Screen:scaleBySize(4) },
     }
 
-    -- Full bar: HorizontalGroup holding settings_button + left_vertical_group +
-    -- quit_button (settings pinned left, quit pinned right).
+    -- Full bar: HorizontalGroup holding left buttons + left_vertical_group +
+    -- quit_button (left controls pinned left, quit pinned right).
     local bar_children = {}
-    if settings_button then
-        bar_children[#bar_children + 1] = settings_button
+    for _, b in ipairs(left_buttons) do
+        bar_children[#bar_children + 1] = b
     end
     bar_children[#bar_children + 1] = left_vertical_group
     if quit_button then

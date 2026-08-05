@@ -291,7 +291,7 @@ function M.newContext()
     -- module to another (e.g. main.lua requires hudbar) resolves regardless
     -- of the order tests call ctx.loadPlugin(). The module bodies only run
     -- when require()'d; ctx.loadPlugin() (below) loads the same file.
-    for _, name in ipairs({ "mahjonglogic", "mahjongboard", "hudbar", "mahjongsettings", "main" }) do
+    for _, name in ipairs({ "mahjonglogic", "mahjongstats", "mahjongboard", "hudbar", "mahjongsettings", "mahjongstatswidget", "main" }) do
         local path = M.ROOT .. "/mahjong.koplugin/" .. name .. ".lua"
         local chunk, err = loadfile(path)
         assert(chunk, "cannot preload plugin module " .. name .. ": " .. tostring(err))

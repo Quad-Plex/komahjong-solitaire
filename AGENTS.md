@@ -321,13 +321,13 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
   `getSize`/`init` behavior or the suite can't catch layout crashes.
 
-## Mahjong plugin — current state and key contracts (US-01..11, US-19 shipped; US-12..18 planned)
+## Mahjong plugin — current state and key contracts (US-01..13, US-19 shipped; US-14..18 planned)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..11, US-19 shipped,
-US-12..18 planned: win summary/bests, stats screen, layout registry + picker, Spider, Bridge,
-pause, hint/shuffle score penalties). The full history of *why* things are the way they are
+per user story; `_completed` in the filename marks shipped stories — US-01..13, US-19 shipped,
+US-14..18 planned: layout registry + picker, Spider, Bridge, pause, hint/shuffle score
+penalties). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
 code.
@@ -341,11 +341,16 @@ mahjong.koplugin/            # the deliverable
 │                            #   timer, settings/stats entry, save/restore, flash band
 ├── mahjonglogic.lua         # PURE logic (no ui/ requires): deck, Turtle layout, free tiles,
 │                            #   match/win/shuffle, scoring, persistence, self-tests
+├── mahjongstats.lua         # PURE lifetime stats (US-12): defaults/load/startGame/recordWin,
+│                            #   total_time, self-tests (no ui/ requires)
 ├── mahjongboard.lua         # 3D board widget (InputContainer): IconWidgets in an
 │                            #   OverlapGroup, per-layer up-left shift, hit-test, overlays
-├── hudbar.lua               # 2-row top bar: title + gear (left) + 3 stat chips + quit X
+├── hudbar.lua               # 2-row top bar: left buttons (gear + stats, left_icons API) +
+│                            #   title + 3 stat chips + quit X
 ├── mahjongsettings.lua      # floating settings dialog (CenterContainer card over the game)
-└── icons/*.svg              # generated tile faces + overlays
+├── mahjongstatswidget.lua   # floating stats screen (US-13): the same card pattern, lists
+│                            #   lifetime stats + Reset-after-confirm
+└── icons/*.svg              # generated tile faces + UI glyphs (gen_icons.py owns them all)
 tests/                       # official suite (tests/run.sh): mock.lua + usNN_*.lua harnesses
 tools/                       # gen_icons.py, check_icons.py, preview.py (icon QA, not in suite)
 install_plugin.sh            # rsync to the Kindle over /mnt/d
@@ -415,13 +420,17 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 10. **Dirtying:** a nested subwidget's `setDirty` alone never repaints (US-07's "zero effect"
     bug) — the window-level widget must be dirtied (`UIManager:setDirty(self, "ui")`), or use
     the `"all"` sentinel from inside the board.
- 11. **Settings dialog (`mahjongsettings.lua`)** is the canonical floating-card pattern (reuse it
-     for the US-13 stats screen and any other dialog): transparent full-screen `InputContainer` →
+ 11. **Floating dialogs (`mahjongsettings.lua`, and `mahjongstatswidget.lua` for US-13's stats
+     screen)** follow the canonical floating-card pattern: transparent full-screen `InputContainer` →
      `CenterContainer` → white rounded `FrameContainer`; `TapClose` dismisses on a tap outside
      `_panel_geom`; `onShow` re-dirties a refresh function over `_panel_geom` (else the panel may
      stay invisible); row buttons `setDirty(self, "ui")`; toggle labels are rebuilt via
      `setButtonText` (Button:setText truncates long values — the score-toggle bug); value buttons
-     are sized to the widest value; timer-interval button greys out in "On interaction" mode.
+     are sized to the widest value; timer-interval button greys out in "On interaction" mode. The
+     stats screen is the read-only counterpart: right-aligned labels + a uniform value column, a
+     Reset button gated behind a `ConfirmBox`, and an `onClose` hook (main.lua's `openStats`
+     pauses the timer while the card is up, exactly like `openSettings`). The record it lists is
+     `MahjongStats` (`total_time` feeds the average-time-per-win row).
  12. **Long-press auto-solve (US-19):** KOReader `Button` fires `hold_callback` ~0.5 s after
      contact (the device-global `ges_hold_interval_ms`), NOT per-widget, so a ~10 s hold is
      implemented as arm/cancel: the Hint button is a `LongPressButton` (a `ButtonWidget` subclass

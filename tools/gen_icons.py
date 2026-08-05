@@ -353,6 +353,19 @@ def generate():
                                 '<path d="M0 0h24v24H0z" fill="none"/>'
                                 '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 '
                                 '9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>')
+    # Warning triangle (US-09 feedback band): Material Design "warning" glyph,
+    # shown on the far left of the flash band while a feedback message is up.
+    written["warning.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                              'viewBox="0 0 24 24" width="24">'
+                              '<path d="M0 0h24v24H0z" fill="none"/>'
+                              '<path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>')
+    # Stats button (US-13): Material Design "assessment" bar chart, the HUD's
+    # left button (next to the settings gear) that opens the stats screen.
+    written["stats.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                            'viewBox="0 0 24 24" width="24">'
+                            '<path d="M0 0h24v24H0z" fill="none"/>'
+                            '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 '
+                            '2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>')
     return written
 
 

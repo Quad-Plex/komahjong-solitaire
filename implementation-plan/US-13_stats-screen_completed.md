@@ -7,7 +7,8 @@ As a player, I want a dedicated stats screen so I can review my lifetime progres
   `left_icon`/`right_icon` fields (the existing tests read
   `status_bar.left_icon_tap_callback`/`right_icon_tap_callback`). Add a "Stats" button next to the
   settings gear; the title stays centered in the remaining width.
-- New widget `mahjongstats.lua` — a floating card in the exact `mahjongsettings.lua` pattern
+- New widget `mahjongstatswidget.lua` (named so because US-12 already took `mahjongstats.lua` for
+  the pure stats module) — a floating card in the exact `mahjongsettings.lua` pattern
   (transparent full-screen `InputContainer` → `CenterContainer` → white rounded `FrameContainer`;
   full-screen `TapClose` dismissing on a tap outside `_panel_geom`; the `onShow` panel-region
   refresh trick so the card appears immediately; rows with right-aligned labels and a

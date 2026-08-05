@@ -241,7 +241,7 @@ def run_rendered_checks():
 def main():
     # Check 1: XML well-formedness.
     names = sorted(n for n in os.listdir(ICONS_DIR) if n.endswith(".svg"))
-    check(len(names) == 176, f"icons dir holds 176 SVGs (got {len(names)})")
+    check(len(names) == 178, f"icons dir holds 178 SVGs (got {len(names)})")
     malformed = []
     for name in names:
         try:
