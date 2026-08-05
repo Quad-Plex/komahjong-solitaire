@@ -26,6 +26,17 @@ local Mahjong = ctx.loadPlugin("main")
 
 local store = ctx.settings_store
 
+-- US-14: startGame with no saved game shows the layout picker; pick Turtle.
+local function pickTurtle()
+    local picker = ctx.window_stack[#ctx.window_stack].widget
+    if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    local r
+    for _, c in ipairs(picker._card_rects) do
+        if c.id == "turtle" then r = c break end
+    end
+    picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+end
+
 local failures = 0
 local function expect(cond, msg)
     if not cond then
@@ -79,6 +90,7 @@ local mj = Mahjong:new()
 local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
+pickTurtle()
 expect(mj.status_bar ~= nil and mj.status_bar.name == "hudbar",
     "startGame builds the HUD bar")
 expect(#mj.status_bar._left_buttons == 2,

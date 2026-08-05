@@ -28,7 +28,8 @@ addition (US-15/16).
   - `resetGame(layout_id)`/`newGame` take the layout; `self.layout` tracks the current one and is
     saved with the game state. The `"layout"` settings key stays as the last-chosen default.
   - The picker makes the New Game `ConfirmBox` redundant (choosing a layout IS the confirmation):
-    stop consulting `confirm_new_game` (keep the key; drop it in a later cleanup).
+    stop consulting `confirm_new_game`; the setting is retired and removed outright
+    (along with its settings-dialog row and test references) by the deferred cleanup.
 - New `mahjonglayoutselect.lua` widget — a full-screen selection screen with a **2x3 grid** of
   cards (6 slots, enough for the current set; wrap in a scroll container if more are added later).
   Each card: a small **thumbnail** (a miniature schematic of the layout's positions — small rounded

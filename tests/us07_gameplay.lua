@@ -51,6 +51,17 @@ local function sortedKinds(board)
     return kinds
 end
 
+-- US-14: startGame with no saved game shows the layout picker; pick Turtle.
+local function pickTurtle()
+    local picker = ctx.window_stack[#ctx.window_stack].widget
+    if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    local r
+    for _, c in ipairs(picker._card_rects) do
+        if c.id == "turtle" then r = c break end
+    end
+    picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+end
+
 -- ---- Logic hooks (US-07) --------------------------------------------------
 
 local l1 = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"} }
@@ -73,6 +84,7 @@ local mj = Mahjong:new()
 local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
+pickTurtle()
 expect(#ctx.window_stack >= 1 and mj.board and Logic.tileCount(mj.board) == 144,
     "startGame shows a full 144-tile game")
 
@@ -161,6 +173,8 @@ expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again"
     and tostring(ctx.last_confirm.text):find("Score: 10", 1, true) ~= nil,
     "win dialog is shown with the final score")
 ctx.last_confirm.ok_callback()
+-- US-14: "Play again" shows the picker; pick Turtle to deal the fresh board.
+pickTurtle()
 expect(Logic.tileCount(mj_win.board) == 144 and mj_win.score == 0 and mj_win.selected == nil,
     "'Play again' resets to a fresh shuffled board")
 expect(mj_win.status_bar.stats.pairs == 72

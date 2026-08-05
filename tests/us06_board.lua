@@ -22,6 +22,17 @@ local function expect(cond, msg)
     end
 end
 
+-- US-14: startGame with no saved game shows the layout picker; pick Turtle.
+local function pickTurtle()
+    local picker = ctx.window_stack[#ctx.window_stack].widget
+    if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    local r
+    for _, c in ipairs(picker._card_rects) do
+        if c.id == "turtle" then r = c break end
+    end
+    picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+end
+
 -- ---- Board widget in isolation ------------------------------------------------
 
 local board = Logic.newGame(42)
@@ -186,6 +197,7 @@ local mj = Mahjong:new()
 local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
+pickTurtle()
 
 expect(#ctx.window_stack == 1 and ctx.window_stack[1].widget == mj, "startGame shows the plugin widget")
 expect(type(mj.board) == "table" and Logic.tileCount(mj.board) == 144, "startGame created a 144-tile board")
@@ -217,10 +229,14 @@ end
 expect(type(new_game_btn.callback) == "function", "New Game button wired")
 ctx.last_confirm = nil
 new_game_btn.callback()
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Start a new game?", "New Game opens its ConfirmBox")
+-- US-14: New Game shows the picker (choosing a layout IS the confirmation).
+expect(ctx.last_confirm == nil, "New Game no longer opens a ConfirmBox (picker instead)")
+expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
+        and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
+    "New Game opens the layout picker")
 local old_board = mj.board
-ctx.last_confirm.ok_callback()
-expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144, "New Game ok builds a fresh board")
+pickTurtle()
+expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144, "picking Turtle builds a fresh board")
 
 -- Close flow still works and clears the board
 local mj_close_cb = mj.status_bar.right_icon_tap_callback

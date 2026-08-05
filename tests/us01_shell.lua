@@ -16,6 +16,18 @@ local function expect(cond, msg)
     end
 end
 
+-- US-14: startGame with no saved game shows the layout picker; pick Turtle to
+-- deal a board. Drives the real tap path (hit-test the Turtle card).
+local function pickTurtle()
+    local picker = ctx.window_stack[#ctx.window_stack].widget
+    if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    local r
+    for _, c in ipairs(picker._card_rects) do
+        if c.id == "turtle" then r = c break end
+    end
+    picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+end
+
 -- ---- _meta.lua ----------------------------------------------------------
 
 local meta = ctx.loadPlugin("_meta")
@@ -52,6 +64,11 @@ expect(type(menu_items.mahjong.callback) == "function", "menu callback is a func
 -- ---- startGame -----------------------------------------------------------
 
 menu_items.mahjong.callback()
+-- US-14: first launch shows the layout picker, not a board.
+expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
+        and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
+    "startGame with no saved game shows the layout picker")
+pickTurtle()
 expect(#ctx.window_stack == 1 and ctx.window_stack[1].widget == mj,
     "startGame shows the plugin widget")
 expect(type(mj.board) == "table" and Logic.tileCount(mj.board) == 144,
@@ -117,12 +134,16 @@ local new_game_btn = btns[4]
 expect(type(new_game_btn.callback) == "function", "New Game button wired")
 ctx.last_confirm = nil
 new_game_btn.callback()
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Start a new game?",
-    "New Game opens its ConfirmBox")
+-- US-14: New Game shows the picker (choosing a layout IS the confirmation),
+-- so no ConfirmBox appears.
+expect(ctx.last_confirm == nil, "New Game no longer opens a ConfirmBox (picker instead)")
+expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
+        and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
+    "New Game opens the layout picker")
 local old_board = mj.board
-ctx.last_confirm.ok_callback()
+pickTurtle()
 expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144,
-    "New Game ok builds a fresh board")
+    "picking Turtle from the New Game picker builds a fresh board")
 
 -- ---- Close / exit --------------------------------------------------------
 

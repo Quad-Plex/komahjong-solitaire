@@ -27,6 +27,7 @@ local HudBar = require("hudbar")
 local SettingsWidget = require("mahjongsettings")
 local StatsWidget = require("mahjongstatswidget")
 local PauseWidget = require("mahjongpause")
+local LayoutSelect = require("mahjonglayoutselect")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -71,14 +72,14 @@ local AUTO_SOLVE_STEP_SECONDS = 0.4
 
 -- Settings keys (persisted via LuaSettings in the KOReader settings dir).
 -- score_method: "chain" (default, +5 for consecutive same-group matches) or
--- "basic" (flat 10 per pair). layout is "turtle" (the only one today).
+-- "basic" (flat 10 per pair). layout: the last-chosen layout id (US-14);
+-- "turtle" today, US-15/16 add "spider"/"bridge".
 -- timer_update: "interval" (repaint the mm:ss on a periodic polling loop,
 -- default) or "move" (only repaint on board interaction, so an idle board
 -- never forces an e-ink refresh). timer_interval: seconds between periodic
 -- repaints (cosmetic; a 1 Hz e-ink repaint is overkill, 5 s is the default).
 local SETTINGS_DEFAULTS = {
     hints = true,               -- show hints on the toolbar / allow the Hint button
-    confirm_new_game = true,    -- ask before starting a New Game
     score_method = "chain",     -- "chain" or "basic"
     layout = "turtle",
     timer_update = "interval",  -- "interval" or "move"
@@ -227,6 +228,8 @@ local Mahjong = FrameContainer:extend{
     hints_used = 0, -- per-game hints actually shown (US-18; persisted in the game state)
     shuffles_used = 0, -- per-game user-initiated shuffles (US-18; persisted)
     _pause_dlg = nil, -- the pause overlay while it is up (US-17)
+    layout = "turtle", -- current layout id (US-14); saved with the game state
+    _picker_dlg = nil, -- the layout picker while it is up (US-14)
 }
 
 function Mahjong:init()
@@ -330,6 +333,7 @@ function Mahjong:startGame()
     self:refreshScoreMethod()
     local restored = self:restoreGameState()
     if restored then
+        self.layout = restored.layout or "turtle"
         self.board = restored.board
         self.history = restored.history
         self.score = restored.score
@@ -341,26 +345,92 @@ function Mahjong:startGame()
         -- A restored game has no fresh deal; the pair count for the win
         -- summary comes from the restored undo stack (US-12).
         self.pairs_matched = #restored.history
+        self.selected = nil
+        self._last_hint = nil -- the hint cycle starts fresh for this session
+        self._timer_running = false
+        self:buildUILayout()
+        self:updateStatus()
+        self:updateTimerDisplay()
+        self:startTimer()
+        UIManager:show(self)
     else
-        self.board = MahjongLogic.newGame()
-        self.history = {}
-        self.score = 0
-        self.last_match_kind = nil
-        self.elapsed_base = 0
-        self.hints_used = 0
-        self.shuffles_used = 0
-        self.pairs_matched = 0
-        -- US-12: a fresh deal is a new game for the lifetime stats.
-        self:noteNewGame()
+        -- US-14: no saved game (first launch, or the save was cleared). Show
+        -- the layout picker instead of dealing a default board; the chosen
+        -- layout deals the game via startGameWithLayout.
+        self:showLayoutPicker()
     end
+end
+
+-- US-14: shows the full-screen layout picker. Pauses the timer (if running)
+-- so the polling loop does not flash behind the opaque picker; the picker's
+-- onClose resumes it. Used by startGame (first launch), the New Game button,
+-- and the win dialog's "Play again" — choosing a layout IS the confirmation,
+-- so the old New Game ConfirmBox is gone.
+function Mahjong:showLayoutPicker()
+    self:stopAutoSolve()
+    self:stopTimer()
+    self._picker_dlg = LayoutSelect:new{
+        parent = self,
+        onPick = function(id) self:startGameWithLayout(id) end,
+        onClose = function()
+            self._picker_dlg = nil
+            -- Resume the clock only if a game was actually running before
+            -- the picker opened (first launch with no board -> no resume).
+            if self.board and not MahjongLogic.isWin(self.board) then
+                self:startTimer()
+                self:updateTimerDisplay()
+            end
+        end,
+    }
+    self._picker_dlg:show()
+end
+
+-- US-14: deals a fresh game on the chosen layout and shows the game (or
+-- rebuilds it if already shown). Called by the picker's onPick.
+function Mahjong:startGameWithLayout(id)
+    -- Drop the picker first; its onClose hook would otherwise resume the
+    -- timer for the OLD board, which we're about to replace.
+    if self._picker_dlg then
+        local dlg = self._picker_dlg
+        self._picker_dlg = nil
+        UIManager:close(dlg)
+    end
+    if not MahjongLogic.layouts[id] then id = "turtle" end
+    self.layout = id
+    -- Persist the choice as the last-chosen default.
+    self:setSetting("layout", id)
+    self.board = MahjongLogic.newGame(id)
     self.selected = nil
-    self._last_hint = nil -- the hint cycle starts fresh for this session
+    self.score = 0
+    self.last_match_kind = nil
+    self.history = {}
+    self.pairs_matched = 0
+    self.hints_used = 0
+    self.shuffles_used = 0
+    self._last_hint = nil
+    self:refreshScoreMethod()
+    self.elapsed_base = 0
     self._timer_running = false
+    self:noteNewGame()
     self:buildUILayout()
     self:updateStatus()
     self:updateTimerDisplay()
     self:startTimer()
-    UIManager:show(self)
+    -- If the game widget is already on the stack (New Game / Play again path),
+    -- a fresh UIManager:show would duplicate it; only show when absent.
+    local already_shown = false
+    if UIManager.isWidgetShown and UIManager:isWidgetShown(self) then
+        already_shown = true
+    end
+    if not already_shown then
+        UIManager:show(self)
+    else
+        UIManager:setDirty(self, "full")
+    end
+    -- Save-after-every-move model: a New Game immediately replaces the old
+    -- saved state (which was cleared), so a close/reopen resumes the fresh
+    -- board rather than resurrecting the previous game.
+    self:saveGameState()
 end
 
 -- US-10: persistence -------------------------------------------------------
@@ -382,7 +452,7 @@ function Mahjong:saveGameState()
         local data = MahjongLogic.serializeGameState(
             self.board, self.history, self.score,
             self.last_match_kind, self:getElapsed(),
-            self.hints_used, self.shuffles_used)
+            self.hints_used, self.shuffles_used, self.layout)
         self.settings:saveSetting("game", data)
     end
     self.settings:flush()
@@ -590,6 +660,7 @@ function Mahjong:buildUILayout()
 
     self.board_view = MahjongBoard:new{
         board = self.board,
+        layout_id = self.layout,
         width = self.full_width,
         height = board_h,
         onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
@@ -720,15 +791,7 @@ function Mahjong:buildUILayout()
             function() self:shuffleBoard() end),
         HorizontalSpan:new{ width = toolbar_gap },
         createToolbarButton("plus", _("New Game"), toolbar_btn_w, toolbar_btn_h, function()
-            if self:getSetting("confirm_new_game", SETTINGS_DEFAULTS.confirm_new_game) then
-                UIManager:show(ConfirmBox:new{
-                    text        = _("Start a new game?"),
-                    ok_text     = _("New Game"),
-                    ok_callback = function() self:resetGame() end,
-                })
-            else
-                self:resetGame()
-            end
+            self:showLayoutPicker()
         end),
         HorizontalSpan:new{ width = toolbar_gap },
         pause_cell,
@@ -775,33 +838,12 @@ function Mahjong:createStatusBar()
     }
 end
 
+-- US-14: resetGame is now a thin wrapper over startGameWithLayout for the
+-- current layout (the production New Game / Play again path goes through the
+-- picker -> startGameWithLayout). Kept so the headless tests that drive a
+-- direct reset (e.g. us18's counter reset) still work.
 function Mahjong:resetGame()
-    -- US-19: a New Game cancels a pending long-press arm or an active solve.
-    self:stopAutoSolve()
-    self._last_hint = nil -- a fresh board resets the hint cycle
-    self.board = MahjongLogic.newGame()
-    self.selected = nil
-    self.score = 0
-    self.last_match_kind = nil
-    self.history = {}
-    self.pairs_matched = 0
-    self.hints_used = 0
-    self.shuffles_used = 0
-    self:refreshScoreMethod()
-    self.elapsed_base = 0
-    self._timer_running = false
-    -- US-12: a New Game (or "Play again" from the win dialog) is a new game for
-    -- the lifetime stats; the streak survives a win and resets on an abandon.
-    self:noteNewGame()
-    self:buildUILayout()
-    self:updateStatus()
-    self:updateTimerDisplay()
-    self:startTimer()
-    -- Save-after-every-move model: a New Game immediately replaces the old
-    -- saved state (which was cleared), so a close/reopen resumes the fresh
-    -- board rather than resurrecting the previous game.
-    self:saveGameState()
-    UIManager:setDirty(self, "ui")
+    self:startGameWithLayout(self.layout or "turtle")
 end
 
 -- Core gameplay (US-07) ------------------------------------------------------
@@ -956,7 +998,7 @@ function Mahjong:showWinDialog()
     UIManager:show(ConfirmBox:new{
         text = table.concat(summary_lines, "\n"),
         ok_text = _("Play again"),
-        ok_callback = function() self:resetGame() end,
+        ok_callback = function() self:showLayoutPicker() end,
         cancel_text = _("Close"),
         cancel_callback = function()
             UIManager:close(self, "full")
@@ -1280,6 +1322,12 @@ function Mahjong:onCloseWidget()
     if self._pause_dlg then
         local dlg = self._pause_dlg
         self._pause_dlg = nil
+        UIManager:close(dlg)
+    end
+    -- US-14: if the layout picker is up, drop it too.
+    if self._picker_dlg then
+        local dlg = self._picker_dlg
+        self._picker_dlg = nil
         UIManager:close(dlg)
     end
     self:saveGameState()

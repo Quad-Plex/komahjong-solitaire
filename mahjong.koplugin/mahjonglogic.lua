@@ -121,12 +121,12 @@ function MahjongLogic.deckCounts(deck)
     return counts
 end
 
--- Turtle layout ---------------------------------------------------------
+-- Layout registry (US-14) --------------------------------------------------
 --
--- The classic 144-tile Turtle (the canonical GNOME Mahjongg map), with the
--- stepped pyramid and the head/tail protrusions. Coordinates are tile
--- top-left corners; `y` may be fractional (x=0/y=3.5 head, x=13..14/y=3.5
--- tail, x=6.5/y=3.5 cap) so the silhouette's half-tile overhang is kept:
+-- The Turtle layout is the canonical GNOME Mahjongg map, with the stepped
+-- pyramid and the head/tail protrusions. Coordinates are tile top-left
+-- corners; `y` may be fractional (x=0/y=3.5 head, x=13..14/y=3.5 tail,
+-- x=6.5/y=3.5 cap) so the silhouette's half-tile overhang is kept:
 --   L0: body rows (12+8+10+12+12+10+8+12 = 84) + head (x=0, y=3.5) + tail
 --       (x=13..14, y=3.5) = 87
 --   L1: block x=4..9,  y=1..6   (6x6  = 36)
@@ -134,7 +134,13 @@ end
 --   L3: block x=6..7,  y=3..4   (2x2  =  4)
 --   L4: single tile x=6.5, y=3.5 (       1)
 -- 87 + 36 + 16 + 4 + 1 = 144. Grid extents: x=0..14, y=0..7.
-local LAYOUT_SPEC = {
+--
+-- US-14 generalizes the layout-dependent paths through a registry: every
+-- layout is registered as { id=, name=, spec= } and the layout functions take
+-- a layout id (defaulting to "turtle" so existing callers and self-tests stay
+-- byte-identical). Adding a layout (US-15/16) is a one-line registerLayout call.
+
+local TURTLE_SPEC = {
     -- Layer 0 body rows, bottom row first.
     { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 0 },
     { layer = 0, kind = "row",   x_min = 3,  x_max = 10, y = 1 },
@@ -154,37 +160,95 @@ local LAYOUT_SPEC = {
     { layer = 4, kind = "tile",  x = 6.5, y = 3.5 },
 }
 
--- Returns the 144 tile positions of the Turtle layout as an array of
--- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
--- paint lower layers first).
--- The layout is static, so it is built once and cached: rebuilds (new game,
--- board repaints) iterate the same table instead of allocating 144 fresh
--- position tables every call. Callers must NOT mutate the returned array.
-local _layout_cache = nil
-function MahjongLogic.buildLayout()
-    if not _layout_cache then
-        local layout = {}
-        local function add(x, y, layer)
-            layout[#layout + 1] = { x = x, y = y, layer = layer }
-        end
-        for _, spec in ipairs(LAYOUT_SPEC) do
-            if spec.kind == "row" then
-                for x = spec.x_min, spec.x_max do
-                    add(x, spec.y, spec.layer)
-                end
-            elseif spec.kind == "block" then
-                for y = spec.y_min, spec.y_max do
-                    for x = spec.x_min, spec.x_max do
-                        add(x, y, spec.layer)
-                    end
-                end
-            else -- single tile
-                add(spec.x, spec.y, spec.layer)
-            end
-        end
-        _layout_cache = layout
+-- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
+-- the entries (the cached layout tables reference the spec).
+MahjongLogic.layouts = {}
+
+-- Per-id caches (forward-declared so registerLayout can invalidate them).
+local _layout_cache = {}      -- id -> positions array
+local _bounds_cache = {}      -- id -> { x_min, x_max, y_min, y_max }
+local _layout_key_cache = {}  -- id -> { [posKey] = true }
+local _max_layer_cache = {}   -- id -> number
+
+-- Builds the flat positions array from a layout spec. Caller-cached per id via
+-- buildLayout(id); this helper never memoizes (it is only run once per id).
+local function buildLayoutFromSpec(spec)
+    local layout = {}
+    local function add(x, y, layer)
+        layout[#layout + 1] = { x = x, y = y, layer = layer }
     end
-    return _layout_cache
+    for _, s in ipairs(spec) do
+        if s.kind == "row" then
+            for x = s.x_min, s.x_max do
+                add(x, s.y, s.layer)
+            end
+        elseif s.kind == "block" then
+            for y = s.y_min, s.y_max do
+                for x = s.x_min, s.x_max do
+                    add(x, y, s.layer)
+                end
+            end
+        else -- single tile
+            add(s.x, s.y, s.layer)
+        end
+    end
+    return layout
+end
+
+-- Registers a layout. `entry` is { id=string, name=string, spec=table } (name
+-- defaults to the id). Re-registering an id replaces it and drops its caches
+-- so a hot-reload picks up a new spec. US-15/16 call this for Spider/Bridge.
+function MahjongLogic.registerLayout(entry)
+    if type(entry) ~= "table" or type(entry.id) ~= "string" or type(entry.spec) ~= "table" then
+        error("registerLayout: needs { id=string, name=string, spec=table }")
+    end
+    local copy = {
+        id = entry.id,
+        name = entry.name or entry.id,
+        spec = entry.spec,
+    }
+    MahjongLogic.layouts[copy.id] = copy
+    _layout_cache[copy.id] = nil
+    _bounds_cache[copy.id] = nil
+    _layout_key_cache[copy.id] = nil
+    _max_layer_cache[copy.id] = nil
+end
+
+-- Sorted list of registered layout ids (the picker iterates this).
+function MahjongLogic.layoutIds()
+    local ids = {}
+    for id in pairs(MahjongLogic.layouts) do
+        ids[#ids + 1] = id
+    end
+    table.sort(ids)
+    return ids
+end
+
+-- Display name of a layout id (falls back to the id for an unknown layout).
+function MahjongLogic.layoutName(id)
+    local l = MahjongLogic.layouts[id]
+    return (l and l.name) or id
+end
+
+-- Turtle is the only registered layout in US-14; US-15/16 add more.
+MahjongLogic.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
+
+-- Returns the 144 tile positions of a layout as an array of
+-- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
+-- paint lower layers first). The layout is static, so it is built once and
+-- cached per id: rebuilds (new game, board repaints) iterate the same table
+-- instead of allocating fresh position tables every call. Callers must NOT
+-- mutate the returned array.
+function MahjongLogic.buildLayout(id)
+    if id == nil then id = "turtle" end
+    if not _layout_cache[id] then
+        local entry = MahjongLogic.layouts[id]
+        if not entry then
+            error("buildLayout: unknown layout id " .. tostring(id))
+        end
+        _layout_cache[id] = buildLayoutFromSpec(entry.spec)
+    end
+    return _layout_cache[id]
 end
 
 -- Canonical map key for a board position. A board is keyed by this string
@@ -224,11 +288,21 @@ end
 -- New game ---------------------------------------------------------------
 
 -- Builds a fresh shuffled board: the 144-tile deck dealt at random onto the
--- 144 Turtle positions. Returns a board keyed by posKey(x,y,layer) -> kind.
--- `rng` is nil (random from the clock), an integer seed, or a function
--- returning [0,1).
-function MahjongLogic.newGame(rng)
-    local layout = MahjongLogic.buildLayout()
+-- 144 layout positions. Returns a board keyed by posKey(x,y,layer) -> kind.
+-- `id` is the layout id (defaults to "turtle"). `rng` is nil (random from the
+-- clock), an integer seed, or a function returning [0,1).
+--
+-- Backward-compat: the pre-US-14 signature was newGame(rng) — a number/nil
+-- first argument is still treated as the rng for a Turtle deal, so every
+-- existing caller (and the self-tests) stays byte-identical. The explicit form
+-- is newGame("turtle", 42).
+function MahjongLogic.newGame(id, rng)
+    if type(id) ~= "string" then
+        -- old call shape: newGame(rng) or newGame()
+        rng = id
+        id = "turtle"
+    end
+    local layout = MahjongLogic.buildLayout(id)
     local deck = MahjongLogic.createDeck()
     if type(rng) == "number" then
         rng = MahjongLogic.newRng(rng)
@@ -369,16 +443,19 @@ function MahjongLogic.isFree(board, x, y, layer)
 end
 
 -- All free tiles on a board, as an array of { x, y, layer, kind } tables.
--- Real boards only ever hold Turtle layout positions, so the hot path iterates
--- the (memoized) buildLayout() and does a posKey lookup per position — no
--- per-key regex parse (IMPLEMENTATION_PLAN P3 #1, roughly 5-6x faster, and a
--- deterministic bottom-layer-first order). Hand-crafted boards in the
--- self-tests may place tiles at non-layout positions; those straggler keys
--- (typically none in a real game) fall back to the old parse path.
-function MahjongLogic.freeTiles(board)
+-- Real boards only ever hold a single layout's positions, so the hot path
+-- iterates the (memoized) buildLayout(id) and does a posKey lookup per
+-- position — no per-key regex parse (IMPLEMENTATION_PLAN P3 #1, roughly 5-6x
+-- faster, and a deterministic bottom-layer-first order). Hand-crafted boards
+-- in the self-tests may place tiles at non-layout positions; those straggler
+-- keys (typically none in a real game) fall back to the old parse path.
+-- `id` is the layout the board was dealt on (default "turtle" for
+-- backward-compat with every pre-US-14 caller).
+function MahjongLogic.freeTiles(board, id)
+    if id == nil then id = "turtle" end
     local free = {}
     local seen = {}
-    for _, p in ipairs(MahjongLogic.buildLayout()) do
+    for _, p in ipairs(MahjongLogic.buildLayout(id)) do
         local key = MahjongLogic.posKey(p.x, p.y, p.layer)
         local kind = board[key]
         if kind then
@@ -407,8 +484,8 @@ end
 -- True if at least one pair of matching free tiles can be removed.
 -- The free-tile count is bounded by the tile count (<= 144), so an O(n^2)
 -- scan of the free tiles is fine for a board game.
-function MahjongLogic.hasMoves(board)
-    local free = MahjongLogic.freeTiles(board)
+function MahjongLogic.hasMoves(board, id)
+    local free = MahjongLogic.freeTiles(board, id)
     for i = 1, #free - 1 do
         for j = i + 1, #free do
             if MahjongLogic.matches(free[i].kind, free[j].kind) then
@@ -515,8 +592,8 @@ end
 -- entries). Used by the US-08 hint to cycle through the available options on
 -- repeated presses; the scan order is deterministic (freeTiles walks the
 -- memoized layout, bottom layer first), so consecutive hints move forward.
-function MahjongLogic.matchingFreePairs(board)
-    local free = MahjongLogic.freeTiles(board)
+function MahjongLogic.matchingFreePairs(board, id)
+    local free = MahjongLogic.freeTiles(board, id)
     local pairs = {}
     for i = 1, #free - 1 do
         for j = i + 1, #free do
@@ -532,15 +609,15 @@ end
 -- b = { x, y, layer, kind } }, or nil if no move exists. Used for the no-moves
 -- check, the auto-solver (US-19) and the logic self-tests; the hint uses
 -- matchingFreePairs to cycle through options.
-function MahjongLogic.matchingFreePair(board)
-    return MahjongLogic.matchingFreePairs(board)[1]
+function MahjongLogic.matchingFreePair(board, id)
+    return MahjongLogic.matchingFreePairs(board, id)[1]
 end
 
 -- The number of distinct matching free pairs currently available — i.e. how
 -- many legal moves could be made right now. Each unordered pair of free tiles
 -- that matches counts once (so three free flowers = 3 available pairs).
-function MahjongLogic.countFreePairs(board)
-    local free = MahjongLogic.freeTiles(board)
+function MahjongLogic.countFreePairs(board, id)
+    local free = MahjongLogic.freeTiles(board, id)
     local count = 0
     for i = 1, #free - 1 do
         for j = i + 1, #free do
@@ -589,10 +666,13 @@ end
 
 -- Serializes the current game for persistence. `history` is the UI's undo
 -- stack ({ a, b, ka, kb, score, prev_last } records), `last_match_kind` the
--- chain-scoring kind, `elapsed` the elapsed seconds, and `hints_used` /
--- `shuffles_used` the per-game help counters (US-18). Returns a fresh table
--- (no references into live state, so later mutations can't corrupt the save).
-function MahjongLogic.serializeGameState(board, history, score, last_match_kind, elapsed, hints_used, shuffles_used)
+-- chain-scoring kind, `elapsed` the elapsed seconds, `hints_used` /
+-- `shuffles_used` the per-game help counters (US-18), and `layout` the layout
+-- id the board was dealt on (US-14, defaults to "turtle"). Returns a fresh
+-- table (no references into live state, so later mutations can't corrupt the
+-- save).
+function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
+                                          elapsed, hints_used, shuffles_used, layout)
     local out_board = {}
     for key, kind in pairs(board) do
         out_board[key] = kind
@@ -606,7 +686,8 @@ function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
         }
     end
     return {
-        v = 1,
+        v = 2,
+        layout = layout or "turtle",
         board = out_board,
         history = out_history,
         score = score or 0,
@@ -618,18 +699,36 @@ function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
 end
 
 -- Validates and restores a serialized game state. Returns
--- { board, history, score, last_match_kind, elapsed } with the history
--- un-flattened back to the UI's record shape, or nil if the state is
--- corrupt/invalid (the caller then silently starts a new game).
+-- { board, history, score, last_match_kind, elapsed, hints_used, shuffles_used,
+-- layout } with the history un-flattened back to the UI's record shape, or nil
+-- if the state is corrupt/invalid (the caller then silently starts a new
+-- game).
+--
+-- Versioning (US-14): v1 saves have no `layout` field and restore as Turtle;
+-- v2 saves carry `layout` and every board/history position is validated
+-- against THAT layout's position set. An unknown saved layout id is corrupt
+-- (the caller deals fresh).
 function MahjongLogic.deserializeGameState(data)
-    if type(data) ~= "table" or data.v ~= 1 then return nil end
+    if type(data) ~= "table" then return nil end
+    if data.v ~= 1 and data.v ~= 2 then return nil end
+
+    -- Layout id: v1 -> "turtle" (no field); v2 -> the stored id (validated).
+    local layout_id
+    if data.v == 1 then
+        layout_id = "turtle"
+    else
+        layout_id = data.layout or "turtle"
+        if type(layout_id) ~= "string" or not MahjongLogic.layouts[layout_id] then
+            return nil
+        end
+    end
 
     local board = data.board
     if type(board) ~= "table" then return nil end
     local history = data.history
     if type(history) ~= "table" then return nil end
 
-    -- Board: every key must be a canonical position of the Turtle layout,
+    -- Board: every key must be a canonical position of the saved layout,
     -- every kind valid, count even.
     local n = 0
     local board_keys = {}
@@ -638,7 +737,7 @@ function MahjongLogic.deserializeGameState(data)
         local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
         if not x then return nil end
         x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
-        if not MahjongLogic.isLayoutPosition(x, y, layer) then return nil end
+        if not MahjongLogic.isLayoutPosition(x, y, layer, layout_id) then return nil end
         board_keys[key] = true
         n = n + 1
     end
@@ -655,8 +754,8 @@ function MahjongLogic.deserializeGameState(data)
             or type(bx) ~= "number" or type(by) ~= "number" or type(bl) ~= "number" then
             return nil
         end
-        if not MahjongLogic.isLayoutPosition(ax, ay, al)
-            or not MahjongLogic.isLayoutPosition(bx, by, bl) then
+        if not MahjongLogic.isLayoutPosition(ax, ay, al, layout_id)
+            or not MahjongLogic.isLayoutPosition(bx, by, bl, layout_id) then
             return nil
         end
         if ax == bx and ay == by and al == bl then return nil end
@@ -714,6 +813,7 @@ function MahjongLogic.deserializeGameState(data)
         elapsed = elapsed,
         hints_used = hints_used,
         shuffles_used = shuffles_used,
+        layout = layout_id,
     }
 end
 
@@ -723,43 +823,58 @@ end
 -- topmost tile at that position. These helpers give the grid extents and the
 -- topmost tile lookup the renderer needs.
 
--- Highest layer used by the Turtle layout.
+-- Highest layer used by the Turtle layout. Kept as a constant for backward
+-- compat with pre-US-14 callers (board widget, tests); per-layout code uses
+-- maxLayer(id) instead.
 MahjongLogic.MAX_LAYER = 4
 
--- Bounds of the projection grid as { x_min, x_max, y_min, y_max }.
--- Static, so cached like buildLayout() (callers must not mutate).
-local _bounds_cache = nil
-function MahjongLogic.gridBounds()
-    if not _bounds_cache then
+-- Highest layer used by a layout (US-14). Cached per id.
+function MahjongLogic.maxLayer(id)
+    if id == nil then id = "turtle" end
+    if not _max_layer_cache[id] then
+        local m = 0
+        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
+            if p.layer > m then m = p.layer end
+        end
+        _max_layer_cache[id] = m
+    end
+    return _max_layer_cache[id]
+end
+
+-- Bounds of a layout's projection grid as { x_min, x_max, y_min, y_max }.
+-- Static per id, so cached like buildLayout(id) (callers must not mutate).
+function MahjongLogic.gridBounds(id)
+    if id == nil then id = "turtle" end
+    if not _bounds_cache[id] then
         local bounds = {
             x_min = math.huge,
             x_max = -math.huge,
             y_min = math.huge,
             y_max = -math.huge,
         }
-        for _, p in ipairs(MahjongLogic.buildLayout()) do
+        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
             bounds.x_min = math.min(bounds.x_min, p.x)
             bounds.x_max = math.max(bounds.x_max, p.x)
             bounds.y_min = math.min(bounds.y_min, p.y)
             bounds.y_max = math.max(bounds.y_max, p.y)
         end
-        _bounds_cache = bounds
+        _bounds_cache[id] = bounds
     end
-    return _bounds_cache
+    return _bounds_cache[id]
 end
 
--- True if (x, y, layer) is one of the 144 Turtle positions. Used to validate
--- deserialized state (US-10): a position that is not part of the layout was
--- not produced by a real game.
-local _layout_key_cache = nil
-function MahjongLogic.isLayoutPosition(x, y, layer)
-    if not _layout_key_cache then
-        _layout_key_cache = {}
-        for _, p in ipairs(MahjongLogic.buildLayout()) do
-            _layout_key_cache[MahjongLogic.posKey(p.x, p.y, p.layer)] = true
+-- True if (x, y, layer) is one of the saved layout's positions. Used to
+-- validate deserialized state (US-10): a position that is not part of the
+-- layout was not produced by a real game. `id` defaults to "turtle".
+function MahjongLogic.isLayoutPosition(x, y, layer, id)
+    if id == nil then id = "turtle" end
+    if not _layout_key_cache[id] then
+        _layout_key_cache[id] = {}
+        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
+            _layout_key_cache[id][MahjongLogic.posKey(p.x, p.y, p.layer)] = true
         end
     end
-    return _layout_key_cache[MahjongLogic.posKey(x, y, layer)] == true
+    return _layout_key_cache[id][MahjongLogic.posKey(x, y, layer)] == true
 end
 
 -- Self-tests --------------------------------------------------------------
@@ -817,7 +932,7 @@ function MahjongLogic.runSelfTests()
     check(layer_counts[3] == 4, "layer 3 has 4 tiles (got " .. tostring(layer_counts[3]) .. ")")
     check(layer_counts[4] == 1, "layer 4 has 1 tile (got " .. tostring(layer_counts[4]) .. ")")
     check(max_x == 14 and max_y == 7, "grid bounds are x<=14, y<=7 (got " .. max_x .. "x" .. max_y .. ")")
-    for _, s in ipairs(LAYOUT_SPEC) do
+    for _, s in ipairs(TURTLE_SPEC) do
         if s.kind == "row" then
             for x = s.x_min, s.x_max do
                 check(seen[MahjongLogic.posKey(x, s.y, s.layer)] ~= nil,
@@ -836,6 +951,79 @@ function MahjongLogic.runSelfTests()
         end
     end
 
+    -- Layout registry (US-14) ---------------------------------------------
+    -- The registry enumerates exactly {"turtle"} in US-14; the layout-
+    -- dependent functions accept an id and default to "turtle" so the
+    -- byte-identical Turtle results fall out of the parameterized paths.
+    local ids = MahjongLogic.layoutIds()
+    check(#ids == 1 and ids[1] == "turtle",
+        "layoutIds returns exactly {turtle} (got " .. table.concat(ids, ",") .. ")")
+    check(MahjongLogic.layoutName("turtle") == "Turtle", "layoutName returns the registered name")
+    check(MahjongLogic.layoutName("nope") == "nope",
+        "layoutName falls back to the id for an unknown layout")
+    check(MahjongLogic.buildLayout("turtle") == MahjongLogic.buildLayout(),
+        "buildLayout(id) and buildLayout() share one memoized Turtle table")
+    check(MahjongLogic.buildLayout("turtle") == MahjongLogic.buildLayout("turtle"),
+        "buildLayout(id) is memoized per id")
+    check(MahjongLogic.gridBounds("turtle") == MahjongLogic.gridBounds(),
+        "gridBounds(id) and gridBounds() share one memoized Turtle bounds")
+    check(MahjongLogic.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
+    check(MahjongLogic.isLayoutPosition(6.5, 3.5, 4, "turtle"),
+        "isLayoutPosition accepts a Turtle position with an explicit id")
+    check(not MahjongLogic.isLayoutPosition(99, 99, 0, "turtle"),
+        "isLayoutPosition rejects an out-of-layout position with an explicit id")
+
+    -- A throwaway layout can be registered at test time and drives the
+    -- parameterized paths end-to-end (deal → free tiles → bounds →
+    -- position check), mirroring what tests/us14_layouts.lua does with the
+    -- board widget. Use a small 4-position pyramid so the test is cheap.
+    local toy_spec = {
+        { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 0 },
+        { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 1 },
+        { layer = 1, kind = "block", x_min = 0, x_max = 1, y_min = 0, y_max = 1 },
+    }
+    MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
+    local toy_ids = MahjongLogic.layoutIds()
+    check(#toy_ids == 2 and toy_ids[1] == "toy" and toy_ids[2] == "turtle",
+        "registerLayout adds the id; layoutIds returns them sorted")
+    check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
+    check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
+    check(MahjongLogic.isLayoutPosition(0, 0, 1, "toy"),
+        "isLayoutPosition validates against the toy layout")
+    check(not MahjongLogic.isLayoutPosition(2, 0, 0, "toy"),
+        "isLayoutPosition rejects a Turtle-only position against the toy layout")
+    local toy_bounds = MahjongLogic.gridBounds("toy")
+    check(toy_bounds.x_min == 0 and toy_bounds.x_max == 1
+            and toy_bounds.y_min == 0 and toy_bounds.y_max == 1,
+        "gridBounds(toy) extents are 0..1 x 0..1")
+    -- newGame on the toy layout: 8 tiles dealt, deterministic for a fixed seed.
+    -- The deck is 144 (Turtle-sized) but only the first 8 land on toy
+    -- positions, so the toy board is an 8-tile subset of the shuffled deck —
+    -- fine for exercising the parameterized deal + free-tile paths.
+    local tg1 = MahjongLogic.newGame("toy", 42)
+    check(MahjongLogic.tileCount(tg1) == 8, "newGame(toy,42) deals 8 tiles")
+    local tg2 = MahjongLogic.newGame("toy", 42)
+    local toy_same = true
+    for k, v in pairs(tg1) do
+        if tg2[k] ~= v then toy_same = false break end
+    end
+    check(toy_same, "newGame(toy,42) is deterministic for a fixed seed")
+    check(#MahjongLogic.freeTiles(tg1, "toy") == 4,
+        "freeTiles(toy) finds the 4 top-layer tiles (all free)")
+
+    -- Backward-compat: newGame(42) and newGame() (no id) still deal Turtle.
+    check(MahjongLogic.tileCount(MahjongLogic.newGame(42)) == 144,
+        "newGame(42) still deals a 144-tile Turtle board (old call shape)")
+    -- Deregister the toy layout so the rest of the self-tests see only Turtle
+    -- (the registry is module-global, and later assertions count exactly one
+    -- id implicitly via the Turtle-specific layout checks above).
+    MahjongLogic.layouts["toy"] = nil
+    _layout_cache["toy"] = nil
+    _bounds_cache["toy"] = nil
+    _layout_key_cache["toy"] = nil
+    _max_layer_cache["toy"] = nil
+    check(#MahjongLogic.layoutIds() == 1, "deregistering restores the {turtle}-only registry")
+
     -- newGame: same seed is deterministic; different seed differs.
     local g1 = MahjongLogic.newGame(42)
     local g2 = MahjongLogic.newGame(42)
@@ -845,6 +1033,13 @@ function MahjongLogic.runSelfTests()
         if g2[k] ~= v then same = false break end
     end
     check(same, "newGame(42) is deterministic for a fixed seed")
+    -- Explicit id form: newGame("turtle", 42) deals the same board as newGame(42).
+    local g2b = MahjongLogic.newGame("turtle", 42)
+    local same_explicit = true
+    for k, v in pairs(g1) do
+        if g2b[k] ~= v then same_explicit = false break end
+    end
+    check(same_explicit, "newGame('turtle', 42) matches newGame(42)")
     local g3 = MahjongLogic.newGame(43)
     local different = false
     for k, v in pairs(g1) do
@@ -1173,7 +1368,8 @@ function MahjongLogic.runSelfTests()
         { a = p_pair.a, b = p_pair.b, ka = p_ka, kb = p_kb, score = 10, prev_last = nil },
     }
     local p_serialized = MahjongLogic.serializeGameState(p_board, p_hist, 10, p_ka, 123)
-    check(type(p_serialized) == "table" and p_serialized.v == 1, "serializeGameState returns a versioned table")
+    check(type(p_serialized) == "table" and p_serialized.v == 2, "serializeGameState returns a versioned table")
+    check(p_serialized.layout == "turtle", "serialized state carries the layout id (turtle by default)")
     check(p_serialized.board[MahjongLogic.posKey(p_pair.a.x, p_pair.a.y, p_pair.a.layer)] == nil,
         "serialized board does not include the removed tile")
     check(#p_serialized.history == 1 and p_serialized.history[1][7] == p_ka,
@@ -1211,9 +1407,31 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.deserializeGameState(nil) == nil, "deserialize rejects nil")
     check(MahjongLogic.deserializeGameState({}) == nil, "deserialize rejects an empty table (no version)")
     local bad_v = p_serialized
-    bad_v.v = 2
+    bad_v.v = 99
     check(MahjongLogic.deserializeGameState(bad_v) == nil, "deserialize rejects an unknown version")
-    bad_v.v = 1
+    bad_v.v = 2
+
+    local bad_layout = p_serialized
+    bad_layout.layout = "nope"
+    check(MahjongLogic.deserializeGameState(bad_layout) == nil,
+        "deserialize rejects an unknown saved layout id (v2)")
+    bad_layout.layout = "turtle"
+
+    -- A v1 save (no layout field) still restores as Turtle. Build one from
+    -- the real mid-game state: same board/history, just v=1 and no `layout`.
+    local v1_save = {
+        v = 1,
+        board = p_serialized.board,
+        history = p_serialized.history,
+        score = p_serialized.score,
+        last = p_serialized.last,
+        elapsed = p_serialized.elapsed,
+        hints = p_serialized.hints,
+        shuffles = p_serialized.shuffles,
+    }
+    local v1_restored = MahjongLogic.deserializeGameState(v1_save)
+    check(v1_restored ~= nil and v1_restored.layout == "turtle",
+        "a v1 save (no layout field) restores as Turtle")
 
     local bad_key = p_serialized
     bad_key.board = { ["999,999,0"] = "b1" }

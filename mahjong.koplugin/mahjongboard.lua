@@ -45,32 +45,36 @@ local BEVEL_FRAC = 0.10
 -- Empty board padding inside the widget.
 local MARGIN = 6
 
--- Unit-space extents of the Turtle layout, including the 0.10-unit outward
--- bevel overhang on the east/south edges AND the up-left layer shift on the
+-- Unit-space extents of a layout, including the 0.10-unit outward bevel
+-- overhang on the east/south edges AND the up-left layer shift on the
 -- west/north (layer L is shifted by L*BEVEL_FRAC, so the top layer reaches
--- MAX_LAYER*BEVEL_FRAC up and left of its grid position). These depend only
--- on the static layout and the fixed bevel fraction (not on widget size or
--- board state), so they are computed once at load and reused by every
--- geometry pass.
-local GRID = MahjongLogic.gridBounds()
-local LAYOUT_BOUNDS
-do
-    local min_px, max_px = math.huge, -math.huge
-    local min_py, max_py = math.huge, -math.huge
-    for _, p in ipairs(MahjongLogic.buildLayout()) do
-        local ux = (p.x - GRID.x_min) - p.layer * BEVEL_FRAC
-        local uy = (p.y - GRID.y_min) - p.layer * BEVEL_FRAC
-        min_px = math.min(min_px, ux)
-        max_px = math.max(max_px, (p.x - GRID.x_min) + 1 + BEVEL_FRAC) -- right edge + bevel
-        min_py = math.min(min_py, uy)
-        max_py = math.max(max_py, (p.y - GRID.y_min) + 1 + BEVEL_FRAC) -- bottom edge + bevel
+-- maxLayer(id)*BEVEL_FRAC up and left of its grid position). These depend
+-- only on the layout and the fixed bevel fraction (not on widget size or
+-- board state), so they are computed once per layout id and reused by every
+-- geometry pass. US-14 generalizes the old module-level LAYOUT_BOUNDS (which
+-- was Turtle-only) to a per-id cache; the board picks its entry by layout_id.
+local _layout_bounds_cache = {}
+local function layoutBounds(id)
+    if not _layout_bounds_cache[id] then
+        local grid = MahjongLogic.gridBounds(id)
+        local min_px, max_px = math.huge, -math.huge
+        local min_py, max_py = math.huge, -math.huge
+        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
+            local ux = (p.x - grid.x_min) - p.layer * BEVEL_FRAC
+            local uy = (p.y - grid.y_min) - p.layer * BEVEL_FRAC
+            min_px = math.min(min_px, ux)
+            max_px = math.max(max_px, (p.x - grid.x_min) + 1 + BEVEL_FRAC) -- right edge + bevel
+            min_py = math.min(min_py, uy)
+            max_py = math.max(max_py, (p.y - grid.y_min) + 1 + BEVEL_FRAC) -- bottom edge + bevel
+        end
+        _layout_bounds_cache[id] = {
+            min_px = min_px,
+            min_py = min_py,
+            width_units = max_px - min_px,
+            height_units = max_py - min_py,
+        }
     end
-    LAYOUT_BOUNDS = {
-        min_px = min_px,
-        min_py = min_py,
-        width_units = max_px - min_px,
-        height_units = max_py - min_py,
-    }
+    return _layout_bounds_cache[id]
 end
 
 local Board = InputContainer:extend{
@@ -78,6 +82,7 @@ local Board = InputContainer:extend{
     board = nil,
     width = 0,
     height = 0,
+    layout_id = "turtle",  -- US-14: which registered layout this board renders
     onTileTap = nil,
     grid = nil,
     tw = 0,          -- face width in px (also the grid pitch)
@@ -96,7 +101,7 @@ local Board = InputContainer:extend{
 
 function Board:init()
     self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self.height }
-    self.grid = GRID
+    self.grid = MahjongLogic.gridBounds(self.layout_id)
     self.ges_events.TapSelect = {
         GestureRange:new{
             ges = "tap",
@@ -109,11 +114,12 @@ function Board:init()
 end
 
 -- Derives the face size and bevel thickness from the widget size so the whole
--- turtle fits, then centers it. Uses the module-level LAYOUT_BOUNDS (the
--- layout is static), so no layout re-scan happens per geometry pass.
+-- layout fits, then centers it. Uses the per-layout layoutBounds(self.layout_id)
+-- (computed once per id), so no layout re-scan happens per geometry pass.
 function Board:computeGeometry()
-    local width_units = LAYOUT_BOUNDS.width_units
-    local height_units = LAYOUT_BOUNDS.height_units
+    local bounds = layoutBounds(self.layout_id)
+    local width_units = bounds.width_units
+    local height_units = bounds.height_units
 
     local margin = Screen:scaleBySize(MARGIN)
     local usable_w = self.width - 2 * margin
@@ -136,8 +142,8 @@ function Board:computeGeometry()
 
     local bounds_w = width_units * tw
     local bounds_h = height_units * th
-    self.origin_x = margin + math.floor((usable_w - bounds_w) / 2) - LAYOUT_BOUNDS.min_px * tw
-    self.origin_y = margin + math.floor((usable_h - bounds_h) / 2) - LAYOUT_BOUNDS.min_py * th
+    self.origin_x = margin + math.floor((usable_w - bounds_w) / 2) - bounds.min_px * tw
+    self.origin_y = margin + math.floor((usable_h - bounds_h) / 2) - bounds.min_py * th
 end
 
 -- Widget-local position of a tile's FACE top-left corner. Layer L is shifted
@@ -164,12 +170,13 @@ function Board:rebuildTiles()
     self.overlays = {}
 
     local by_layer = {}
-    for layer = 0, MahjongLogic.MAX_LAYER do
+    local max_layer = MahjongLogic.maxLayer(self.layout_id)
+    for layer = 0, max_layer do
         by_layer[layer] = {}
     end
     local children = {}
 
-    for _, p in ipairs(MahjongLogic.buildLayout()) do
+    for _, p in ipairs(MahjongLogic.buildLayout(self.layout_id)) do
         local kind = MahjongLogic.tileAt(self.board, p.x, p.y, p.layer)
         if kind then
             local px, py = self:tilePos(p.x, p.y, p.layer)
@@ -327,7 +334,8 @@ function Board:syncOverlapGroup()
         self.overlap[i] = nil
     end
     -- Add tiles in layer order
-    for layer = 0, MahjongLogic.MAX_LAYER do
+    local max_layer = MahjongLogic.maxLayer(self.layout_id)
+    for layer = 0, max_layer do
         for _, t in ipairs(self.tiles_by_layer[layer]) do
             local w = self.tile_widgets[MahjongLogic.posKey(t.x, t.y, t.layer)]
             if w then
@@ -463,7 +471,8 @@ end
 
 -- Topmost tile whose rect contains the widget-local point, or nil.
 function Board:hitTest(lx, ly)
-    for layer = MahjongLogic.MAX_LAYER, 0, -1 do
+    local max_layer = MahjongLogic.maxLayer(self.layout_id)
+    for layer = max_layer, 0, -1 do
         for _, t in ipairs(self.tiles_by_layer[layer] or {}) do
             if lx >= t.px and lx < t.px + t.w
                 and ly >= t.py and ly < t.py + t.h then

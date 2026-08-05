@@ -87,7 +87,7 @@ kindle_majong/
 │   ├── US-11_polish_completed.md
 │   ├── US-12_win-summary_completed.md
 │   ├── US-13_stats-screen_completed.md
-│   ├── US-14_layout-registry.md    # planned
+│   ├── US-14_layout-registry_completed.md
 │   ├── US-15_spider-layout.md      # planned
 │   ├── US-16_bridge-layout.md      # planned
 │   ├── US-17_pause_completed.md
@@ -110,7 +110,7 @@ kindle_majong/
 │   ├── board_updates.lua         # incremental tile add/remove contract
 │   ├── us12_stats.lua            # win summary + lifetime stats
 │   ├── us13_stats.lua            # stats button + floating stats card
-│   ├── us14_layouts.lua          # layout registry + picker (planned)
+│   ├── us14_layouts.lua          # layout registry + picker (US-14)
 │   ├── us15_spider.lua           # Spider layout (planned)
 │   ├── us16_bridge.lua           # Bridge layout (planned)
 │   ├── us17_pause.lua            # pause overlay
@@ -128,8 +128,8 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-13,
-US-17..US-20**. Planned: **US-14..US-16**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-14,
+US-17..US-20**. Planned: **US-15..US-16**.
 
 | Story | File | Status |
 |---|---|---|
@@ -146,7 +146,7 @@ US-17..US-20**. Planned: **US-14..US-16**.
 | US-11 — Polish and cross-device refinement | [US-11_polish_completed.md](implementation-plan/US-11_polish_completed.md) | ✅ completed |
 | US-12 — Win summary + best-score/best-time tracking | [US-12_win-summary_completed.md](implementation-plan/US-12_win-summary_completed.md) | ✅ completed |
 | US-13 — Stats screen (dedicated "Stats" button + floating card) | [US-13_stats-screen_completed.md](implementation-plan/US-13_stats-screen_completed.md) | ✅ completed |
-| US-14 — Layout registry + layout selection screen (architecture) | [US-14_layout-registry.md](implementation-plan/US-14_layout-registry.md) | planned |
+| US-14 — Layout registry + layout selection screen (architecture) | [US-14_layout-registry_completed.md](implementation-plan/US-14_layout-registry_completed.md) | ✅ completed |
 | US-15 — Spider layout | [US-15_spider-layout.md](implementation-plan/US-15_spider-layout.md) | planned |
 | US-16 — Bridge layout | [US-16_bridge-layout.md](implementation-plan/US-16_bridge-layout.md) | planned |
 | US-17 — Pause | [US-17_pause_completed.md](implementation-plan/US-17_pause_completed.md) | ✅ completed |
@@ -208,4 +208,14 @@ they are not lost. Revisited after US-10/11 — see status below.
   dark tile SVGs + a theme setting).
 - Keep the device awake during play (inhibit KOReader auto-suspend while the game is open).
 - Localization catalogs.
-- Cleanup: drop the now-redundant `confirm_new_game` setting once US-14's picker is in.
+
+## Retrospectives (post-completion notes)
+
+### US-14 retrospective — `confirm_new_game` retired
+The layout picker (US-14) made the New Game `ConfirmBox` redundant — choosing a layout
+is the confirmation. The original plan kept the `confirm_new_game` setting key around
+and just stopped consulting it on the New-Game path, deferring a small cleanup. After
+shipping, that cleanup landed too: the setting default, its settings-dialog toggle row,
+and all test references to it were removed (the `tests/us10_persistence.lua` dialog
+section was rewritten to exercise toggle/Cancel/Reset via `hints` and `score_method`
+instead). `confirm_new_game` no longer exists anywhere in code, config, or tests.

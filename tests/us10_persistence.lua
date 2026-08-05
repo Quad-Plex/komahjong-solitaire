@@ -14,7 +14,7 @@
 --   * The settings dialog: toggles are collected, Save persists, Cancel
 --     discards, Reset restores the defaults, score cycles Chain -> Basic and
 --     is applied via onApply;
---   * confirm_new_game=false skips the New Game ConfirmBox;
+--   * New Game always shows the layout picker (US-14);
 --   * The mm:ss timer text lives in the band and tracks elapsed time.
 
 local mock = require("mock")
@@ -57,13 +57,23 @@ local function firstFreePair(board)
     return nil, nil
 end
 
+-- US-14: startGame with no saved game shows the layout picker; pick Turtle.
+local function pickTurtle()
+    local picker = ctx.window_stack[#ctx.window_stack].widget
+    if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    local r
+    for _, c in ipairs(picker._card_rects) do
+        if c.id == "turtle" then r = c break end
+    end
+    picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+end
+
 local store = ctx.settings_store
 
 -- ---- Settings defaults + set/get + cross-instance round-trip ----------------
 
 local mj0 = Mahjong:new()
 expect(mj0:getSetting("hints", true) == true, "unset hints defaults to true")
-expect(mj0:getSetting("confirm_new_game", true) == true, "unset confirm_new_game defaults to true")
 expect(mj0:getSetting("score_method", "chain") == "chain", "unset score_method defaults to chain")
 mj0:refreshScoreMethod()
 expect(mj0.score_method == "chain", "fresh instance scores with the chain method")
@@ -96,7 +106,8 @@ local ka1 = a1.kind
 mj1:handleTileTap(a1.x, a1.y, a1.layer)
 mj1:handleTileTap(b1.x, b1.y, b1.layer)
 expect(mj1.score == 10, "first match scored 10")
-expect(type(store.game) == "table" and store.game.v == 1, "a match saved a versioned game state")
+expect(type(store.game) == "table" and store.game.v == 2, "a match saved a versioned game state")
+expect(store.game.layout == "turtle", "the saved state carries the turtle layout id")
 expect(store.game.board[pk(a1.x, a1.y, a1.layer)] == nil
         and store.game.board[pk(b1.x, b1.y, b1.layer)] == nil,
     "saved board excludes the removed pair")
@@ -164,9 +175,9 @@ for i = 1, #toolbar do
 end
 ctx.last_confirm = nil
 btns[4].callback()
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Start a new game?",
-    "New Game prompts before replacing the saved state")
-ctx.last_confirm.ok_callback()
+-- US-14: New Game shows the picker (choosing a layout IS the confirmation).
+expect(ctx.last_confirm == nil, "New Game no longer prompts (picker instead)")
+pickTurtle()
 expect(count(mj3.board) == 144, "New Game built a fresh 144-tile board")
 expect(store.game.board ~= saved_before and count(store.game.board) == 144
         and #store.game.history == 0,
@@ -177,16 +188,19 @@ expect(store.game.board ~= saved_before and count(store.game.board) == 144
 store.game = "this is not a table"
 local mj4 = Mahjong:new()
 mj4:startGame()
-expect(Logic.tileCount(mj4.board) == 144, "a garbage saved state deals a fresh board")
+-- The corrupt key is cleared before the picker deals a replacement board.
 expect(store.game == nil, "a garbage saved state is cleared from settings")
+pickTurtle()
+expect(Logic.tileCount(mj4.board) == 144, "a garbage saved state deals a fresh board")
 
 store.game = { v = 1, board = { [pk(999, 999, 0)] = "b1", [pk(2, 2, 0)] = "b1" },
                history = {}, score = 0, last = nil, elapsed = 0 }
 local mj4b = Mahjong:new()
 mj4b:startGame()
+expect(store.game == nil, "the invalid table state is cleared too")
+pickTurtle()
 expect(Logic.tileCount(mj4b.board) == 144,
     "a table that fails validation also deals a fresh board")
-expect(store.game == nil, "the invalid table state is cleared too")
 
 -- ---- A won board is never saved ----------------------------------------------
 
@@ -211,7 +225,6 @@ expect(store.game == nil, "a won board is not left in the saved state")
 -- Baseline the settings file for a self-contained dialog walk: wipe the keys
 -- written by the earlier defaults section so the dialog starts from defaults.
 store.hints = nil
-store.confirm_new_game = nil
 store.score_method = nil
 
 local mj6 = Mahjong:new()
@@ -243,12 +256,13 @@ expect(not dlg_still_open, "Save closes the settings dialog")
 mj6:openSettings()
 dlg = ctx.window_stack[#ctx.window_stack].widget
 expect(dlg.changes.hints == false, "reopened dialog reflects the saved Off value")
-dlg._rows.confirm_new_game.callback()
-expect(dlg.changes.confirm_new_game == false, "confirm toggle flips (On -> Off)")
+dlg._rows.hints.callback() -- Off -> On (unsaved)
+expect(dlg.changes.hints == true, "hints toggle flips (Off -> On) before cancel")
 dlg:cancel()
-expect(store.confirm_new_game == true,
-    "Cancel discards the confirm toggle (keeps the previously saved true)")
-expect(store.hints == false, "Cancel leaves already-saved settings untouched")
+expect(store.hints == false,
+    "Cancel discards the unsaved toggle (keeps the previously saved false)")
+expect(mj6:getSetting("hints", true) == false,
+    "Cancel leaves already-saved settings untouched")
 
 -- Reset restores the defaults and Save writes them.
 mj6:openSettings()
@@ -256,11 +270,11 @@ dlg = ctx.window_stack[#ctx.window_stack].widget
 dlg._rows.hints.callback() -- Off -> On
 dlg._rows.hints.callback() -- On -> Off (differs from the default)
 dlg:resetToDefaults()
-expect(dlg.changes.hints == true and dlg.changes.confirm_new_game == true,
+expect(dlg.changes.hints == true,
     "Reset restores the default settings")
 expect(dlg._rows.hints.text == "On", "Reset re-renders the row labels")
 dlg:save()
-expect(store.hints == true and store.confirm_new_game == true,
+expect(store.hints == true,
     "Save after Reset writes the defaults back")
 
 -- Score cycles Chain -> Basic and is applied via onApply.
@@ -314,8 +328,8 @@ local vgroup = dlg_panel[1]
 expect(type(vgroup) == "table" and type(vgroup[3]) == "table",
     "the settings card holds a vertical row list")
 local row_indices = {
-    [3] = "hints", [5] = "confirm_new_game", [7] = "score_method",
-    [9] = "timer_update", [11] = "timer_interval",
+    [3] = "hints", [5] = "score_method",
+    [7] = "timer_update", [9] = "timer_interval",
 }
 local btn_w = dlg._rows.hints.width
 local all_same_w = true
@@ -329,8 +343,8 @@ for i, key in pairs(row_indices) do
             and type(r[3]) == "table" and r[4] == dlg._rows[key],
         "settings row " .. key .. " is [pad, label, gap, button]")
 end
-expect(vgroup[3][2].text == "Hints" and vgroup[7][2].text == "Score"
-        and vgroup[11][2].text == "Timer interval",
+expect(vgroup[3][2].text == "Hints" and vgroup[5][2].text == "Score"
+        and vgroup[9][2].text == "Timer interval",
     "row labels are the second element of each row")
 expect(vgroup[13] == nil or type(vgroup[13]) ~= "table" or vgroup[13][2] == nil
         or vgroup[13][2].text ~= "Layout",
@@ -404,10 +418,11 @@ expect(x_closed, "the close X closes the settings dialog")
 expect(store.hints == saved_hints, "the close X discards the unsaved change")
 expect(mj6._timer_running == true, "the close X notifies the owner (timer restarted)")
 
--- ---- confirm_new_game=false skips the New Game confirm -------------------------
+-- ---- New Game always shows the picker ----------------------------------------
+-- US-14: choosing a layout IS the confirmation, so confirm_new_game is gone
+-- (the New Game button shows the picker unconditionally).
 
 local mj7 = Mahjong:new()
-mj7:setSetting("confirm_new_game", false)
 mj7.board = Logic.newGame(17)
 mj7:buildUILayout()
 local toolbar7 = mj7[1][4]
@@ -423,15 +438,13 @@ end
 local old_board7 = mj7.board
 ctx.last_confirm = nil
 btns7[4].callback()
-expect(ctx.last_confirm == nil, "confirm_new_game=false skips the New Game confirm")
+expect(ctx.last_confirm == nil, "New Game shows no ConfirmBox (picker instead)")
+expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
+        and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
+    "New Game opens the layout picker")
+pickTurtle()
 expect(mj7.board ~= old_board7 and count(mj7.board) == 144,
-    "New Game still starts immediately without the prompt")
-
-mj7:setSetting("confirm_new_game", true)
-ctx.last_confirm = nil
-btns7[4].callback()
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Start a new game?",
-    "confirm_new_game=true brings the ConfirmBox back")
+    "picking Turtle from the picker builds a fresh board")
 
 -- ---- Elapsed-time display -------------------------------------------------------
 

@@ -321,12 +321,12 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
   `getSize`/`init` behavior or the suite can't catch layout crashes.
 
-## Mahjong plugin — current state and key contracts (US-01..13, US-17..20 shipped; US-14..16 planned)
+## Mahjong plugin — current state and key contracts (US-01..14, US-17..20 shipped; US-15..16 planned)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..13, US-17..20
-shipped, US-14..16 planned: layout registry + picker, Spider, Bridge). The full history of *why* things are the way they are
+per user story; `_completed` in the filename marks shipped stories — US-01..14, US-17..20
+shipped, US-15..16 planned: Spider, Bridge). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
 code.
@@ -337,13 +337,16 @@ code.
 mahjong.koplugin/            # the deliverable
 ├── _meta.lua                # plugin metadata (name/fullname/description)
 ├── main.lua                 # plugin class: menu/dispatcher, buildUILayout, gameplay,
-│                            #   timer, settings/stats entry, save/restore, flash band
-├── mahjonglogic.lua         # PURE logic (no ui/ requires): deck, Turtle layout, free tiles,
-│                            #   match/win/shuffle, scoring, persistence, self-tests
+│                            #   timer, settings/stats entry, save/restore, flash band,
+│                            #   layout picker entry (US-14)
+├── mahjonglogic.lua         # PURE logic (no ui/ requires): deck, LAYOUT REGISTRY (US-14),
+│                            #   Turtle layout, free tiles, match/win/shuffle, scoring,
+│                            #   persistence (v2 with layout field), self-tests
 ├── mahjongstats.lua         # PURE lifetime stats (US-12): defaults/load/startGame/recordWin,
 │                            #   total_time, self-tests (no ui/ requires)
 ├── mahjongboard.lua         # 3D board widget (InputContainer): IconWidgets in an
-│                            #   OverlapGroup, per-layer up-left shift, hit-test, overlays
+│                            #   OverlapGroup, per-layer up-left shift, hit-test, overlays;
+│                            #   per-layout geometry via layout_id (US-14)
 ├── hudbar.lua               # 2-row top bar: left buttons (gear + stats, left_icons API) +
 │                            #   title + 3 stat chips + quit X (Pause lives in the bottom toolbar)
 ├── mahjongsettings.lua      # floating settings dialog (CenterContainer card over the game)
@@ -351,6 +354,9 @@ mahjong.koplugin/            # the deliverable
 │                            #   lifetime stats + Reset-after-confirm
 ├── mahjongpause.lua         # pause overlay (US-17): floating card with a Resume button; the
 │                            #   full-screen tap gesture consumes taps (no tap-outside dismiss)
+├── mahjonglayoutselect.lua  # full-screen layout picker (US-14): 2x3 grid of cards, each a
+│                            #   thumbnail (miniature schematic of the layout's positions) +
+│                            #   name; tapping a card deals a game on that layout
 └── icons/*.svg              # generated tile faces + UI glyphs (gen_icons.py owns them all)
 tests/                       # official suite (tests/run.sh): mock.lua + usNN_*.lua harnesses
 tools/                       # gen_icons.py, check_icons.py, preview.py (icon QA, not in suite)
@@ -362,15 +368,19 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 
 - `main.lua` owns the game: `self.board` (logic state), `self.history` (undo stack),
   `self.score`, `self.selected`, `self.board_view` (the rendered board), `self.status_bar`
-  (HudBar). `handleTileTap(x, y, layer)` is the gameplay entry; it mutates the **logic board
-  first**, then tells the **board widget** to update its paint.
-- `MahjongLogic` (in `mahjonglogic.lua`) is pure: deck/layout/free-tiles/match/win/shuffle,
-  scoring (`pairPoints`, `matchGroup`), and `serializeGameState`/`deserializeGameState`. UI
-  code must never reach into it except through its functions; keep new logic here so it stays
-  testable with plain `lua` (self-tests via `--selftest`).
+  (HudBar), and `self.layout` (the current layout id, US-14). `handleTileTap(x, y, layer)` is
+  the gameplay entry; it mutates the **logic board first**, then tells the **board widget** to
+  update its paint.
+- `MahjongLogic` (in `mahjonglogic.lua`) is pure: deck/**layout registry**/free-tiles/match/
+  win/shuffle, scoring (`pairPoints`, `matchGroup`), and `serializeGameState`/
+  `deserializeGameState`. UI code must never reach into it except through its functions; keep
+  new logic here so it stays testable with plain `lua` (self-tests via `--selftest`).
 - The board (`mahjongboard.lua`) paints one `IconWidget` per tile, absolutely positioned via an
   `OverlapGroup`'s `overlap_offset`. The stock `ButtonTable` is NOT used (flat projection was
-  rejected — see plan). Tiles are keyed by `posKey(x,y,layer)` strings (`x,y,layer`).
+  rejected — see plan). Tiles are keyed by `posKey(x,y,layer)` strings (`x,y,layer`). A board
+  is built with `layout_id` (US-14) and all its geometry paths (`tilePos`/`computeGeometry`/
+  `rebuildTiles`/`syncOverlapGroup`/`hitTest`) key off `maxLayer(self.layout_id)` and
+  `layoutBounds(self.layout_id)`.
 - Hit-testing lives in the board (`hitTest`, walks `tiles_by_layer` top-down), not in the logic.
 
 ### Key contracts (do not regress)
@@ -388,10 +398,18 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    grid an edge fully covered by TWO half-overlapping same-layer neighbours also hides it
    (`(x+1,y±0.5)` east, `(x±0.5,y+1)` south). SVGs are **generated by `tools/gen_icons.py`** —
    never hand-edit an SVG; re-run the generator and `tools/check_icons.py`.
-3. **Layout** is the canonical GNOME Mahjongg Turtle: per-layer 87/36/16/4/1, grid x=0..14,
-   y=0..7, fractional x/y on the head/tail/cap half-grid. `buildLayout()`/`gridBounds()` are
-   memoized at module level — callers must not mutate the returned tables. (US-14 will
-   generalize this into a per-layout registry; until then there is exactly one layout.)
+3. **Layout registry (US-14).** `MahjongLogic.layouts` maps `id -> { id, name, spec }`;
+   `registerLayout(entry)`, `layoutIds()`, `layoutName(id)` manage it. Turtle is registered at
+   module load (the canonical GNOME Mahjongg map: per-layer 87/36/16/4/1, grid x=0..14, y=0..7,
+   fractional x/y on the head/tail/cap half-grid); US-15/16 add Spider/Bridge via one
+   `registerLayout` call each. Every layout-dependent function takes a layout id (defaulting to
+   `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
+   `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,
+   `freeTiles(board, id)`, `hasMoves`/`matchingFreePair*`/`countFreePairs` (all take a trailing
+   `id`). Each cache (`_layout_cache`/`_bounds_cache`/`_layout_key_cache`/`_max_layer_cache`)
+   is per-id; `registerLayout` invalidates the caches for the re-registered id. The old
+   `MAX_LAYER` constant stays for legacy callers (== `maxLayer("turtle")`). The `newGame(rng)`
+   old call shape is preserved (a non-string first arg is the rng, defaulting id to "turtle").
 4. **Free-tile rule:** a tile is free iff nothing overlaps it from layer+1 (within ±0.5 in both
    axes) AND at least one horizontal side is open (`x-1` or `x+1` on the same layer, also
    half-grid aware).
@@ -404,12 +422,14 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 6. **Overlays** (`select`/`hint`) are extra IconWidgets appended AFTER all tiles in the same
    OverlapGroup, never added to `tiles_by_layer`, so they paint on top and taps pass through.
 7. **Persistence:** one `LuaSettings` file at `DataStorage:getSettingsDir()/mahjong.lua`. Game
-   state = `"game"` key (versioned table `v=1`: flat posKey→kind board + flattened 10-field undo
-   history `{ax,ay,al,bx,by,bl,ka,kb,score,prev_last}`), validated hard on load (count sum must
-   be 144, kinds valid, positions in layout, history disjoint). Settings = their own keys
-   (`hints`, `confirm_new_game`, `score_method`, `layout`, `timer_update`, `timer_interval`).
-   A **won (empty) board is NOT saved** — the key is cleared. Corrupt state silently starts
-   fresh.
+   state = `"game"` key (versioned table: **`v=2`** with a `layout` field (US-14); flat
+   posKey→kind board + flattened 10-field undo history
+   `{ax,ay,al,bx,by,bl,ka,kb,score,prev_last}`), validated hard on load (count sum must be 144,
+   kinds valid, positions in the saved layout, history disjoint, layout id registered). A **v1**
+   save (no `layout` field) restores as Turtle. An unknown saved `layout` id is corrupt →
+   fresh. Settings = their own keys (`hints`, `score_method`, `layout`,
+   `timer_update`, `timer_interval`). A **won (empty) board is NOT saved** —
+   the key is cleared. Corrupt state silently starts fresh.
 8. **Timer:** elapsed seconds always accrue (`getElapsed()` diffs `os.time()`); the mode only
    controls when the mm:ss **repaints** — `timer_update="interval"` (default, poll every
    `timer_interval`s, default 5) vs `"move"` (repaint on interaction only). `startTimer` bumps a
@@ -463,6 +483,20 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
      clock restarts exactly once no matter the close path. `Mahjong:onCloseWidget()` closes a
      still-open overlay before the final idempotent `stopTimer()`/`saveGameState()` (closing
      while paused saves).
+ 14. **Layout picker (US-14):** `startGame()` restores a saved game directly (no picker);
+    otherwise (first launch, New Game, win "Play again") it shows the full-screen
+    `mahjonglayoutselect.lua` picker — choosing a layout IS the New Game confirmation, so the
+    old New Game `ConfirmBox` and the `confirm_new_game` setting are retired. The picker is an opaque
+    `InputContainer` (full-screen, not a floating card) with a 2x3 grid of cards (one per registered layout, sorted id order); each card is a
+    `FrameContainer` holding a `layoutThumbnail(id, w, h)` schematic (an `OverlapGroup` of small
+    rounded `FrameContainer` tiles, one per layout position, per-layer up-left offset so the 3D
+    shape reads) plus the layout name. A single full-screen `TapSelect` gesture hit-tests the
+    card rects (the board's pattern, not per-card gestures): a hit fires `onPick(id)` →
+    `startGameWithLayout(id)` (deals, persists `layout` as the last-chosen default, shows the
+    game); a miss / the close X fires `onClose` (resumes the timer if a game was running, does
+    nothing on first launch). `showLayoutPicker()` stops the auto-solver + timer first (so the
+    polling loop doesn't flash behind the opaque picker); `onClose`/`onPick` resume. The board
+    widget is rebuilt with `layout_id` so its geometry follows the chosen layout.
 
 ### Test harness notes (and verification workflow)
 
@@ -481,6 +515,13 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
   `main.lua`/`mahjongboard.lua` end-to-end: instantiate the class, fire the menu callback, tap
   toolbar buttons, run `ConfirmBox` ok_callbacks, and assert the mock window stack/`self[1]`.
 - The harness cannot run `UIManager:scheduleIn`; tests call cleanup/clear paths directly.
+- **US-14 picker in harness:** `startGame()` with no saved game now shows the layout picker
+  instead of dealing a board. Harnesses that drive `menu_items.mahjong.callback()` or the
+  toolbar's New Game button must pick a layout to proceed — the shared idiom is a small
+  `pickTurtle()` helper that finds the Turtle card's rect in the picker's `_card_rects` and
+  fires `picker:onTapSelect(nil, { pos = { x = r.x + r.w/2, y = r.y + r.h/2 } })`. Tests that
+  set `mj.board = ...; mj:buildUILayout()` directly bypass the picker. A restored game (save
+  present) still resumes directly, no picker.
 - Mock gotchas (keep the stubs faithful, or the suite won't catch real layout bugs):
   - `WidgetContainer:extend` must be `function(self, o)` (colon receiver) or `:extend{...}`
     silently drops the class table → "loop in gettable" at runtime.

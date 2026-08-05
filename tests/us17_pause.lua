@@ -152,7 +152,7 @@ local dlg3 = ctx.window_stack[#ctx.window_stack].widget
 expect(mj_close._timer_running == false, "paused before close")
 
 mj_close:onCloseWidget() -- the quit/close path while paused
-expect(type(store.game) == "table" and store.game.v == 1,
+expect(type(store.game) == "table" and store.game.v == 2,
     "closing while paused saves the game state")
 expect(mj_close._timer_running == false,
     "closing while paused leaves the clock stopped (stopTimer ran once)")

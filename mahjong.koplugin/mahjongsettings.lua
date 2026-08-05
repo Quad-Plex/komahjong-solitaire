@@ -49,7 +49,6 @@ local _ = require("gettext")
 
 local DEFAULTS = {
     hints = true,
-    confirm_new_game = true,
     score_method = "chain",
     layout = "turtle",
     timer_update = "interval",
@@ -67,8 +66,8 @@ local SettingsWidget = InputContainer:extend{
     onApply = nil,
     onCancel = nil,   -- optional hook so the owner can react to a discard
     changes = nil,    -- current (unsaved) values
-    _rows = nil,      -- { hints=btn, confirm_new_game=btn, score_method=btn,
-                      --   timer_update=btn, timer_interval=btn }
+    _rows = nil,      -- { hints=btn, score_method=btn, timer_update=btn,
+                      --   timer_interval=btn }
     _panel_geom = nil, -- absolute screen rect of the floating panel (tap-outside test)
 }
 
@@ -130,7 +129,6 @@ function SettingsWidget:init()
     end
     self.changes = {
         hints = getv("hints", defaults.hints),
-        confirm_new_game = getv("confirm_new_game", defaults.confirm_new_game),
         score_method = getv("score_method", defaults.score_method),
         layout = getv("layout", defaults.layout),
         timer_update = getv("timer_update", defaults.timer_update),
@@ -191,7 +189,7 @@ function SettingsWidget:init()
     -- starts at the same x (the label lengths differ, which previously left
     -- the buttons staggered). (The Layout row was dropped from the dialog;
     -- the layout setting itself is still round-tripped via `changes`.)
-    local row_labels = { _("Hints"), _("Confirm new game"), _("Score"),
+    local row_labels = { _("Hints"), _("Score"),
                          _("Timer update"), _("Timer interval") }
     local max_label_w = 0
     for _, l in ipairs(row_labels) do
@@ -218,18 +216,6 @@ function SettingsWidget:init()
         UIManager:setDirty(self, "ui")
     end
     self._rows.hints = hints_btn
-
-    -- New-game confirmation button ---------------------------------------
-    local confirm_btn
-    confirm_btn = makeButton(
-        self.changes.confirm_new_game and _("On") or _("Off"), toggle_w, Screen:scaleBySize(32),
-        function() return self.changes.confirm_new_game and _("On") or _("Off") end)
-    confirm_btn.callback = function()
-        self.changes.confirm_new_game = not (self.changes.confirm_new_game or false)
-        setButtonText(confirm_btn, confirm_btn.refresh())
-        UIManager:setDirty(self, "ui")
-    end
-    self._rows.confirm_new_game = confirm_btn
 
     -- Score-method button (cycles Chain -> Basic) -------------------------
     local score_btn
@@ -363,8 +349,6 @@ function SettingsWidget:init()
             VerticalSpan:new{ width = gap },
             row(_("Hints"), hints_btn),
             VerticalSpan:new{ width = gap },
-            row(_("Confirm new game"), confirm_btn),
-            VerticalSpan:new{ width = gap },
             row(_("Score"), score_btn),
             VerticalSpan:new{ width = gap },
             row(_("Timer update"), timer_mode_btn),
@@ -429,7 +413,6 @@ function SettingsWidget:save()
     local p = self.parent
     if p and p.setSetting then
         p:setSetting("hints", self.changes.hints)
-        p:setSetting("confirm_new_game", self.changes.confirm_new_game)
         p:setSetting("score_method", self.changes.score_method)
         p:setSetting("layout", self.changes.layout)
         p:setSetting("timer_update", self.changes.timer_update)
@@ -461,13 +444,11 @@ end
 function SettingsWidget:resetToDefaults()
     local defaults = self.settings_defaults or DEFAULTS
     self.changes.hints = defaults.hints
-    self.changes.confirm_new_game = defaults.confirm_new_game
     self.changes.score_method = defaults.score_method
     self.changes.layout = defaults.layout
     self.changes.timer_update = defaults.timer_update
     self.changes.timer_interval = defaults.timer_interval
     setButtonText(self._rows.hints, self._rows.hints.refresh())
-    setButtonText(self._rows.confirm_new_game, self._rows.confirm_new_game.refresh())
     setButtonText(self._rows.score_method, self._rows.score_method.refresh())
     setButtonText(self._rows.timer_update, self._rows.timer_update.refresh())
     setButtonText(self._rows.timer_interval, self._rows.timer_interval.refresh())
