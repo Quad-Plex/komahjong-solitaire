@@ -85,22 +85,8 @@ MahjongLogic.dragons     = DRAGONS
 MahjongLogic.flowers     = FLOWERS
 MahjongLogic.seasons     = SEASONS
 MahjongLogic.tileKinds   = TILE_KINDS
-MahjongLogic.MULTIPLICITY = MULTIPLICITY
 
 -- Helpers ---------------------------------------------------------------
-
--- True if `kind` is a flower or a season.
-function MahjongLogic.isSpecial(kind)
-    return MATCH_GROUP[kind] == "flower" or MATCH_GROUP[kind] == "season"
-end
-
-function MahjongLogic.isFlower(kind)
-    return MATCH_GROUP[kind] == "flower"
-end
-
-function MahjongLogic.isSeason(kind)
-    return MATCH_GROUP[kind] == "season"
-end
 
 -- True if `kind` is one of the 42 valid tile kinds. Used to validate
 -- deserialized state (US-10): a tampered/corrupt value must be rejected.
@@ -383,17 +369,36 @@ function MahjongLogic.isFree(board, x, y, layer)
 end
 
 -- All free tiles on a board, as an array of { x, y, layer, kind } tables.
+-- Real boards only ever hold Turtle layout positions, so the hot path iterates
+-- the (memoized) buildLayout() and does a posKey lookup per position — no
+-- per-key regex parse (IMPLEMENTATION_PLAN P3 #1, roughly 5-6x faster, and a
+-- deterministic bottom-layer-first order). Hand-crafted boards in the
+-- self-tests may place tiles at non-layout positions; those straggler keys
+-- (typically none in a real game) fall back to the old parse path.
 function MahjongLogic.freeTiles(board)
     local free = {}
-    for key, kind in pairs(board) do
-        -- x/y may be fractional (head/tail/cap tiles sit on the half grid).
-        local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
-        if not x then
-            error("freeTiles: malformed board key " .. tostring(key))
+    local seen = {}
+    for _, p in ipairs(MahjongLogic.buildLayout()) do
+        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
+        local kind = board[key]
+        if kind then
+            seen[key] = true
+            if MahjongLogic.isFree(board, p.x, p.y, p.layer) then
+                free[#free + 1] = { x = p.x, y = p.y, layer = p.layer, kind = kind }
+            end
         end
-        x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
-        if MahjongLogic.isFree(board, x, y, layer) then
-            free[#free + 1] = { x = x, y = y, layer = layer, kind = kind }
+    end
+    for key, kind in pairs(board) do
+        if not seen[key] then
+            -- x/y may be fractional (head/tail/cap tiles sit on the half grid).
+            local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
+            if not x then
+                error("freeTiles: malformed board key " .. tostring(key))
+            end
+            x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
+            if MahjongLogic.isFree(board, x, y, layer) then
+                free[#free + 1] = { x = x, y = y, layer = layer, kind = kind }
+            end
         end
     end
     return free
@@ -695,16 +700,6 @@ function MahjongLogic.gridBounds()
         _bounds_cache = bounds
     end
     return _bounds_cache
-end
-
--- Kind of the topmost tile at projection cell (x, y), or nil if the cell is
--- empty. Topmost means the highest layer; lower tiles are fully covered.
-function MahjongLogic.topTileAt(board, x, y)
-    for layer = MahjongLogic.MAX_LAYER, 0, -1 do
-        local kind = MahjongLogic.tileAt(board, x, y, layer)
-        if kind then return kind end
-    end
-    return nil
 end
 
 -- True if (x, y, layer) is one of the 144 Turtle positions. Used to validate
@@ -1060,12 +1055,6 @@ function MahjongLogic.runSelfTests()
         if t.x == 0 and t.y == 3.5 and t.layer == 0 then has_head = true end
     end
     check(has_head, "freeTiles parses half-grid keys and lists the head tile")
-
-    local proj = boardWith{ {2,2,0,"b1"}, {2,2,1,"c2"}, {2,2,2,"d3"}, {3,2,0,"east"} }
-    check(MahjongLogic.topTileAt(proj, 2, 2) == "d3", "topTileAt returns the highest layer's kind")
-    check(MahjongLogic.topTileAt(proj, 3, 2) == "east", "topTileAt returns a lone tile's kind")
-    check(MahjongLogic.topTileAt(proj, 9, 9) == nil, "topTileAt returns nil for an empty cell")
-    check(MahjongLogic.topTileAt({}, 4, 4) == nil, "topTileAt on an empty board returns nil")
 
     -- Scoring (US-09) -------------------------------------------------
     check(MahjongLogic.SCORE_PER_PAIR == 10, "base score is 10 per pair")

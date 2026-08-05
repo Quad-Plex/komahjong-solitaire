@@ -414,7 +414,9 @@ the locked design and story list. Current state:
   (12+8+10+12+12+10+8+12=84) plus head (x=0, y=3.5) and tail (x=13..14, y=3.5); L1 block
   x=4..9,y=1..6; L2 block x=5..8,y=2..5; L3 block x=6..7,y=3..4; L4 single tile (x=6.5, y=3.5).
   Grid extents x=0..14, y=0..7; x/y may be fractional (the head/tail/cap sit on the half grid).
-  `posKey`/`freeTiles` handle the fractional keys (`freeTiles` regex is `^([%d%.]+),([%d%.]+),(%d+)$`).
+  `posKey`/`freeTiles` handle the fractional keys (`freeTiles` iterates the memoized
+  `buildLayout()` and looks up each position's posKey — no per-key regex parse since the
+  post-US-11 cleanup).
 - **US-05 (done):** free-tile rules: `tileAt`, `isFree`, `freeTiles`, `hasMoves`.
 - **US-06 (done, reworked):** real board rendering as an **outward-bevel 3D turtle**. The first
   US-06 attempt was a flat `ButtonTable` projection (see git history) — the user rejected it
