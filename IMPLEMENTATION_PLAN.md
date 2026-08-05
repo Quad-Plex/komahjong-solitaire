@@ -79,7 +79,21 @@ kindle_majong/
 │   ├── us01_shell.lua            # meta, menu, dispatcher, startGame/new-game/exit shell
 │   ├── us03_icons.lua            # installIconsIfNeeded copies every SVG
 │   ├── us06_board.lua            # 3D turtle: geometry, z-order, hit-test, taps, wiring
-│   └── us06_paint.lua            # getSize/paint-contract regression
+│   ├── us06_paint.lua            # getSize/paint-contract regression
+│   ├── us07_gameplay.lua         # select/match/remove/win flow
+│   ├── us08_features.lua         # undo/hint/shuffle
+│   ├── us09_score.lua            # scoring, chain bonus, feedback band
+│   ├── us10_persistence.lua      # save/restore + settings dialog
+│   ├── us11_timer.lua            # timer refresh modes + interval settings
+│   ├── hud_bar.lua               # two-row HUD shape + setStats (preloaded by mock)
+│   ├── board_updates.lua         # incremental tile add/remove contract
+│   ├── us12_stats.lua            # win summary + lifetime stats (planned)
+│   ├── us13_stats_screen.lua     # stats button + floating stats card (planned)
+│   ├── us14_layouts.lua          # layout registry + picker (planned)
+│   ├── us15_spider.lua           # Spider layout (planned)
+│   ├── us16_bridge.lua           # Bridge layout (planned)
+│   ├── us17_pause.lua            # pause overlay (planned)
+│   └── us18_penalties.lua        # hint/shuffle score penalties (planned)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
@@ -346,6 +360,183 @@ As a player, I want a polished, stable game on my specific Kindle.
 **Acceptance:** Game runs smoothly end-to-end on the target device; no clipped tiles; overlays
 readable; README present; luacheck clean.
 
+### US-12 — Win summary + best-score/best-time tracking
+
+As a player, I want the win screen to tell me how I did and to see my personal bests, so there is a
+reason to replay.
+
+- Add a pure `mahjongstats.lua` module (no UI deps, `--`-style self-tests like
+  `mahjonglogic.lua`). A lifetime stats record is a plain table:
+  `games_played`, `games_won`, `best_score`, `best_time` (seconds of the fastest win; `nil` until
+  the first win), `current_streak`, `longest_streak`.
+  - `defaults()`, `startGame(stats, previous_won)` (bumps `games_played`; resets `current_streak`
+    to 0 when the previous game was abandoned, i.e. not won), `recordWin(stats, score, elapsed,
+    pairs)` (bumps `games_won`/`current_streak`, tracks `longest_streak`, best-score/best-time
+    maxima/minima).
+- `main.lua` holds `self.stats` and persists it under the `"stats"` `LuaSettings` key — separate
+  from the `"game"` key, so a win or a restore never touches it. Flush on every update.
+- Call sites: `startGame()` fresh deal → `startGame(stats, previous_won)`; on win →
+  `recordWin`; New Game/reset → `startGame(stats, self.game_won)`; set a `self.game_won` flag in
+  `showWinDialog()`.
+- Replace the one-line win dialog text with a summary: score, elapsed time, pairs matched (72),
+  best score, best time, current streak. Mark best-score/best-time lines with "New best!" the first
+  time each record is set. Keep "Play again" / "Close" (Play again still calls `resetGame()` until
+  US-14 reroutes it through the layout picker).
+- Bests are computed from the real game (score + `getElapsed()`), so they are genuine records.
+
+**Acceptance:**
+- Self-tests: `startGame` bumps games_played and breaks a stale streak only when the previous game
+  wasn't won; `recordWin` updates every field; best_time starts nil and only ever decreases;
+  streak increments across consecutive wins and resets on an abandoned game.
+- `tests/us12_stats.lua` (registered in `tests/run.sh`): stats survive a fresh plugin instance;
+  the win dialog text contains score/time/pairs/bests and the "New best!" marker on a first
+  record; Play again starts a new game; a mid-game New Game resets the streak.
+- Manual: win → summary matches the game; a later win with a higher score updates best_score;
+  abandoning resets the streak.
+
+### US-13 — Stats screen (dedicated "Stats" button + floating card)
+
+As a player, I want a dedicated stats screen so I can review my lifetime progress at a glance.
+
+- Extend `hudbar.lua` to support **multiple left buttons**
+  (`left_icons = { { icon=.., size_ratio=.., callback=.. }, ... }`) while keeping the existing
+  `left_icon`/`right_icon` fields (the existing tests read
+  `status_bar.left_icon_tap_callback`/`right_icon_tap_callback`). Add a "Stats" button next to the
+  settings gear; the title stays centered in the remaining width.
+- New widget `mahjongstats.lua` — a floating card in the exact `mahjongsettings.lua` pattern
+  (transparent full-screen `InputContainer` → `CenterContainer` → white rounded `FrameContainer`;
+  full-screen `TapClose` dismissing on a tap outside `_panel_geom`; the `onShow` panel-region
+  refresh trick so the card appears immediately; rows with right-aligned labels and a
+  uniform-width value column).
+- Rows: Games played, Games won, Win rate, Best score, Best time, Average time per win, Current
+  streak, Longest streak. A bottom "Reset" button (ConfirmBox first) clears the record back to
+  `defaults()`.
+- Timer: opening the dialog calls `stopTimer()`; closing resumes via `startTimer()`, exactly like
+  `openSettings`.
+- `main.lua`: `createStatusBar()` wires the Stats button; `openStats()` shows the dialog.
+
+**Acceptance:**
+- `tests/us13_stats.lua` (registered in `tests/run.sh`): the HUD exposes a stats button whose
+  callback opens the dialog; the card lists the persisted lifetime stats; Reset zeroes them only
+  after a confirm; tap-outside closes; the timer stops while open and resumes on close. Existing
+  `hud_bar.lua` assertions still pass (compat fields preserved).
+- Manual: open Stats mid-game → values match real play; Reset works; closing the card resumes the
+  clock.
+
+### US-14 — Layout registry + layout selection screen (architecture)
+
+As a player, I want to choose which board shape to play on.
+
+This story ships the **architecture only**: Turtle stays the only registered layout, but every
+layout-dependent path is generalized and a picker exists, so a new layout becomes a one-file
+addition (US-15/16).
+
+- `mahjonglogic.lua` — layout registry:
+  - `MahjongLogic.layouts` maps `id -> { id, name, spec }` (the Turtle spec moves in verbatim)
+    with `registerLayout(spec)`, `layoutIds()`, `layoutName(id)`.
+  - Generalize the layout-dependent functions to take a layout id (defaulting to `"turtle"` so
+    existing behavior and self-tests are unchanged): `buildLayout(id)`, `gridBounds(id)`,
+    `maxLayer(id)` (replaces the fixed `MAX_LAYER`), `isLayoutPosition(x, y, layer, id)`,
+    `newGame(id, rng)`, `freeTiles(board, id)`. Each `_layout_cache` becomes per-id.
+- `mahjongboard.lua` — per-layout geometry:
+  - `Board` gains a `layout_id`; the module-level `LAYOUT_BOUNDS` block becomes `layoutBounds(id)`;
+    `tilePos`/`computeGeometry`/`rebuildTiles`/`syncOverlapGroup`/`hitTest` use the board's layout
+    and `maxLayer`. (Turtle renders identically.)
+- Persistence:
+  - `serializeGameState` adds a `layout` field; `deserializeGameState` bumps to v2 and validates
+    the stored layout id (unknown id → corrupt → fresh game) and every board/history position
+    against THAT layout's position set. Old v1 saves (no `layout` field) restore as Turtle.
+- `main.lua` — selection flow:
+  - `startGame()`: a **saved** game restores directly (as today); otherwise (first launch, New
+    Game, or win "Play again") show the **layout selection screen**; the chosen layout deals the
+    board.
+  - `resetGame(layout_id)`/`newGame` take the layout; `self.layout` tracks the current one and is
+    saved with the game state. The `"layout"` settings key stays as the last-chosen default.
+  - The picker makes the New Game `ConfirmBox` redundant (choosing a layout IS the confirmation):
+    stop consulting `confirm_new_game` (keep the key; drop it in a later cleanup).
+- New `mahjonglayoutselect.lua` widget — a full-screen selection screen with a **2x3 grid** of
+  cards (6 slots, enough for the current set; wrap in a scroll container if more are added later).
+  Each card: a small **thumbnail** (a miniature schematic of the layout's positions — small rounded
+  rects per tile, per-layer offset so the 3D shape reads) plus the layout **name** underneath.
+  Tapping a card deals a game on that layout.
+- Add a `layoutThumbnail(id, w, h)` helper (in the picker module) that builds the schematic from
+  the layout positions so US-15/16 get their thumbnail for free.
+
+**Acceptance:**
+- Self-tests: passing a layout id returns byte-identical Turtle results; the registry enumerates
+  exactly `{"turtle"}`.
+- `tests/us14_layouts.lua` (registered in `tests/run.sh`): registering a throwaway layout at
+  test-time works end-to-end (deal → free tiles → render via a board built with that layout →
+  serialize/restore round-trip → an unknown saved layout id deals fresh); the picker appears on
+  first launch / New Game / Play again; choosing Turtle deals a game; the thumbnail renders for
+  every registered layout.
+- Manual: fresh launch → picker shows the Turtle card (thumbnail + name); picking it deals; New
+  Game returns to the picker.
+
+### US-15 — Spider layout
+
+As a player, I want a second board shape ("Spider") to vary the game.
+
+- Add the classic Spider layout (144 positions) to the registry via `registerLayout`. The
+  neighbour-based bevel-variant icon logic is layout-agnostic and needs no changes.
+- It appears automatically as a second card (thumbnail + name) in the US-14 picker.
+- Verify on the target resolutions: geometry fits the screen (Spider's grid extents may exceed the
+  Turtle's 14x7 — exercise `layoutBounds`/`computeGeometry`), free-tile detection and gameplay
+  work, persistence round-trips with `layout="spider"`.
+- `tests/us15_spider.lua` (registered in `tests/run.sh`): 144 unique positions, per-layer counts
+  match the spec, deal/free-tiles/hasMoves work, save/restore with the layout id, the picker lists
+  two entries.
+
+**Acceptance:** Manual — pick Spider, play a full game, save/restore mid-game on the Spider board.
+
+### US-16 — Bridge layout
+
+Same template as US-15 for the classic Bridge layout (144 positions). Register it, thumbnail
+automatic, geometry/free-tile/persistence verified, `tests/us16_bridge.lua` (registered in
+`tests/run.sh`).
+
+**Acceptance:** Manual — pick Bridge, play, restore mid-game.
+
+### US-17 — Pause
+
+As a player, I want to pause the game so the clock stops and stray taps can't move tiles.
+
+- Add a Pause button (extend the HUD's `left_icons` list).
+- Tap → `stopTimer()` (freezes `elapsed_base`), then show a modal overlay: a full-screen
+  transparent `InputContainer` with a centered "Paused" card (the settings/stats floating-card
+  pattern) and a **Resume** button. The overlay consumes all taps, so no tile can be selected
+  while paused.
+- Resume → close the overlay + `startTimer()`.
+- Closing the plugin while paused still saves the game (`onCloseWidget` calls `saveGameState`;
+  ensure `stopTimer` runs once — reuse the existing timer helpers).
+- `tests/us17_pause.lua` (registered in `tests/run.sh`): pause freezes elapsed (two `getElapsed()`
+  reads are stable), the overlay sits on the window stack and blocks board taps, resume restarts
+  the clock, pause-then-close saves.
+
+**Acceptance:** Manual — pause mid-game, elapsed freezes, taps do nothing, resume continues.
+
+### US-18 — Hint/shuffle score penalties
+
+As a player, I want hints and shuffles to cost points, so using them is a real trade-off.
+
+- `mahjonglogic.lua`: add `HINT_PENALTY` (5) and `SHUFFLE_PENALTY` (10) constants and a pure
+  `applyPenalty(score, amount)` that floors at 0 (score can't go negative).
+- `main.lua`:
+  - `showHint()` deducts `HINT_PENALTY` when a hint is actually shown (the dead-board shuffle offer
+    is not a hint and does not penalize).
+  - `shuffleBoard()` deducts `SHUFFLE_PENALTY` once per **user-initiated** shuffle; the bounded
+    auto-repeat re-shuffles that guarantee a playable board do NOT re-charge.
+  - Penalties apply at use time and persist via the existing score save; they are NOT part of the
+    pair history, so `undo()` restores only the pair's points (never a penalty).
+- Track per-game counters `hints_used` / `shuffles_used` (persisted in the game state) that feed
+  the US-12/13 stats.
+- `tests/us18_penalties.lua` (registered in `tests/run.sh`): constants + floor at 0; a hint
+  deducts once per real hint; a shuffle deducts once (not per auto-repeat); undo doesn't restore
+  penalties; the counters increment and survive a save/restore.
+
+**Acceptance:** Manual — use a hint and shuffle, watch the Score chip drop; the win summary
+reflects the net score.
+
 ## Deferred optimizations (P3 — marked for later)
 
 Reviewed during the P1/P2 optimization pass (US-01..06 shipped). These were
@@ -376,7 +567,10 @@ they are not lost. Revisited after US-10/11 — see status below.
 ## Later / optional enhancements (not in the current scope)
 
 - Half-tile-offset rendering for a true "stacked" look.
-- Additional layouts (e.g. "Spider", "Bridge") selectable from settings.
+- Additional layouts beyond Spider/Bridge (the registry + picker make this a data-only addition).
 - Keyboard/d-pad navigation for non-touch Kindles.
-- Achievement/stat tracking and best-time leaderboard.
+- Dark/night-mode theme (KOReader night mode inverts the framebuffer; a proper dark theme needs
+  dark tile SVGs + a theme setting).
+- Keep the device awake during play (inhibit KOReader auto-suspend while the game is open).
 - Localization catalogs.
+- Cleanup: drop the now-redundant `confirm_new_game` setting once US-14's picker is in.
