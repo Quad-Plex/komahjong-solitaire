@@ -11,7 +11,7 @@ Usage:
     python3 tools/gen_icons.py --check    # exit 1 if any committed icon is stale
     python3 tools/gen_icons.py --out DIR  # write into a custom directory
 
-Design goals (locked in by the 2.5D redesign):
+Design goals (locked in by the 2.5D redesign + the black-symbol contrast pass):
   1. The bevel is an OUTWARD extension of the tile, not an inset. The tile
      face fills (nearly) the full 100x140 portrait canvas (matching the
      board's 1.4 aspect) and the depth bevels hang off its right and bottom
@@ -29,10 +29,14 @@ Design goals (locked in by the 2.5D redesign):
      the face is always anchored at the widget's top-left. The board sets the
      widget dimen to (tw + bw, th + bh) with bw/bh = 10% of the tile size, so
      the rendered face is exactly the grid pitch.
-  3. The face carries a thin gray outline (FACE_STROKE, ~1 viewBox unit)
-     drawn inside the face box, so adjacent same-layer tiles — which have no
-     bevels between them — show a crisp ~1px grid line at every seam instead
-     of an invisible white-on-white border.
+  3. HIGH-CONTRAST WHITE FACES WITH FULL-BLACK SYMBOLS: the face is white
+     (#ffffff) and every symbol is drawn in FULL BLACK (#000000, with only
+     tiny light-gray detail accents like the bamboo joint), because the board
+     sits on a white e-ink screen and the colored symbols of the original
+     design rendered as muddy mid-grays. The face carries a thin gray outline
+     (FACE_STROKE, ~1 viewBox unit) drawn inside the face box, so adjacent
+     same-layer tiles — which have no bevels between them — show a crisp ~1px
+     grid line at every seam instead of an invisible white-on-white border.
   4. Bevels appear ONLY on exposed edges. Each kind ships in four variants
      (base / "_nb" / "_nr" / "_n", see VARIANTS): a same-layer neighbour to
      the right or below blocks that bevel (it would read as a fake seam inside
@@ -84,8 +88,9 @@ FACE_W, FACE_H = 100, 140
 # shifts each layer up-left by exactly the bevel thickness, so a raised tile's
 # bevels land exactly on the edges of the tile directly beneath it (the bevel
 # never overlaps the tiles to its east/south). This artwork only supplies the
-# outward bevel bands. Darker fills than the original pale grays give the
-# tiles contrast on e-ink (white face -> light right side -> dark base).
+# outward bevel bands. The symbols are FULL BLACK on the white face for
+# maximum contrast on e-ink (the original colored symbols rendered as muddy
+# mid-grays); the bevels keep their gray tones for the 3D depth.
 FACE_BEVEL_RIGHT = '<rect x="100" y="0" width="10" height="154" fill="#78909c"/>'
 FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L100 154 L10 154 Z" fill="#546e7a"/>'
 
@@ -111,11 +116,12 @@ FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L100 154 L10 154 Z" fill="#546e7a"
 FACE_BEVEL_RIGHT_CORNER = '<path d="M100 0 L110 0 L110 154 L100 140 Z" fill="#78909c"/>'
 FACE_BEVEL_BOTTOM_CORNER = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"/>'
 
-# Face outline: thin medium-gray ring inside the face box, ~1 viewBox unit
-# (~1 device px on the target screen). Same tone as the side bevel. See the
-# tile-body comment above.
+# Face outline: thin medium-gray ring inside the white face box, ~1 viewBox
+# unit (~1 device px on the target screen). Same tone as the side bevel. See
+# the tile-body comment above.
 FACE_STROKE = 1
 FACE_STROKE_COLOR = "#78909c"
+FACE_COLOR = "#ffffff"
 
 
 def face(bottom=True, right=True):
@@ -131,7 +137,7 @@ def face(bottom=True, right=True):
     s = FACE_STROKE
     parts.append(f'<rect x="{s / 2:.1f}" y="{s / 2:.1f}" '
                  f'width="{FACE_W - s}" height="{FACE_H - s}" rx="3" '
-                 f'fill="#ffffff" stroke="{FACE_STROKE_COLOR}" stroke-width="{s}"/>')
+                 f'fill="{FACE_COLOR}" stroke="{FACE_STROKE_COLOR}" stroke-width="{s}"/>')
     return "".join(parts)
 
 
@@ -161,18 +167,18 @@ def svg(body, bottom=True, right=True):
 
 
 def dot(cx, cy, r=8.5):
-    return circle(cx, cy, r, "#1565c0")
+    return circle(cx, cy, r, "#000000")
 
 
 def numdots(cx_list, cy=80, r=3):
-    return "".join(circle(cx, cy, r, "#424242") for cx in cx_list)
+    return "".join(circle(cx, cy, r, "#000000") for cx in cx_list)
 
 
 def bamboo(cx, cy, w, h):
     x = cx - w / 2
     y = cy - h / 2
-    return (rect(x, y, w, h, w / 2, "#2e7d32")
-            + rect(x, cy - 2, w, 4, 2, "#1b5e20"))
+    return (rect(x, y, w, h, w / 2, "#000000")
+            + rect(x, cy - 2, w, 4, 2, "#616161"))
 
 
 # ---------------------------------------------------------------------------
@@ -204,7 +210,7 @@ D = {
 }
 
 # ---------------------------------------------------------------------------
-# Characters (red line-art numerals), 1..9
+# Characters (black line-art numerals), 1..9
 C = {
     1: ["M24 50 L76 50"],
     2: ["M26 38 L74 38", "M26 62 L74 62"],
@@ -218,7 +224,7 @@ C = {
 }
 
 # ---------------------------------------------------------------------------
-# Winds (blue), East/South/West/North
+# Winds (black), East/South/West/North
 WINDS = {
     "east": ["M50 26 L50 74", "M50 26 L72 26", "M50 50 L70 50", "M50 74 L72 74"],
     "south": ["M30 28 L70 28", "M30 28 L30 52", "M30 52 L70 52", "M70 52 L70 72", "M30 72 L70 72"],
@@ -229,45 +235,45 @@ WINDS = {
 # ---------------------------------------------------------------------------
 # Dragons
 DRAGONS = {
-    "red": rect(26, 26, 48, 48, 4, "#c62828") + rect(46, 26, 8, 48, 0, "#ffffff"),
-    "green": [path(d, "#2e7d32") for d in [
+    "red": rect(26, 26, 48, 48, 4, "#000000") + rect(46, 26, 8, 48, 0, "#ffffff"),
+    "green": [path(d, "#000000") for d in [
         "M50 24 L50 76", "M36 38 L64 38", "M32 50 L68 50", "M36 62 L64 62"]],
-    "white": '<rect x="24" y="24" width="52" height="52" rx="4" fill="none" stroke="#1565c0" stroke-width="8"/>',
+    "white": '<rect x="24" y="24" width="52" height="52" rx="4" fill="none" stroke="#000000" stroke-width="8"/>',
 }
 
 # ---------------------------------------------------------------------------
-# Flowers: pink petals around center (50,42), number dots at y=80
+# Flowers: black petals around center (50,42), number dots at y=80
 FLOWER_CENTER = ('<circle cx="50" cy="42" r="6" fill="#ffffff"/>'
-                 '<circle cx="50" cy="42" r="6" fill="none" stroke="#ad1457" stroke-width="2.5"/>')
+                 '<circle cx="50" cy="42" r="6" fill="none" stroke="#000000" stroke-width="2.5"/>')
 
 FLOWERS = {
-    1: ([circle(cx, cy, 12, "#ad1457") for cx, cy in
+    1: ([circle(cx, cy, 12, "#000000") for cx, cy in
          [(50, 22), (69, 42), (50, 62), (31, 42)]] + [FLOWER_CENTER] + [numdots([50])]),
-    2: ([circle(cx, cy, 12, "#ad1457") for cx, cy in
+    2: ([circle(cx, cy, 12, "#000000") for cx, cy in
          [(50, 23), (68, 36), (32, 36), (32, 48), (68, 48)]] + [FLOWER_CENTER] + [numdots([45.5, 54.5])]),
-    3: ([circle(cx, cy, 12, "#ad1457") for cx, cy in
+    3: ([circle(cx, cy, 12, "#000000") for cx, cy in
          [(67, 32), (50, 22), (33, 32), (33, 52), (50, 62), (67, 52)]] + [FLOWER_CENTER] + [numdots([41, 50, 59])]),
-    4: ([circle(cx, cy, 12, "#ad1457") for cx, cy in
+    4: ([circle(cx, cy, 12, "#000000") for cx, cy in
          [(70, 42), (64, 28), (50, 22), (36, 28), (30, 42), (36, 56), (50, 62), (64, 56)]]
         + [FLOWER_CENTER] + [numdots([36.5, 45.5, 54.5, 63.5])]),
 }
 
 # ---------------------------------------------------------------------------
-# Seasons: teal spokes/star around center (50,44), number dots at y=80
+# Seasons: black spokes/star around center (50,44), number dots at y=80
 SEASONS = {
-    1: ([path(d, "#00695c", 7) for d in
+    1: ([path(d, "#000000", 7) for d in
          ["M50 44 L72 44", "M50 44 L50 66", "M50 44 L28 44", "M50 44 L50 22"]]
         + [numdots([50])]),
-    2: ([path(d, "#00695c", 7) for d in
+    2: ([path(d, "#000000", 7) for d in
          ["M50 44 L70 44", "M50 44 L60 61", "M50 44 L40 61", "M50 44 L30 44",
           "M50 44 L40 27", "M50 44 L60 27"]]
         + [numdots([45.5, 54.5])]),
-    3: ([path(d, "#00695c", 7) for d in
+    3: ([path(d, "#000000", 7) for d in
          ["M50 44 L70 44", "M50 44 L64 30", "M50 44 L50 24", "M50 44 L36 30",
           "M50 44 L30 44", "M50 44 L36 58", "M50 44 L50 64", "M50 44 L64 58"]]
         + [numdots([41, 50, 59])]),
     4: ([path("M50 20 L56.5 37.1 L74.7 38 L60.5 49.4 L65.3 67 L50 57 L34.7 67 "
-              "L39.5 49.4 L25.3 38 L43.5 37.1 Z", "#00695c", 7)]
+              "L39.5 49.4 L25.3 38 L43.5 37.1 Z", "#000000", 7)]
         + [numdots([36.5, 45.5, 54.5, 63.5])]),
 }
 
@@ -292,10 +298,10 @@ def generate():
         for suffix, bottom, right in VARIANTS:
             written[f"d{n}{suffix}.svg"] = svg("".join(dot(cx, cy, r) for cx, cy, r in D[n]), bottom, right)
         for suffix, bottom, right in VARIANTS:
-            written[f"c{n}{suffix}.svg"] = svg("".join(path(d, "#c62828") for d in C[n]), bottom, right)
+            written[f"c{n}{suffix}.svg"] = svg("".join(path(d, "#000000") for d in C[n]), bottom, right)
     for name, strokes in WINDS.items():
         for suffix, bottom, right in VARIANTS:
-            written[f"{name}{suffix}.svg"] = svg("".join(path(d, "#1565c0") for d in strokes), bottom, right)
+            written[f"{name}{suffix}.svg"] = svg("".join(path(d, "#000000") for d in strokes), bottom, right)
     for name, body in DRAGONS.items():
         if isinstance(body, list):
             body = "".join(body)
@@ -307,7 +313,8 @@ def generate():
         for suffix, bottom, right in VARIANTS:
             written[f"season{n}{suffix}.svg"] = svg("".join(SEASONS[n]), bottom, right)
     # Overlays + empty face (no face rect). Portrait, matching the tile box so
-    # the highlight covers the whole face.
+    # the highlight covers the whole face. Dark strokes so the selection / hint
+    # highlights read on the (white) tile faces.
     written["select.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
                              f'viewBox="0 0 100 140"><rect x="1" y="1" width="98" height="138" rx="4" '
                              f'fill="none" stroke="#263238" stroke-width="5"/></svg>')

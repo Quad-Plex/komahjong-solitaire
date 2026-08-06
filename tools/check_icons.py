@@ -229,7 +229,10 @@ def run_rendered_checks():
                 for xx in range(tw):
                     r, g, b = tpx[yy][xx][0], tpx[yy][xx][1], tpx[yy][xx][2]
                     a = tpx[yy][xx][3] if len(tpx[yy][xx]) > 3 else 255
-                    if a > 0 and (max(r, g, b) - min(r, g, b)) > 40 and max(r, g, b) > 60:
+                    # Full-black symbols on the white face: symbol pixels are the
+                    # near-black ones (the gray bevels / stroke stay well above
+                    # this threshold, so the tile's edge bands don't count).
+                    if a > 0 and max(r, g, b) < 60:
                         minx = min(minx, xx); maxx = max(maxx, xx)
                         miny = min(miny, yy); maxy = max(maxy, yy)
             if minx < 0 or miny < 0 or maxx > 153 or maxy > 153:
