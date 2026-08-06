@@ -59,10 +59,10 @@ end
 -- {"bridge", "cloud", "confounding", "overpass", "pyramid", "red-dragon",
 -- "spider", "taipei", "tictactoe", "turtle", "ziggurat"} (sorted).
 local ids = Logic.layoutIds()
-expect(#ids == 11 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
-        and ids[4] == "overpass" and ids[5] == "pyramid" and ids[6] == "red-dragon"
-        and ids[7] == "spider" and ids[8] == "taipei" and ids[9] == "tictactoe"
-        and ids[10] == "turtle" and ids[11] == "ziggurat",
+expect(#ids == 12 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
+        and ids[4] == "crab" and ids[5] == "overpass" and ids[6] == "pyramid"
+        and ids[7] == "red-dragon" and ids[8] == "spider" and ids[9] == "taipei"
+        and ids[10] == "tictactoe" and ids[11] == "turtle" and ids[12] == "ziggurat",
     "registry enumerates exactly {bridge, cloud, confounding, overpass, pyramid,\n"
     .. "red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got "
     .. table.concat(ids, ",") .. ")")
@@ -118,12 +118,13 @@ local toy_spec = {
 }
 Logic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
 local toy_ids = Logic.layoutIds()
-expect(#toy_ids == 12 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "confounding" and toy_ids[4] == "overpass"
-        and toy_ids[5] == "pyramid" and toy_ids[6] == "red-dragon"
-        and toy_ids[7] == "spider" and toy_ids[8] == "taipei"
-        and toy_ids[9] == "tictactoe" and toy_ids[10] == "toy"
-        and toy_ids[11] == "turtle" and toy_ids[12] == "ziggurat",
+expect(#toy_ids == 13 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
+        and toy_ids[5] == "overpass" and toy_ids[6] == "pyramid"
+        and toy_ids[7] == "red-dragon" and toy_ids[8] == "spider"
+        and toy_ids[9] == "taipei" and toy_ids[10] == "tictactoe"
+        and toy_ids[11] == "toy" and toy_ids[12] == "turtle"
+        and toy_ids[13] == "ziggurat",
     "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
 expect(#Logic.buildLayout("toy") == 5, "the toy layout has 5 positions")
 expect(Logic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -379,16 +380,16 @@ end
 expect(not restored_via_picker,
     "a restored game does NOT show the picker (resumes directly)")
 
--- ---- Deregister the toy layout (restore the 11 built-in layouts) ---------------
+-- ---- Deregister the toy layout (restore the 12 built-in layouts) ---------------
 
 Logic.deregisterLayout("toy")
-expect(#Logic.layoutIds() == 11 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "cloud"
-        and Logic.layoutIds()[3] == "confounding" and Logic.layoutIds()[4] == "overpass"
-        and Logic.layoutIds()[5] == "pyramid" and Logic.layoutIds()[6] == "red-dragon"
-        and Logic.layoutIds()[7] == "spider" and Logic.layoutIds()[8] == "taipei"
-        and Logic.layoutIds()[9] == "tictactoe" and Logic.layoutIds()[10] == "turtle"
-        and Logic.layoutIds()[11] == "ziggurat",
-    "deregistering the toy layout restores the {bridge, cloud, confounding, overpass,\n"
+expect(#Logic.layoutIds() == 12 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "cloud"
+        and Logic.layoutIds()[3] == "confounding" and Logic.layoutIds()[4] == "crab"
+        and Logic.layoutIds()[5] == "overpass" and Logic.layoutIds()[6] == "pyramid"
+        and Logic.layoutIds()[7] == "red-dragon" and Logic.layoutIds()[8] == "spider"
+        and Logic.layoutIds()[9] == "taipei" and Logic.layoutIds()[10] == "tictactoe"
+        and Logic.layoutIds()[11] == "turtle" and Logic.layoutIds()[12] == "ziggurat",
+    "deregistering the toy layout restores the {bridge, cloud, confounding, crab, overpass,\n"
     .. "pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} registry")
 
 if failures == 0 then

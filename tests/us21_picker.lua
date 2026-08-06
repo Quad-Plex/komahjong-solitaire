@@ -101,17 +101,28 @@ expect(ids_match, "card ids match sorted registered layout ids")
 -- Every card has a non-nil thumbnail-backed content (the card was built).
 for _, c in ipairs(picker._card_rects) do
     expect(c.id == "bridge" or c.id == "cloud" or c.id == "confounding"
-            or c.id == "overpass" or c.id == "pyramid" or c.id == "red-dragon"
-            or c.id == "spider" or c.id == "taipei" or c.id == "tictactoe"
-            or c.id == "turtle" or c.id == "ziggurat",
+            or c.id == "crab" or c.id == "overpass" or c.id == "pyramid"
+            or c.id == "red-dragon" or c.id == "spider" or c.id == "taipei"
+            or c.id == "tictactoe" or c.id == "turtle" or c.id == "ziggurat",
         "card id is a known layout (" .. tostring(c.id) .. ")")
 end
 
--- ---- Dynamic rows: 12 layouts fill 4 rows -------------------------------------
+-- ---- Dynamic rows: full 3x4 of 12 built-in layouts ---------------------------
 
--- Register a throwaway toy layout: 12 layouts → ceil(12/3)=4 → max(3,4)=4 rows.
--- The 4th card (overpass) wraps to row 1, column 0; the toy (10th) is the
--- first card of row 3.
+-- With the 12 built-in layouts, the grid is a complete 3x4: 4 rows of 3 cards.
+expect(#picker._card_rects == 12,
+    "12 built-in layouts fill a 3x4 grid (got " .. #picker._card_rects .. " cards)")
+expect(picker._card_rects[12].y == picker._card_rects[11].y
+    and picker._card_rects[11].y == picker._card_rects[10].y,
+    "row 3 (cards 10/11/12) is full")
+expect(picker._card_rects[10].y > picker._card_rects[9].y,
+    "row 3 starts at card 10")
+
+-- ---- Dynamic rows: 13 layouts overflow to a 5th row --------------------------
+
+-- Register a throwaway toy layout: 13 layouts → ceil(13/3)=5 rows. The 4th
+-- card (crab) wraps to row 1, column 0; the toy (11th) sits in row 3 with
+-- tictactoe and turtle; the 13th (ziggurat) overflows to a 5th row alone.
 local toy_spec = {
     { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 0 },
     { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 1 },
@@ -124,23 +135,24 @@ local mj2 = Mahjong:new()
 mj2:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker2 = ctx.window_stack[#ctx.window_stack].widget
-expect(#picker2._card_rects == 12,
-    "12 layouts → 12 cards (got " .. #picker2._card_rects .. ")")
+expect(#picker2._card_rects == 13,
+    "13 layouts → 13 cards (got " .. #picker2._card_rects .. ")")
 
--- Sorted ids: {bridge, cloud, confounding, overpass, pyramid, red-dragon,
+-- Sorted ids: {bridge, cloud, confounding, crab, overpass, pyramid, red-dragon,
 -- spider, taipei, tictactoe, toy, turtle, ziggurat}
-expect(picker2._card_rects[1].id == "bridge", "12-layout grid: slot 1 = bridge")
-expect(picker2._card_rects[2].id == "cloud",  "12-layout grid: slot 2 = cloud")
-expect(picker2._card_rects[3].id == "confounding", "12-layout grid: slot 3 = confounding")
-expect(picker2._card_rects[4].id == "overpass", "12-layout grid: slot 4 = overpass")
-expect(picker2._card_rects[5].id == "pyramid", "12-layout grid: slot 5 = pyramid")
-expect(picker2._card_rects[6].id == "red-dragon", "12-layout grid: slot 6 = red-dragon")
-expect(picker2._card_rects[7].id == "spider", "12-layout grid: slot 7 = spider")
-expect(picker2._card_rects[8].id == "taipei", "12-layout grid: slot 8 = taipei")
-expect(picker2._card_rects[9].id == "tictactoe", "12-layout grid: slot 9 = tictactoe")
-expect(picker2._card_rects[10].id == "toy",    "12-layout grid: slot 10 = toy")
-expect(picker2._card_rects[11].id == "turtle", "12-layout grid: slot 11 = turtle")
-expect(picker2._card_rects[12].id == "ziggurat", "12-layout grid: slot 12 = ziggurat")
+expect(picker2._card_rects[1].id == "bridge", "13-layout grid: slot 1 = bridge")
+expect(picker2._card_rects[2].id == "cloud",  "13-layout grid: slot 2 = cloud")
+expect(picker2._card_rects[3].id == "confounding", "13-layout grid: slot 3 = confounding")
+expect(picker2._card_rects[4].id == "crab", "13-layout grid: slot 4 = crab")
+expect(picker2._card_rects[5].id == "overpass", "13-layout grid: slot 5 = overpass")
+expect(picker2._card_rects[6].id == "pyramid", "13-layout grid: slot 6 = pyramid")
+expect(picker2._card_rects[7].id == "red-dragon", "13-layout grid: slot 7 = red-dragon")
+expect(picker2._card_rects[8].id == "spider", "13-layout grid: slot 8 = spider")
+expect(picker2._card_rects[9].id == "taipei", "13-layout grid: slot 9 = taipei")
+expect(picker2._card_rects[10].id == "tictactoe", "13-layout grid: slot 10 = tictactoe")
+expect(picker2._card_rects[11].id == "toy",    "13-layout grid: slot 11 = toy")
+expect(picker2._card_rects[12].id == "turtle", "13-layout grid: slot 12 = turtle")
+expect(picker2._card_rects[13].id == "ziggurat", "13-layout grid: slot 13 = ziggurat")
 
 -- First 3 cards share row 0; the 4th is in row 1 (lower y).
 expect(picker2._card_rects[1].y == picker2._card_rects[2].y
@@ -174,7 +186,8 @@ expect(picker2._card_rects[8].x > picker2._card_rects[7].x
     and picker2._card_rects[9].x > picker2._card_rects[8].x,
     "8th and 9th cards sit in row 2, columns 1 and 2")
 
--- The 10th card (toy) wraps to row 3, column 0; 11th and 12th sit beside it.
+-- The 10th card (tictactoe) wraps to row 3, column 0; the 11th (toy) and
+-- 12th (turtle) sit beside it.
 expect(picker2._card_rects[10].y > picker2._card_rects[7].y,
     "10th card is in row 3 (lower than row 2)")
 expect(picker2._card_rects[10].x == EDGE_PAD,
@@ -186,7 +199,13 @@ expect(picker2._card_rects[11].x > picker2._card_rects[10].x
     and picker2._card_rects[12].x > picker2._card_rects[11].x,
     "11th and 12th cards sit in row 3, columns 1 and 2")
 
--- Deregister the toy layout (restore the eleven built-ins).
+-- The 13th card (ziggurat) overflows to a 5th row, column 0.
+expect(picker2._card_rects[13].y > picker2._card_rects[10].y,
+    "13th card wraps to row 4 (5 rows total, lower than row 3)")
+expect(picker2._card_rects[13].x == EDGE_PAD,
+    "13th card wraps to column 0 (x=" .. picker2._card_rects[13].x .. ")")
+
+-- Deregister the toy layout (restore the twelve built-ins).
 Logic.deregisterLayout("toy")
 
 -- ---- Pick a layout from the grid -----------------------------------------------

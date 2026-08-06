@@ -862,12 +862,13 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 12 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "confounding" and toy_ids[4] == "overpass"
-        and toy_ids[5] == "pyramid" and toy_ids[6] == "red-dragon"
-        and toy_ids[7] == "spider" and toy_ids[8] == "taipei"
-        and toy_ids[9] == "tictactoe" and toy_ids[10] == "toy"
-        and toy_ids[11] == "turtle" and toy_ids[12] == "ziggurat",
+    check(#toy_ids == 13 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
+        and toy_ids[5] == "overpass" and toy_ids[6] == "pyramid"
+        and toy_ids[7] == "red-dragon" and toy_ids[8] == "spider"
+        and toy_ids[9] == "taipei" and toy_ids[10] == "tictactoe"
+        and toy_ids[11] == "toy" and toy_ids[12] == "turtle"
+        and toy_ids[13] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -901,9 +902,10 @@ function MahjongLogic.runSelfTests()
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
     MahjongLogic.deregisterLayout("toy")
-    check(#MahjongLogic.layoutIds() == 11,
-        "deregistering toy restores the {bridge, cloud, confounding, overpass,\n"
-        .. "pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} registry")
+    check(#MahjongLogic.layoutIds() == 12,
+        "deregistering toy restores the {bridge, cloud, confounding, crab, "
+        .. "overpass, pyramid, red-dragon, spider, taipei, tictactoe, turtle, "
+        .. "ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
     -- Shape checks (144 positions, per-layer counts, grid bounds) live in

@@ -35,11 +35,11 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-expect(#ids == 11 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
-        and ids[4] == "overpass" and ids[5] == "pyramid" and ids[6] == "red-dragon"
-        and ids[7] == "spider" and ids[8] == "taipei" and ids[9] == "tictactoe"
-        and ids[10] == "turtle" and ids[11] == "ziggurat",
-    "registry enumerates {bridge, cloud, confounding, overpass, pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
+expect(#ids == 12 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
+        and ids[4] == "crab" and ids[5] == "overpass" and ids[6] == "pyramid"
+        and ids[7] == "red-dragon" and ids[8] == "spider" and ids[9] == "taipei"
+        and ids[10] == "tictactoe" and ids[11] == "turtle" and ids[12] == "ziggurat",
+    "registry enumerates {bridge, cloud, confounding, crab, overpass, pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("cloud") == "Cloud", "layoutName returns 'Cloud'")
 expect(Logic.maxLayer("cloud") == 2, "maxLayer(cloud) == 2")
 

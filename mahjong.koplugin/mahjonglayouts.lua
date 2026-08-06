@@ -560,6 +560,77 @@ local TAIPEI_SPEC = {
     { layer = 6, kind = "tile",  x = 5, y = 3 },
 }
 
+-- Crab layout (US-34): the classic Microsoft *Mahjong Titans* "Crab" board,
+-- transcribed from KMahjongg's `crab.layout` (KDE, GPL-2.0-or-later). A wide
+-- 4-layer crab silhouette with two large claws at the north corners, an
+-- hourglass body, and a vertical ridge pile rising to two stacked peak tiles
+-- in the center, 144 tiles across 4 layers (77/50/15/2). The claws/ridge use
+-- the half-grid (x=1.5/4.5/..., y=0.5/6.5/...), which the layout-agnostic
+-- bevel/free-tile logic handles unchanged (like Red Dragon).
+--   L0: the two north claw blocks (x=1.5..4.5, y=0..1 and x=10.5..13.5, y=0..1)
+--       plus the bridging rows and the wide lower body = 77
+--   L1: the smaller claw rectangles, the body hourglass, and the base
+--       supports = 50
+--   L2: the center ridge (two stacked 2-wide rows, two claw-tip pairs, and
+--       a single spine tile) = 15
+--   L3: the two stacked peak tiles at x=7.5, y=4 and y=5 = 2
+-- Grid extents: x=1..14, y=0..7.
+local CRAB_SPEC = {
+    -- Layer 0: the claws, the bridging rows, and the body.
+    { layer = 0, kind = "row",  x_min = 1.5,  x_max = 4.5,  y = 0 },
+    { layer = 0, kind = "row",  x_min = 10.5, x_max = 13.5, y = 0 },
+    { layer = 0, kind = "row",  x_min = 1.5,  x_max = 4.5,  y = 1 },
+    { layer = 0, kind = "row",  x_min = 7,    x_max = 8,    y = 1 },
+    { layer = 0, kind = "row",  x_min = 10.5, x_max = 13.5, y = 1 },
+    { layer = 0, kind = "row",  x_min = 3.5,  x_max = 11.5, y = 2 },
+    { layer = 0, kind = "row",  x_min = 1,    x_max = 2,    y = 3 },
+    { layer = 0, kind = "row",  x_min = 5.5,  x_max = 9.5,  y = 3 },
+    { layer = 0, kind = "row",  x_min = 13,   x_max = 14,   y = 3 },
+    { layer = 0, kind = "tile", x = 1,  y = 4 },
+    { layer = 0, kind = "row",  x_min = 5,    x_max = 10,   y = 4 },
+    { layer = 0, kind = "tile", x = 14, y = 4 },
+    { layer = 0, kind = "row",  x_min = 3,    x_max = 12,   y = 5 },
+    { layer = 0, kind = "row",  x_min = 1,    x_max = 4,    y = 6 },
+    { layer = 0, kind = "row",  x_min = 6,    x_max = 9,    y = 6 },
+    { layer = 0, kind = "row",  x_min = 11,   x_max = 14,   y = 6 },
+    { layer = 0, kind = "row",  x_min = 1,    x_max = 4,    y = 7 },
+    { layer = 0, kind = "row",  x_min = 6.5,  x_max = 8.5,  y = 7 },
+    { layer = 0, kind = "row",  x_min = 11,   x_max = 14,   y = 7 },
+    -- Layer 1: smaller claw rectangles, the hourglass body, and the supports.
+    { layer = 1, kind = "row",  x_min = 2.5,  x_max = 4.5,  y = 0 },
+    { layer = 1, kind = "row",  x_min = 10.5, x_max = 12.5, y = 0 },
+    { layer = 1, kind = "row",  x_min = 2.5,  x_max = 4.5,  y = 1 },
+    { layer = 1, kind = "row",  x_min = 7,    x_max = 8,    y = 1 },
+    { layer = 1, kind = "row",  x_min = 10.5, x_max = 12.5, y = 1 },
+    { layer = 1, kind = "tile", x = 4.5,  y = 2 },
+    { layer = 1, kind = "tile", x = 10.5, y = 2 },
+    { layer = 1, kind = "row",  x_min = 1,    x_max = 2,    y = 3 },
+    { layer = 1, kind = "row",  x_min = 6.5,  x_max = 8.5,  y = 3 },
+    { layer = 1, kind = "row",  x_min = 13,   x_max = 14,   y = 3 },
+    { layer = 1, kind = "tile", x = 1,  y = 4 },
+    { layer = 1, kind = "row",  x_min = 6,    x_max = 9,    y = 4 },
+    { layer = 1, kind = "tile", x = 14, y = 4 },
+    { layer = 1, kind = "row",  x_min = 5,    x_max = 10,   y = 5 },
+    { layer = 1, kind = "row",  x_min = 2,    x_max = 4,    y = 6 },
+    { layer = 1, kind = "row",  x_min = 11,   x_max = 13,   y = 6 },
+    { layer = 1, kind = "row",  x_min = 2,    x_max = 4,    y = 7 },
+    { layer = 1, kind = "row",  x_min = 6.5,  x_max = 8.5,  y = 7 },
+    { layer = 1, kind = "row",  x_min = 11,   x_max = 13,   y = 7 },
+    -- Layer 2: the center ridge and claw-tip pairs.
+    { layer = 2, kind = "row",  x_min = 3,    x_max = 4,    y = 0.5 },
+    { layer = 2, kind = "row",  x_min = 11,   x_max = 12,   y = 0.5 },
+    { layer = 2, kind = "tile", x = 7.5, y = 1 },
+    { layer = 2, kind = "tile", x = 7.5, y = 3 },
+    { layer = 2, kind = "row",  x_min = 7,    x_max = 8,    y = 4 },
+    { layer = 2, kind = "row",  x_min = 7,    x_max = 8,    y = 5 },
+    { layer = 2, kind = "row",  x_min = 2.5,  x_max = 3.5,  y = 6.5 },
+    { layer = 2, kind = "row",  x_min = 11.5, x_max = 12.5, y = 6.5 },
+    { layer = 2, kind = "tile", x = 7.5, y = 7 },
+    -- Layer 3: the two stacked peak tiles.
+    { layer = 3, kind = "tile", x = 7.5, y = 4 },
+    { layer = 3, kind = "tile", x = 7.5, y = 5 },
+}
+
 -- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
 -- the entries (the cached layout tables reference the spec).
 Layouts.layouts = {}
@@ -654,7 +725,8 @@ end
 
 -- Turtle is registered in US-14; US-15 adds Spider; US-16 adds Bridge; US-22
 -- adds Ziggurat; US-23 adds Cloud; US-24/25/26 add Tic-Tac-Toe, Red Dragon and
--- Overpass; US-27/28/29 add Pyramid's Walls, Confounding Cross and Taipei.
+-- Overpass; US-27/28/29 add Pyramid's Walls, Confounding Cross and Taipei;
+-- US-34 adds Crab.
 Layouts.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
 Layouts.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
 Layouts.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
@@ -666,6 +738,7 @@ Layouts.registerLayout{ id = "overpass", name = "Overpass", spec = OVERPASS_SPEC
 Layouts.registerLayout{ id = "pyramid", name = "Pyramid's Walls", spec = PYRAMID_SPEC }
 Layouts.registerLayout{ id = "confounding", name = "Confounding Cross", spec = CONFOUNDING_SPEC }
 Layouts.registerLayout{ id = "taipei", name = "Taipei", spec = TAIPEI_SPEC }
+Layouts.registerLayout{ id = "crab", name = "Crab", spec = CRAB_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -818,7 +891,7 @@ function Layouts.runSelfTests()
     -- 87/36/16/4/1, Spider 65/53/25/1, Bridge 88/36/16/4, Ziggurat
     -- 64/20/18/18/14/10, Cloud 79/36/29, Tic-Tac-Toe 40/36/28/20/20, Red Dragon
     -- 82/45/17, Overpass 52/20/16/32/24, Pyramid's Walls 41/34/27/20/13/6/3,
-    -- Confounding Cross 47/42/27/18/9/1, Taipei 63/46/19/10/3/2/1.
+    -- Confounding Cross 47/42/27/18/9/1, Taipei 63/46/19/10/3/2/1, Crab 77/50/15/2.
     checkShape("turtle", { [0] = 87, [1] = 36, [2] = 16, [3] = 4, [4] = 1 },
         { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
     checkShape("spider", { [0] = 65, [1] = 53, [2] = 25, [3] = 1 },
@@ -841,6 +914,8 @@ function Layouts.runSelfTests()
         { x_min = 0, x_max = 10, y_min = 0, y_max = 8 })
     checkShape("taipei", { [0] = 63, [1] = 46, [2] = 19, [3] = 10, [4] = 3, [5] = 2, [6] = 1 },
         { x_min = 0, x_max = 10, y_min = 0, y_max = 6 })
+    checkShape("crab", { [0] = 77, [1] = 50, [2] = 15, [3] = 2 },
+        { x_min = 1, x_max = 14, y_min = 0, y_max = 7 })
 
     -- maxLayer per layout.
     check(Layouts.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
@@ -857,14 +932,14 @@ function Layouts.runSelfTests()
 
     -- Registry behavior (US-14..US-29): the eleven built-ins are enumerated
     -- sorted; memoization is per-id; an unknown id falls back to the id itself.
-    local ids = Layouts.layoutIds()
-    check(#ids == 11 and ids[1] == "bridge" and ids[2] == "cloud"
-        and ids[3] == "confounding" and ids[4] == "overpass"
-        and ids[5] == "pyramid" and ids[6] == "red-dragon"
-        and ids[7] == "spider" and ids[8] == "taipei"
-        and ids[9] == "tictactoe" and ids[10] == "turtle"
-        and ids[11] == "ziggurat",
-        "layoutIds returns exactly {bridge, cloud, confounding, overpass, pyramid,\n"
+local ids = Layouts.layoutIds()
+    check(#ids == 12 and ids[1] == "bridge" and ids[2] == "cloud"
+        and ids[3] == "confounding" and ids[4] == "crab"
+        and ids[5] == "overpass" and ids[6] == "pyramid"
+        and ids[7] == "red-dragon" and ids[8] == "spider"
+        and ids[9] == "taipei" and ids[10] == "tictactoe"
+        and ids[11] == "turtle" and ids[12] == "ziggurat",
+        "layoutIds returns exactly {bridge, cloud, confounding, crab, overpass, pyramid,\n"
         .. "red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got "
         .. table.concat(ids, ",") .. ")")
     check(Layouts.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
@@ -878,8 +953,9 @@ function Layouts.runSelfTests()
     check(Layouts.layoutName("pyramid") == "Pyramid's Walls",
         "layoutName returns Pyramid's Walls' registered name")
     check(Layouts.layoutName("confounding") == "Confounding Cross",
-        "layoutName returns Confounding Cross's registered name")
+        "layoutName returns Confounding Cross' registered name")
     check(Layouts.layoutName("taipei") == "Taipei", "layoutName returns Taipei's registered name")
+    check(Layouts.layoutName("crab") == "Crab", "layoutName returns Crab's registered name")
     check(Layouts.layoutName("nope") == "nope",
         "layoutName falls back to the id for an unknown layout")
     check(Layouts.buildLayout("turtle") == Layouts.buildLayout(),
@@ -905,12 +981,13 @@ function Layouts.runSelfTests()
     }
     Layouts.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = Layouts.layoutIds()
-    check(#toy_ids == 12 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "confounding" and toy_ids[4] == "overpass"
-        and toy_ids[5] == "pyramid" and toy_ids[6] == "red-dragon"
-        and toy_ids[7] == "spider" and toy_ids[8] == "taipei"
-        and toy_ids[9] == "tictactoe" and toy_ids[10] == "toy"
-        and toy_ids[11] == "turtle" and toy_ids[12] == "ziggurat",
+    check(#toy_ids == 13 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
+        and toy_ids[5] == "overpass" and toy_ids[6] == "pyramid"
+        and toy_ids[7] == "red-dragon" and toy_ids[8] == "spider"
+        and toy_ids[9] == "taipei" and toy_ids[10] == "tictactoe"
+        and toy_ids[11] == "toy" and toy_ids[12] == "turtle"
+        and toy_ids[13] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
     check(#Layouts.buildLayout("toy") == 5, "the toy layout has 5 positions")
     check(Layouts.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -932,10 +1009,10 @@ function Layouts.runSelfTests()
     check(Layouts.layoutName("toy") == "Toy2", "re-registering an id replaces its name")
 
     Layouts.deregisterLayout("toy")
-    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 11,
+    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 12,
         "deregisterLayout removes the entry and restores the built-in registry")
     Layouts.deregisterLayout("toy")
-    check(#Layouts.layoutIds() == 11,
+    check(#Layouts.layoutIds() == 12,
         "deregisterLayout is a no-op for an already-deregistered id")
 
     local function checkError(fn, msg)
