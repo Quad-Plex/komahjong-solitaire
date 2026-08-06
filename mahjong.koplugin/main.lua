@@ -353,6 +353,12 @@ function Mahjong:startGame()
         self:updateTimerDisplay()
         self:startTimer()
         UIManager:show(self)
+        -- US-32: a restored dead board must be recognized at launch (saved a
+        -- dead game, closed, re-opened — the player should not face a silent
+        -- dead board).
+        if not MahjongLogic.hasMoves(self.board) then
+            self:handleNoMoves()
+        end
     else
         -- US-14: no saved game (first launch, or the save was cleared). Show
         -- the layout picker instead of dealing a default board; the chosen
@@ -939,12 +945,14 @@ function Mahjong:clearSelection()
     end
 end
 
--- After every removal: win dialog when the board is empty, otherwise an
--- offer to reshuffle when no move remains (US-08).
-function Mahjong:checkGameState()
-    if MahjongLogic.isWin(self.board) then
-        self:showWinDialog()
-    elseif not MahjongLogic.hasMoves(self.board) then
+-- US-32: centralized no-moves handler.  Called from checkGameState (after
+-- every match), showHint's dead branch, and startGame's restore branch.
+-- If the board is provably dead the loss dialog skips the shuffle offer
+-- entirely; otherwise the existing shuffle prompt still runs.
+function Mahjong:handleNoMoves()
+    if MahjongLogic.isPermanentlyDead(self.board) then
+        self:showDeadBoardDialog()
+    else
         UIManager:show(ConfirmBox:new{
             text = _("No moves left! Shuffle the board?"),
             ok_text = _("Shuffle"),
@@ -954,6 +962,52 @@ function Mahjong:checkGameState()
                 UIManager:close(self, "full")
             end,
         })
+    end
+end
+
+-- US-32: permanent-dead-board dialog (New Game / Close + optional Undo).
+-- Shown when isPermanentlyDead is true, or when the shuffle/auto-solve
+-- retry loops exhaust with no moves. The dialog pauses the clock (like the
+-- win dialog) so the polling loop does not flash behind the modal.
+function Mahjong:showDeadBoardDialog()
+    self:stopTimer()
+    local has_undo = self.history and #self.history > 0
+    local opts = {
+        text = _([[No moves left, and shuffling can't help — this board can't be cleared.
+Undo your last move to try a different approach, or start a new game.]]),
+        ok_text = _("New Game"),
+        ok_callback = function()
+            self:showLayoutPicker()
+        end,
+        cancel_text = _("Close"),
+        cancel_callback = function()
+            UIManager:close(self, "full")
+        end,
+    }
+    if has_undo then
+        opts.other_buttons = { {
+            {
+                text = _("Undo"),
+                callback = function()
+                    self:undo()
+                    self:startTimer()
+                    self:updateTimerDisplay()
+                end,
+            },
+        } }
+        opts.other_buttons_first = true
+    end
+    UIManager:show(ConfirmBox:new(opts))
+end
+
+-- After every removal: win dialog when the board is empty, otherwise an
+-- offer to reshuffle when no move remains (US-08).  US-32: provably-dead
+-- boards skip the shuffle offer and show the loss dialog instead.
+function Mahjong:checkGameState()
+    if MahjongLogic.isWin(self.board) then
+        self:showWinDialog()
+    elseif not MahjongLogic.hasMoves(self.board) then
+        self:handleNoMoves()
     end
 end
 
@@ -1065,11 +1119,7 @@ function Mahjong:showHint()
         self._last_hint = nil
         -- In theory checkGameState already caught this, but user can tap Hint
         -- on a dead board before the shuffle prompt is accepted.
-        UIManager:show(ConfirmBox:new{
-            text = _("No moves left! Shuffle the board?"),
-            ok_text = _("Shuffle"),
-            ok_callback = function() self:shuffleBoard(true) end,
-        })
+        self:handleNoMoves()
         return
     end
     -- Cycle: highlight the pair AFTER the one just shown (wrapping around). If
@@ -1133,10 +1183,14 @@ function Mahjong:shuffleBoard(force, attempts, charge)
         self:updateTimerDisplay()
         self:saveGameState()
         -- If still no moves (rare but possible), auto-repeat a bounded number
-        -- of times (a board whose remaining kinds can never pair must not loop).
-        if attempts > 0 and not MahjongLogic.hasMoves(self.board)
-            and MahjongLogic.tileCount(self.board) > 0 then
-            self:shuffleBoard(true, attempts - 1, false)
+        -- of times. When the retries run out and the board is still stuck, the
+        -- board is empirically dead — show the permanent deadlock dialog.
+        if not MahjongLogic.hasMoves(self.board) then
+            if attempts > 0 then
+                self:shuffleBoard(true, attempts - 1, false)
+            elseif MahjongLogic.tileCount(self.board) > 0 then
+                self:showDeadBoardDialog()
+            end
         end
     end
 
@@ -1237,7 +1291,9 @@ function Mahjong:autoSolveStep()
         until pair or attempts == 0
         self.board_view:updateBoard()
         if not pair then
+            -- US-32: the board is empirically dead (all shuffles failed).
             self:stopAutoSolve()
+            self:showDeadBoardDialog()
             return
         end
     end

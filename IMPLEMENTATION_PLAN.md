@@ -133,7 +133,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-30, US-22a**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-31, US-22a**.
 
 | Story | File | Status |
 |---|---|---|
@@ -168,6 +168,8 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-28 — Confounding Cross layout | [US-28_confounding-cross-layout_completed.md](implementation-plan/US-28_confounding-cross-layout_completed.md) | ✅ completed |
 | US-29 — Taipei layout | [US-29_taipei-layout_completed.md](implementation-plan/US-29_taipei-layout_completed.md) | ✅ completed |
 | US-30 — Layout picker polish + bevel corner fix | [US-30_picker-polish_completed.md](implementation-plan/US-30_picker-polish_completed.md) | ✅ completed |
+| US-31 — Per-layout highscore chip on the layout picker | [US-31_layout-highscore_completed.md](implementation-plan/US-31_layout-highscore_completed.md) | ✅ completed |
+| US-32 — Failure recognition (deadlock detection) | [US-32_failure-recognition.md](implementation-plan/US-32_failure-recognition.md) | 🚧 planned |
 
 The US-21..US-29 stories add the GNOME Mahjongg layouts now that the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) are shipped. A full git checkout of the GNOME

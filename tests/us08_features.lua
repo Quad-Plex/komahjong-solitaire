@@ -149,22 +149,25 @@ local same = true
 for i=1,3 do if kinds_before[i] ~= kinds_after[i] then same = false end end
 expect(same, "shuffle preserves the multiset of tiles")
 
--- ---- No-moves Shuffle prompt (US-08) ---------------------------------------
+-- ---- No-moves Shuffle prompt (US-08) → US-32 loss dialog ------------------
 
 local mj_dead = Mahjong:new()
 mj_dead.board = boardWith{
     {2,2,0,"b1"}, {4,2,0,"b1"},   -- playable pair
-    {6,2,0,"c1"}, {8,2,0,"c2"},   -- leftovers: no move possible
+    {6,2,0,"c1"}, {8,2,0,"c2"},   -- leftovers: odd parity → provably dead
 }
 mj_dead:buildUILayout()
 ctx.last_confirm = nil
 mj_dead:handleTileTap(2, 2, 0)
 mj_dead:handleTileTap(4, 2, 0)
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.text:find("No moves left", 1, true),
-    "dead board shows a shuffle prompt instead of immediate shuffle")
-ctx.last_confirm.ok_callback()
-expect(Logic.tileCount(mj_dead.board) == 2, "shuffled board still has 2 tiles")
-expect(mapCount(mj_dead.board_view.tile_widgets) == 2, "board view updated after shuffle prompt")
+expect(ctx.last_confirm ~= nil
+        and tostring(ctx.last_confirm.text):find("can't help", 1, true) ~= nil,
+    "dead board shows the loss dialog (not the shuffle prompt)")
+-- Undo restores the pair.
+ctx.last_confirm.other_buttons[1][1].callback()
+expect(Logic.tileCount(mj_dead.board) == 4, "undo from the loss dialog restored the pair")
+expect(mapCount(mj_dead.board_view.tile_widgets) == 4,
+    "board view updated after undo")
 
 if failures == 0 then
     print("\nALL US-08 FEATURE CHECKS PASSED")

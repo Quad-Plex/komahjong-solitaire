@@ -530,6 +530,96 @@ function MahjongLogic.countFreePairs(board, id)
     return count
 end
 
+-- Deadlock detection (US-32) -------------------------------------------------
+
+-- True when the board is permanently dead — no sequence of legal moves (plus
+-- shuffles, which preserve the position set and the kind multiset) can clear
+-- the board.
+--
+-- Detection is sound (never flags a winnable board as dead), written as two
+-- cheap structural checks:
+--   A. Match-group parity. Every legal match removes exactly two tiles from
+--      the same group (kind / "flower" / "season"), so any group with an odd
+--      remaining count can never fully clear.  A single leftover flower after
+--      its partner was already removed is the canonical example.
+--   B. Stacked-kind deadlock.  For a kind K with at least 2 remaining tiles,
+--      if at most one K-tile is free AND every non-free K-tile is covered
+--      (from above, within ±0.5 in both axes) by a K-tile, the K's form a
+--      self-blocking column — no pair can ever escape because freeing a
+--      covered K-tile always requires first removing a K-tile (impossible
+--      with ≤1 free match).  The named "two identical stacked" trap falls
+--      under this rule, as does an n-tile stack all in one column.
+--
+-- The checks are NOT complete: exotic deadlocks that survive both (e.g. a
+-- no-moves board whose kinds are all even-count and whose covered tiles are
+-- covered by independent non-own-kind tiles) fall through; the caller's
+-- shuffle-retries-exhausted fallback catches those empirically.
+--
+-- The checks only consult the board table and the isFree/isMatch rules.
+function MahjongLogic.isPermanentlyDead(board)
+
+    -- A: parity by match group
+    local group_counts = {}
+    for _, kind in pairs(board) do
+        local g = MahjongLogic.matchGroup(kind)
+        group_counts[g] = (group_counts[g] or 0) + 1
+    end
+    for _, n in pairs(group_counts) do
+        if n % 2 == 1 then return true end
+    end
+
+    -- B: stacked-kind deadlock. Collect positions per kind in one pass.
+    local positions_by_kind = {}
+    for key, kind in pairs(board) do
+        local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
+        if not x then
+            error("isPermanentlyDead: malformed board key " .. tostring(key))
+        end
+        x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
+        local list = positions_by_kind[kind]
+        if not list then
+            list = {}
+            positions_by_kind[kind] = list
+        end
+        list[#list + 1] = { x = x, y = y, layer = layer }
+    end
+
+    for kind, positions in pairs(positions_by_kind) do
+        if #positions >= 2 then
+            local free_count = 0
+            for _, p in ipairs(positions) do
+                if MahjongLogic.isFree(board, p.x, p.y, p.layer) then
+                    free_count = free_count + 1
+                end
+            end
+            if free_count <= 1 then
+                local all_covered_by_same = true
+                for _, p in ipairs(positions) do
+                    if not MahjongLogic.isFree(board, p.x, p.y, p.layer) then
+                        local covered_by_same = false
+                        for dx = -0.5, 0.5, 0.5 do
+                            for dy = -0.5, 0.5, 0.5 do
+                                if MahjongLogic.tileAt(board, p.x + dx, p.y + dy, p.layer + 1) == kind then
+                                    covered_by_same = true
+                                    break
+                                end
+                            end
+                            if covered_by_same then break end
+                        end
+                        if not covered_by_same then
+                            all_covered_by_same = false
+                            break
+                        end
+                    end
+                end
+                if all_covered_by_same then return true end
+            end
+        end
+    end
+
+    return false
+end
+
 -- Shuffle ----------------------------------------------------------------
 
 -- Reshuffles the tiles remaining on a board IN PLACE: the remaining kinds are
@@ -1325,6 +1415,56 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.formatElapsed(599) == "09:59", "formatElapsed(599) is 09:59")
     check(MahjongLogic.formatElapsed(-3) == "00:00", "formatElapsed clamps negatives")
     check(MahjongLogic.formatElapsed(3600) == "60:00", "formatElapsed rolls past 59:59")
+
+    -- Deadlock detection (US-32) ------------------------------------
+    -- A. Parity: any match group with an odd remaining count can never clear.
+    local d_odd = boardWith{ {2,2,0,"b1"}, {3,2,0,"b1"}, {4,2,0,"b1"} }
+    check(MahjongLogic.isPermanentlyDead(d_odd),
+        "odd count (3 b1) is permanently dead")
+    local d_single = boardWith{ {2,2,0,"flower1"} }
+    check(MahjongLogic.isPermanentlyDead(d_single),
+        "single remaining flower is permanently dead")
+    local d_mixed = boardWith{ {2,2,0,"b1"}, {3,2,0,"b1"}, {4,2,0,"b2"} }
+    check(MahjongLogic.isPermanentlyDead(d_mixed),
+        "last b2-of-three-total with an odd b2 count is permanently dead")
+
+    -- B. Stacked-kind deadlock: two identical tiles, one directly covering
+    --    the other, with no third copy → the top can never be matched.
+    local d_stacked = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
+    check(MahjongLogic.isPermanentlyDead(d_stacked),
+        "two stacked identical tiles are permanently dead")
+
+    -- Four of a kind all in one column → same chain, can't escape.
+    local d_4stack = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {2,2,2,"b1"}, {2,2,3,"b1"} }
+    check(MahjongLogic.isPermanentlyDead(d_4stack),
+        "4 stacked identical tiles in one column are permanently dead")
+
+    -- Not dead: same kind, both free side by side.
+    local d_side = boardWith{ {2,2,0,"b1"}, {3,2,0,"b1"} }
+    check(not MahjongLogic.isPermanentlyDead(d_side),
+        "two free side-by-side identical tiles are winnable")
+
+    -- Not dead: 4 of a kind with 2 stacked but the other 2 free elsewhere.
+    local d_4mix = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {3,2,0,"b1"}, {4,2,0,"b1"} }
+    check(not MahjongLogic.isPermanentlyDead(d_4mix),
+        "4 of a kind with 2 stacked + 2 free is still winnable")
+
+    -- Not dead: a covered tile whose coverer is a different kind (remove
+    -- the foreign tile → both of the target kind become free).  Need even
+    -- parity for both kinds: two b1, two b2.
+    local d_cross = boardWith{ {2,2,0,"b1"}, {2,2,1,"b2"}, {3,2,0,"b1"}, {3,3,0,"b2"} }
+    check(not MahjongLogic.isPermanentlyDead(d_cross),
+        "covered b1 under a b2 is not a same-kind chain → winnable")
+
+    -- Empty board → not dead (it was won, not stuck).
+    check(not MahjongLogic.isPermanentlyDead({}),
+        "empty board is not permanently dead (it is empty/won)")
+
+    -- Full newGame board should never be provably dead (parity forced even
+    -- by the deck, and 144 scattered tiles never form a single-kind column).
+    local d_full = MahjongLogic.newGame()
+    check(not MahjongLogic.isPermanentlyDead(d_full),
+        "full random new game is not permanently dead")
 
     -- Persistence round-trip (US-10) ------------------------------------
     check(MahjongLogic.isKind("b1") and MahjongLogic.isKind("east") and MahjongLogic.isKind("flower2"),

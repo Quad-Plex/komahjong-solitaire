@@ -202,28 +202,32 @@ end
 expect(not still_on_stack and mj_win2.board == nil,
     "'Close' exits the game and clears the board")
 
--- ---- Dead board: shuffle prompt (US-08) --------------------------------------
+-- ---- Dead board: shuffle prompt (US-08) → US-32 loss dialog ------------------
 
 local mj_dead = Mahjong:new()
 mj_dead.board = boardWith{
     {2,2,0,"b1"}, {4,2,0,"b1"},   -- playable pair
-    {6,2,0,"c1"}, {8,2,0,"c2"},   -- leftovers: no move possible
+    {6,2,0,"c1"}, {8,2,0,"c2"},   -- leftovers: no move possible, odd parity → dead
 }
 mj_dead:buildUILayout()
 ctx.last_confirm = nil
 mj_dead:handleTileTap(2, 2, 0)
 mj_dead:handleTileTap(4, 2, 0)
 expect(Logic.tileCount(mj_dead.board) == 2, "pair removed from the dead-board game")
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.text:find("Shuffle", 1, true) ~= nil,
-    "no win dialog but a shuffle prompt on a non-empty dead board")
+expect(ctx.last_confirm ~= nil
+        and tostring(ctx.last_confirm.text):find("can't help", 1, true) ~= nil,
+    "dead board with odd parity shows the loss dialog (not the shuffle prompt)")
 expect(mj_dead.score == 10 and #mj_dead.history == 1,
     "the removal that dead-locked the board still counts")
-ctx.last_confirm.ok_callback()
-local dead_kinds = sortedKinds(mj_dead.board)
-expect(#dead_kinds == 2 and dead_kinds[1] == "c1" and dead_kinds[2] == "c2",
-    "shuffle keeps exactly the two leftover tiles (multiset preserved)")
-expect(mapCount(mj_dead.board_view.tile_widgets) == 2,
-    "board view matches the shuffled board")
+
+-- Undo restores the last pair so the player can try a different approach.
+expect(ctx.last_confirm.other_buttons ~= nil
+        and ctx.last_confirm.other_buttons[1][1].text:find("Undo", 1, true),
+    "loss dialog has an Undo button")
+ctx.last_confirm.other_buttons[1][1].callback()
+expect(Logic.tileCount(mj_dead.board) == 4, "undo from the loss dialog restores the pair")
+expect(mapCount(mj_dead.board_view.tile_widgets) == 4,
+    "board view has all 4 tiles after undo")
 
 -- ---- Board tap forwarding ---------------------------------------------------------
 

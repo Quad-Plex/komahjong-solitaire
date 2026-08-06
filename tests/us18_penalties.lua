@@ -120,23 +120,25 @@ expect(mj_shuf.score == 40 and mj_shuf.shuffles_used == 1,
 expect(store.game ~= nil and store.game.shuffles == 1,
     "the shuffle penalty is persisted with the game state")
 
--- The dead-board prompt path also charges exactly once.
+-- The provably-dead board shows the loss dialog (US-32) — no shuffle
+-- prompt is offered, so no shuffle penalty is charged. Instead the dialog
+-- has an Undo button.
 local mj_prompt = Mahjong:new()
 mj_prompt.board = boardWith{
     {2,2,0,"b1"}, {4,2,0,"b1"},
-    {6,2,0,"c1"}, {8,2,0,"c2"}, -- after the pair, c1/c2 can never match
+    {6,2,0,"c1"}, {8,2,0,"c2"}, -- after the pair, c1/c2 odd parity → provably dead
 }
 mj_prompt:buildUILayout()
 mj_prompt.score = 20
 mj_prompt.shuffles_used = 0
 mj_prompt:handleTileTap(2, 2, 0)
-mj_prompt:handleTileTap(4, 2, 0) -- dead board -> checkGameState shows the offer
+mj_prompt:handleTileTap(4, 2, 0) -- dead board -> checkGameState shows the loss dialog
 expect(ctx.last_confirm ~= nil
-        and tostring(ctx.last_confirm.text):find("No moves left", 1, true) ~= nil,
-    "a dead board shows the shuffle prompt")
-ctx.last_confirm.ok_callback()
-expect(mj_prompt.score == 20 and mj_prompt.shuffles_used == 1,
-    "the no-moves shuffle prompt charges SHUFFLE_PENALTY once (pair +10 then -10)")
+        and tostring(ctx.last_confirm.text):find("can't help", 1, true) ~= nil,
+    "a provably-dead board shows the loss dialog (not the shuffle prompt)")
+expect(mj_prompt.score == 30, "the pair scored 10 points; no shuffle penalty was charged")
+expect(mj_prompt.shuffles_used == 0,
+    "a provably-dead board skips the shuffle offer → no shuffle charge")
 
 -- ---- Auto-repeat re-shuffles do NOT re-charge ----------------------------------
 
