@@ -116,7 +116,8 @@ kindle_majong/
 │   ├── us17_pause.lua            # pause overlay
 │   ├── us18_penalties.lua        # hint/shuffle score penalties
 │   ├── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
-│   └── us21_picker.lua           # dynamic 3-col picker grid + scroll (US-21)
+│   ├── us21_picker.lua           # dynamic 3-col picker grid + scroll (US-21)
+│   └── us30_picker_wins.lua      # picker polish: badges, tap feedback (US-30)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
@@ -132,7 +133,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-23, US-22a**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-30, US-22a**.
 
 | Story | File | Status |
 |---|---|---|
@@ -163,9 +164,10 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout_completed.md](implementation-plan/US-24_tictactoe-layout_completed.md) | ✅ completed |
 | US-25 — Red Dragon layout | [US-25_red-dragon-layout_completed.md](implementation-plan/US-25_red-dragon-layout_completed.md) | ✅ completed |
 | US-26 — Overpass layout | [US-26_overpass-layout_completed.md](implementation-plan/US-26_overpass-layout_completed.md) | ✅ completed |
-| US-27 — Pyramid's Walls layout | [US-27_pyramid-walls-layout.md](implementation-plan/US-27_pyramid-walls-layout.md) | ⏳ planned |
-| US-28 — Confounding Cross layout | [US-28_confounding-cross-layout.md](implementation-plan/US-28_confounding-cross-layout.md) | ⏳ planned |
-| US-29 — Taipei layout | [US-29_taipei-layout.md](implementation-plan/US-29_taipei-layout.md) | ⏳ planned |
+| US-27 — Pyramid's Walls layout | [US-27_pyramid-walls-layout_completed.md](implementation-plan/US-27_pyramid-walls-layout_completed.md) | ✅ completed |
+| US-28 — Confounding Cross layout | [US-28_confounding-cross-layout_completed.md](implementation-plan/US-28_confounding-cross-layout_completed.md) | ✅ completed |
+| US-29 — Taipei layout | [US-29_taipei-layout_completed.md](implementation-plan/US-29_taipei-layout_completed.md) | ✅ completed |
+| US-30 — Layout picker polish + bevel corner fix | [US-30_picker-polish_completed.md](implementation-plan/US-30_picker-polish_completed.md) | ✅ completed |
 
 The US-21..US-29 stories add the GNOME Mahjongg layouts now that the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) are shipped. A full git checkout of the GNOME

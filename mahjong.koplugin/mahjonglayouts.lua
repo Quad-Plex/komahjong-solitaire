@@ -366,6 +366,200 @@ local OVERPASS_SPEC = {
     { layer = 4, kind = "block", x_min = 3, x_max = 8, y_min = 3, y_max = 6 },
 }
 
+-- Pyramid's Walls layout (US-27): GNOME Mahjongg's `pyramid` map — concentric
+-- square rings stepping up to a single peak tile, the deepest board at 7
+-- layers (41/34/27/20/13/6/3). Each layer keeps the same shape: a full border
+-- ring of tiles (rows at y=1/y=7, columns at x=0/x=11) plus a horizontal
+-- middle bar at y=4, all shrinking inward by one tile per layer until only the
+-- three L6 peak tiles remain. The y=1..7 rows (no tile at y=0 or y=8) and the
+-- fractional x=2.5..8.5 middle bars sit on the same half-grid the bevel logic
+-- already handles. (The story's "y=0..6" extent summary is a mis-transcription;
+-- the map's rows span y=1..7.)
+--   L0: border rows y=1/y=7 (12 each) + columns x=0/x=11 (5 each) + middle bar
+--       x=2.5..8.5 at y=4 (7) = 41
+--   L1..L4: same shape, ring shrunk by one per layer (34/27/20/13)
+--   L5: the inner ring narrows to two-wide rows at x=5..6, y=1/y=4/y=7 (6)
+--   L6: three peak tiles x=5.5 at y=1/y=4/y=7 (3)
+-- Grid extents: x=0..11, y=1..7.
+local PYRAMID_SPEC = {
+    -- Layer 0: the outer border ring plus the wide middle bar.
+    { layer = 0, kind = "row",   x_min = 0,   x_max = 11,  y = 1 },
+    { layer = 0, kind = "row",   x_min = 0,   x_max = 11,  y = 7 },
+    { layer = 0, kind = "block", x_min = 0,   x_max = 0,   y_min = 2, y_max = 6 },
+    { layer = 0, kind = "block", x_min = 11,  x_max = 11,  y_min = 2, y_max = 6 },
+    { layer = 0, kind = "row",   x_min = 2.5, x_max = 8.5, y = 4 },
+    -- Layer 1.
+    { layer = 1, kind = "row",   x_min = 1,   x_max = 10,  y = 1 },
+    { layer = 1, kind = "row",   x_min = 1,   x_max = 10,  y = 7 },
+    { layer = 1, kind = "block", x_min = 0,   x_max = 0,   y_min = 2.5, y_max = 5.5 },
+    { layer = 1, kind = "block", x_min = 11,  x_max = 11,  y_min = 2.5, y_max = 5.5 },
+    { layer = 1, kind = "row",   x_min = 3,   x_max = 8,   y = 4 },
+    -- Layer 2.
+    { layer = 2, kind = "row",   x_min = 2,   x_max = 9,   y = 1 },
+    { layer = 2, kind = "row",   x_min = 2,   x_max = 9,   y = 7 },
+    { layer = 2, kind = "block", x_min = 0,   x_max = 0,   y_min = 3, y_max = 5 },
+    { layer = 2, kind = "block", x_min = 11,  x_max = 11,  y_min = 3, y_max = 5 },
+    { layer = 2, kind = "row",   x_min = 3.5, x_max = 7.5, y = 4 },
+    -- Layer 3.
+    { layer = 3, kind = "row",   x_min = 3,   x_max = 8,   y = 1 },
+    { layer = 3, kind = "row",   x_min = 3,   x_max = 8,   y = 7 },
+    { layer = 3, kind = "block", x_min = 0,   x_max = 0,   y_min = 3.5, y_max = 4.5 },
+    { layer = 3, kind = "block", x_min = 11,  x_max = 11,  y_min = 3.5, y_max = 4.5 },
+    { layer = 3, kind = "row",   x_min = 4,   x_max = 7,   y = 4 },
+    -- Layer 4: the side columns have shrunk to a single tile each.
+    { layer = 4, kind = "row",   x_min = 4,   x_max = 7,   y = 1 },
+    { layer = 4, kind = "row",   x_min = 4,   x_max = 7,   y = 7 },
+    { layer = 4, kind = "tile",  x = 0,  y = 4 },
+    { layer = 4, kind = "tile",  x = 11, y = 4 },
+    { layer = 4, kind = "row",   x_min = 4.5, x_max = 6.5, y = 4 },
+    -- Layer 5.
+    { layer = 5, kind = "row",   x_min = 5, x_max = 6, y = 1 },
+    { layer = 5, kind = "row",   x_min = 5, x_max = 6, y = 7 },
+    { layer = 5, kind = "row",   x_min = 5, x_max = 6, y = 4 },
+    -- Layer 6: the three peak tiles.
+    { layer = 6, kind = "tile",  x = 5.5, y = 1 },
+    { layer = 6, kind = "tile",  x = 5.5, y = 7 },
+    { layer = 6, kind = "tile",  x = 5.5, y = 4 },
+}
+
+-- Confounding Cross layout (US-28): GNOME Mahjongg's `confounding` map — a
+-- plus/cross shape built from nested hollow rings rising to a lone center
+-- peak tile, 144 tiles across 6 layers (47/42/27/18/9/1). The cross arms are
+-- three-wide rows/columns; the inner rings keep the arms but hollow out the
+-- corners until a single peak tile (5, 4, L5) remains. L0 has the corner
+-- tiles of the 5x5 cross-center hollowed; the upper layers shrink toward the
+-- center column x=5. Grid extents: x=0..10, y=0..8.
+local CONFOUNDING_SPEC = {
+    -- Layer 0: the outer cross — arms, corner fills, and the center column.
+    { layer = 0, kind = "row",   x_min = 1, x_max = 9,  y = 1 },
+    { layer = 0, kind = "row",   x_min = 1, x_max = 9,  y = 7 },
+    { layer = 0, kind = "block", x_min = 1, x_max = 1,  y_min = 2, y_max = 6 },
+    { layer = 0, kind = "block", x_min = 9, x_max = 9,  y_min = 2, y_max = 6 },
+    { layer = 0, kind = "tile",  x = 5,  y = 0 },
+    { layer = 0, kind = "tile",  x = 5,  y = 8 },
+    { layer = 0, kind = "tile",  x = 0,  y = 4 },
+    { layer = 0, kind = "tile",  x = 10, y = 4 },
+    { layer = 0, kind = "tile",  x = 2,  y = 2 },
+    { layer = 0, kind = "tile",  x = 2,  y = 6 },
+    { layer = 0, kind = "tile",  x = 8,  y = 2 },
+    { layer = 0, kind = "tile",  x = 8,  y = 6 },
+    { layer = 0, kind = "row",   x_min = 2, x_max = 8,  y = 4 },
+    { layer = 0, kind = "tile",  x = 5,  y = 2 },
+    { layer = 0, kind = "tile",  x = 5,  y = 3 },
+    { layer = 0, kind = "tile",  x = 5,  y = 5 },
+    { layer = 0, kind = "tile",  x = 5,  y = 6 },
+    -- Layer 1: the ring steps inward — hollow 2x2 corner blocks and stub arms.
+    { layer = 1, kind = "row",   x_min = 0.5, x_max = 3.5,  y = 4 },
+    { layer = 1, kind = "row",   x_min = 6.5, x_max = 9.5,  y = 4 },
+    { layer = 1, kind = "block", x_min = 4.5, x_max = 5.5,  y_min = 3.5, y_max = 4.5 },
+    { layer = 1, kind = "block", x_min = 1, x_max = 2,  y_min = 1, y_max = 2 },
+    { layer = 1, kind = "block", x_min = 8, x_max = 9,  y_min = 1, y_max = 2 },
+    { layer = 1, kind = "block", x_min = 1, x_max = 2,  y_min = 6, y_max = 7 },
+    { layer = 1, kind = "block", x_min = 8, x_max = 9,  y_min = 6, y_max = 7 },
+    { layer = 1, kind = "block", x_min = 5, x_max = 5,  y_min = 0.5, y_max = 2.5 },
+    { layer = 1, kind = "block", x_min = 5, x_max = 5,  y_min = 5.5, y_max = 7.5 },
+    { layer = 1, kind = "tile",  x = 1, y = 3 },
+    { layer = 1, kind = "tile",  x = 1, y = 5 },
+    { layer = 1, kind = "tile",  x = 9, y = 3 },
+    { layer = 1, kind = "tile",  x = 9, y = 5 },
+    { layer = 1, kind = "tile",  x = 3, y = 1 },
+    { layer = 1, kind = "tile",  x = 3, y = 7 },
+    { layer = 1, kind = "tile",  x = 7, y = 1 },
+    { layer = 1, kind = "tile",  x = 7, y = 7 },
+    -- Layer 2: the cross body plus the four 2-tile corner stubs.
+    { layer = 2, kind = "row",   x_min = 1, x_max = 9,  y = 4 },
+    { layer = 2, kind = "block", x_min = 5, x_max = 5,  y_min = 1, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 5, x_max = 5,  y_min = 5, y_max = 7 },
+    { layer = 2, kind = "tile",  x = 1, y = 1 },
+    { layer = 2, kind = "tile",  x = 1, y = 2 },
+    { layer = 2, kind = "tile",  x = 2, y = 1 },
+    { layer = 2, kind = "tile",  x = 9, y = 7 },
+    { layer = 2, kind = "tile",  x = 9, y = 6 },
+    { layer = 2, kind = "tile",  x = 8, y = 7 },
+    { layer = 2, kind = "tile",  x = 9, y = 1 },
+    { layer = 2, kind = "tile",  x = 9, y = 2 },
+    { layer = 2, kind = "tile",  x = 8, y = 1 },
+    { layer = 2, kind = "tile",  x = 1, y = 7 },
+    { layer = 2, kind = "tile",  x = 1, y = 6 },
+    { layer = 2, kind = "tile",  x = 2, y = 7 },
+    -- Layer 3: the arms shrink to stub rows plus the 2-tile center spine.
+    { layer = 3, kind = "block", x_min = 4.5, x_max = 5.5, y_min = 3.5, y_max = 4.5 },
+    { layer = 3, kind = "row",   x_min = 1.5, x_max = 3.5, y = 4 },
+    { layer = 3, kind = "row",   x_min = 6.5, x_max = 8.5, y = 4 },
+    { layer = 3, kind = "block", x_min = 5, x_max = 5,  y_min = 1.5, y_max = 2.5 },
+    { layer = 3, kind = "block", x_min = 5, x_max = 5,  y_min = 5.5, y_max = 6.5 },
+    { layer = 3, kind = "tile",  x = 1, y = 1 },
+    { layer = 3, kind = "tile",  x = 9, y = 7 },
+    { layer = 3, kind = "tile",  x = 1, y = 7 },
+    { layer = 3, kind = "tile",  x = 9, y = 1 },
+    -- Layer 4: a horizontal bar plus the two 2-tile center stubs.
+    { layer = 4, kind = "row",   x_min = 3, x_max = 7, y = 4 },
+    { layer = 4, kind = "block", x_min = 5, x_max = 5, y_min = 2, y_max = 3 },
+    { layer = 4, kind = "block", x_min = 5, x_max = 5, y_min = 5, y_max = 6 },
+    -- Layer 5: the lone center peak tile.
+    { layer = 5, kind = "tile",  x = 5, y = 4 },
+}
+
+-- Taipei layout (US-29): GNOME Mahjongg's `difficult` map (Taipei, the
+-- "difficult" default) — the iconic fortified Great Wall board, 144 tiles
+-- across 7 layers (63/46/19/10/3/2/1). Two tall corner towers and a stepped
+-- center mound: the tiered wall bands shrink one layer at a time toward a
+-- single peak tile (5, 3, L6). The four corner 2x2 blocks and the half-grid
+-- center rows feed the existing bevel logic unchanged.
+--   L0: towers x=0/x=10 at y=3, 2x2 corner blocks, 2-wide 2x2 edge blocks at
+--       x=1..2 / x=8..9, the 5-wide center block x=3..7 (y=2..4), top/bottom
+--       rows y=0/y=6 and mid rows y=1/y=5 = 63
+--   L1: tower peaks, the left/right 3-wide tower bodies, and the half-grid
+--       center bands (46)
+--   L2: three full rows y=2/y=3/y=4 stepping in (19)
+--   L3: two edge tiles + a 4-wide block (10)
+--   L4/L5/L6: the three-row taper to the peak (3/2/1)
+-- Grid extents: x=0..10, y=0..6.
+local TAIPEI_SPEC = {
+    -- Layer 0: the base walls and corner towers.
+    { layer = 0, kind = "tile",  x = 0,  y = 3 },
+    { layer = 0, kind = "tile",  x = 10, y = 3 },
+    { layer = 0, kind = "block", x_min = 0.5, x_max = 1.5, y_min = 0.5, y_max = 1.5 },
+    { layer = 0, kind = "block", x_min = 8.5, x_max = 9.5, y_min = 0.5, y_max = 1.5 },
+    { layer = 0, kind = "block", x_min = 0.5, x_max = 1.5, y_min = 4.5, y_max = 5.5 },
+    { layer = 0, kind = "block", x_min = 8.5, x_max = 9.5, y_min = 4.5, y_max = 5.5 },
+    { layer = 0, kind = "block", x_min = 1, x_max = 2, y_min = 2.5, y_max = 3.5 },
+    { layer = 0, kind = "block", x_min = 8, x_max = 9, y_min = 2.5, y_max = 3.5 },
+    { layer = 0, kind = "block", x_min = 3, x_max = 7, y_min = 2, y_max = 4 },
+    { layer = 0, kind = "row",   x_min = 3, x_max = 7, y = 0 },
+    { layer = 0, kind = "row",   x_min = 3, x_max = 7, y = 6 },
+    { layer = 0, kind = "row",   x_min = 2.5, x_max = 7.5, y = 1 },
+    { layer = 0, kind = "row",   x_min = 2.5, x_max = 7.5, y = 5 },
+    -- Layer 1: the tier above — tower bodies and the half-grid center bands.
+    { layer = 1, kind = "tile",  x = 3.5, y = 0 },
+    { layer = 1, kind = "tile",  x = 6.5, y = 0 },
+    { layer = 1, kind = "tile",  x = 3.5, y = 6 },
+    { layer = 1, kind = "tile",  x = 6.5, y = 6 },
+    { layer = 1, kind = "row",   x_min = 1, x_max = 3,  y = 1 },
+    { layer = 1, kind = "block", x_min = 1.5, x_max = 2.5, y_min = 2, y_max = 4 },
+    { layer = 1, kind = "row",   x_min = 1, x_max = 3,  y = 5 },
+    { layer = 1, kind = "row",   x_min = 7, x_max = 9,  y = 1 },
+    { layer = 1, kind = "block", x_min = 7.5, x_max = 8.5, y_min = 2, y_max = 4 },
+    { layer = 1, kind = "row",   x_min = 7, x_max = 9,  y = 5 },
+    { layer = 1, kind = "row",   x_min = 4.5, x_max = 5.5, y = 0.5 },
+    { layer = 1, kind = "row",   x_min = 4, x_max = 6, y = 1.5 },
+    { layer = 1, kind = "block", x_min = 3.5, x_max = 6.5, y_min = 2.5, y_max = 3.5 },
+    { layer = 1, kind = "row",   x_min = 4, x_max = 6, y = 4.5 },
+    { layer = 1, kind = "row",   x_min = 4.5, x_max = 5.5, y = 5.5 },
+    -- Layer 2: three full stepped rows.
+    { layer = 2, kind = "row", x_min = 2.5, x_max = 7.5, y = 2 },
+    { layer = 2, kind = "row", x_min = 2,   x_max = 8,   y = 3 },
+    { layer = 2, kind = "row", x_min = 2.5, x_max = 7.5, y = 4 },
+    -- Layer 3: two edge tiles flanking the 4-wide center block.
+    { layer = 3, kind = "tile",  x = 2.5, y = 3 },
+    { layer = 3, kind = "tile",  x = 7.5, y = 3 },
+    { layer = 3, kind = "block", x_min = 3.5, x_max = 6.5, y_min = 2.5, y_max = 3.5 },
+    -- Layers 4-6: the taper to the peak tile.
+    { layer = 4, kind = "row",   x_min = 4, x_max = 6,  y = 3 },
+    { layer = 5, kind = "row",   x_min = 4.5, x_max = 5.5, y = 3 },
+    { layer = 6, kind = "tile",  x = 5, y = 3 },
+}
+
 -- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
 -- the entries (the cached layout tables reference the spec).
 Layouts.layouts = {}
@@ -460,7 +654,7 @@ end
 
 -- Turtle is registered in US-14; US-15 adds Spider; US-16 adds Bridge; US-22
 -- adds Ziggurat; US-23 adds Cloud; US-24/25/26 add Tic-Tac-Toe, Red Dragon and
--- Overpass. Future boards (US-27..29) add their registerLayout call here.
+-- Overpass; US-27/28/29 add Pyramid's Walls, Confounding Cross and Taipei.
 Layouts.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
 Layouts.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
 Layouts.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
@@ -469,6 +663,9 @@ Layouts.registerLayout{ id = "cloud", name = "Cloud", spec = CLOUD_SPEC }
 Layouts.registerLayout{ id = "tictactoe", name = "Tic-Tac-Toe", spec = TICTACTOE_SPEC }
 Layouts.registerLayout{ id = "red-dragon", name = "Red Dragon", spec = RED_DRAGON_SPEC }
 Layouts.registerLayout{ id = "overpass", name = "Overpass", spec = OVERPASS_SPEC }
+Layouts.registerLayout{ id = "pyramid", name = "Pyramid's Walls", spec = PYRAMID_SPEC }
+Layouts.registerLayout{ id = "confounding", name = "Confounding Cross", spec = CONFOUNDING_SPEC }
+Layouts.registerLayout{ id = "taipei", name = "Taipei", spec = TAIPEI_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -617,10 +814,11 @@ function Layouts.runSelfTests()
         end
     end
 
-    -- Per-layout shape (US-04/15/16/22/23/24/25/26): Turtle 87/36/16/4/1,
-    -- Spider 65/53/25/1, Bridge 88/36/16/4, Ziggurat 64/20/18/18/14/10,
-    -- Cloud 79/36/29, Tic-Tac-Toe 40/36/28/20/20, Red Dragon 82/45/17,
-    -- Overpass 52/20/16/32/24.
+    -- Per-layout shape (US-04/15/16/22/23/24/25/26/27/28/29): Turtle
+    -- 87/36/16/4/1, Spider 65/53/25/1, Bridge 88/36/16/4, Ziggurat
+    -- 64/20/18/18/14/10, Cloud 79/36/29, Tic-Tac-Toe 40/36/28/20/20, Red Dragon
+    -- 82/45/17, Overpass 52/20/16/32/24, Pyramid's Walls 41/34/27/20/13/6/3,
+    -- Confounding Cross 47/42/27/18/9/1, Taipei 63/46/19/10/3/2/1.
     checkShape("turtle", { [0] = 87, [1] = 36, [2] = 16, [3] = 4, [4] = 1 },
         { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
     checkShape("spider", { [0] = 65, [1] = 53, [2] = 25, [3] = 1 },
@@ -637,6 +835,12 @@ function Layouts.runSelfTests()
         { x_min = 0, x_max = 14, y_min = 0, y_max = 6.5 })
     checkShape("overpass", { [0] = 52, [1] = 20, [2] = 16, [3] = 32, [4] = 24 },
         { x_min = 0, x_max = 11, y_min = 0, y_max = 8 })
+    checkShape("pyramid", { [0] = 41, [1] = 34, [2] = 27, [3] = 20, [4] = 13, [5] = 6, [6] = 3 },
+        { x_min = 0, x_max = 11, y_min = 1, y_max = 7 })
+    checkShape("confounding", { [0] = 47, [1] = 42, [2] = 27, [3] = 18, [4] = 9, [5] = 1 },
+        { x_min = 0, x_max = 10, y_min = 0, y_max = 8 })
+    checkShape("taipei", { [0] = 63, [1] = 46, [2] = 19, [3] = 10, [4] = 3, [5] = 2, [6] = 1 },
+        { x_min = 0, x_max = 10, y_min = 0, y_max = 6 })
 
     -- maxLayer per layout.
     check(Layouts.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
@@ -647,16 +851,22 @@ function Layouts.runSelfTests()
     check(Layouts.maxLayer("tictactoe") == 4, "maxLayer(tictactoe) == 4")
     check(Layouts.maxLayer("red-dragon") == 2, "maxLayer(red-dragon) == 2")
     check(Layouts.maxLayer("overpass") == 4, "maxLayer(overpass) == 4")
+    check(Layouts.maxLayer("pyramid") == 6, "maxLayer(pyramid) == 6")
+    check(Layouts.maxLayer("confounding") == 5, "maxLayer(confounding) == 5")
+    check(Layouts.maxLayer("taipei") == 6, "maxLayer(taipei) == 6")
 
-    -- Registry behavior (US-14..US-26): the eight built-ins are enumerated
+    -- Registry behavior (US-14..US-29): the eleven built-ins are enumerated
     -- sorted; memoization is per-id; an unknown id falls back to the id itself.
     local ids = Layouts.layoutIds()
-    check(#ids == 8 and ids[1] == "bridge" and ids[2] == "cloud"
-        and ids[3] == "overpass" and ids[4] == "red-dragon"
-        and ids[5] == "spider" and ids[6] == "tictactoe"
-        and ids[7] == "turtle" and ids[8] == "ziggurat",
-        "layoutIds returns exactly {bridge, cloud, overpass, red-dragon, spider,\n"
-        .. "tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
+    check(#ids == 11 and ids[1] == "bridge" and ids[2] == "cloud"
+        and ids[3] == "confounding" and ids[4] == "overpass"
+        and ids[5] == "pyramid" and ids[6] == "red-dragon"
+        and ids[7] == "spider" and ids[8] == "taipei"
+        and ids[9] == "tictactoe" and ids[10] == "turtle"
+        and ids[11] == "ziggurat",
+        "layoutIds returns exactly {bridge, cloud, confounding, overpass, pyramid,\n"
+        .. "red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got "
+        .. table.concat(ids, ",") .. ")")
     check(Layouts.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
     check(Layouts.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
     check(Layouts.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
@@ -665,6 +875,11 @@ function Layouts.runSelfTests()
     check(Layouts.layoutName("tictactoe") == "Tic-Tac-Toe", "layoutName returns Tic-Tac-Toe's registered name")
     check(Layouts.layoutName("red-dragon") == "Red Dragon", "layoutName returns Red Dragon's registered name")
     check(Layouts.layoutName("overpass") == "Overpass", "layoutName returns Overpass's registered name")
+    check(Layouts.layoutName("pyramid") == "Pyramid's Walls",
+        "layoutName returns Pyramid's Walls' registered name")
+    check(Layouts.layoutName("confounding") == "Confounding Cross",
+        "layoutName returns Confounding Cross's registered name")
+    check(Layouts.layoutName("taipei") == "Taipei", "layoutName returns Taipei's registered name")
     check(Layouts.layoutName("nope") == "nope",
         "layoutName falls back to the id for an unknown layout")
     check(Layouts.buildLayout("turtle") == Layouts.buildLayout(),
@@ -690,11 +905,12 @@ function Layouts.runSelfTests()
     }
     Layouts.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = Layouts.layoutIds()
-    check(#toy_ids == 9 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "overpass" and toy_ids[4] == "red-dragon"
-        and toy_ids[5] == "spider" and toy_ids[6] == "tictactoe"
-        and toy_ids[7] == "toy" and toy_ids[8] == "turtle"
-        and toy_ids[9] == "ziggurat",
+    check(#toy_ids == 12 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "confounding" and toy_ids[4] == "overpass"
+        and toy_ids[5] == "pyramid" and toy_ids[6] == "red-dragon"
+        and toy_ids[7] == "spider" and toy_ids[8] == "taipei"
+        and toy_ids[9] == "tictactoe" and toy_ids[10] == "toy"
+        and toy_ids[11] == "turtle" and toy_ids[12] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
     check(#Layouts.buildLayout("toy") == 5, "the toy layout has 5 positions")
     check(Layouts.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -716,10 +932,10 @@ function Layouts.runSelfTests()
     check(Layouts.layoutName("toy") == "Toy2", "re-registering an id replaces its name")
 
     Layouts.deregisterLayout("toy")
-    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 8,
+    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 11,
         "deregisterLayout removes the entry and restores the built-in registry")
     Layouts.deregisterLayout("toy")
-    check(#Layouts.layoutIds() == 8,
+    check(#Layouts.layoutIds() == 11,
         "deregisterLayout is a no-op for an already-deregistered id")
 
     local function checkError(fn, msg)

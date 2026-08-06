@@ -182,6 +182,13 @@ end
 -- `id` is the layout id (defaults to "turtle"). `rng` is nil (random from the
 -- clock), an integer seed, or a function returning [0,1).
 --
+-- A random deal (rng == nil) is re-dealt until the board has at least one
+-- matching free pair, so a fresh game never starts dead — without this, a
+-- small fraction of deals (measured ~5% on Bridge) have no possible first
+-- move and the player is forced to shuffle a board they never got to play.
+-- Seeded deals (the self-tests, and the deterministic deal checks) are left
+-- byte-identical: only the nil-rng path re-deals.
+--
 -- Backward-compat: the pre-US-14 signature was newGame(rng) — a number/nil
 -- first argument is still treated as the rng for a Turtle deal, so every
 -- existing caller (and the self-tests) stays byte-identical. The explicit form
@@ -193,19 +200,23 @@ function MahjongLogic.newGame(id, rng)
         id = "turtle"
     end
     local layout = MahjongLogic.buildLayout(id)
-    local deck = MahjongLogic.createDeck()
+    local is_random = rng == nil
     if type(rng) == "number" then
         rng = MahjongLogic.newRng(rng)
     elseif rng == nil then
         local seed = os.time() * 1000 + math.random(1000)
         rng = MahjongLogic.newRng(seed)
     end
-    MahjongLogic.shuffle(deck, rng)
-    local board = {}
-    for i = 1, #layout do
-        local p = layout[i]
-        board[MahjongLogic.posKey(p.x, p.y, p.layer)] = deck[i]
-    end
+    local board
+    repeat
+        local deck = MahjongLogic.createDeck()
+        MahjongLogic.shuffle(deck, rng)
+        board = {}
+        for i = 1, #layout do
+            local p = layout[i]
+            board[MahjongLogic.posKey(p.x, p.y, p.layer)] = deck[i]
+        end
+    until not is_random or MahjongLogic.hasMoves(board, id)
     return board
 end
 
@@ -766,11 +777,12 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 9 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "overpass" and toy_ids[4] == "red-dragon"
-        and toy_ids[5] == "spider" and toy_ids[6] == "tictactoe"
-        and toy_ids[7] == "toy" and toy_ids[8] == "turtle"
-        and toy_ids[9] == "ziggurat",
+    check(#toy_ids == 12 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "confounding" and toy_ids[4] == "overpass"
+        and toy_ids[5] == "pyramid" and toy_ids[6] == "red-dragon"
+        and toy_ids[7] == "spider" and toy_ids[8] == "taipei"
+        and toy_ids[9] == "tictactoe" and toy_ids[10] == "toy"
+        and toy_ids[11] == "turtle" and toy_ids[12] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -804,9 +816,9 @@ function MahjongLogic.runSelfTests()
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
     MahjongLogic.deregisterLayout("toy")
-    check(#MahjongLogic.layoutIds() == 8,
-        "deregistering toy restores the {bridge, cloud, overpass, red-dragon,\n"
-        .. "spider, tictactoe, turtle, ziggurat} registry")
+    check(#MahjongLogic.layoutIds() == 11,
+        "deregistering toy restores the {bridge, cloud, confounding, overpass,\n"
+        .. "pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
     -- Shape checks (144 positions, per-layer counts, grid bounds) live in

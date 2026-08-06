@@ -66,6 +66,13 @@ local function pickTurtle()
         if c.id == "turtle" then r = c break end
     end
     picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+    -- US-30: the picker deals on a deferred tick. This test overrides
+    -- um.scheduleIn into its own `scheduled` list; the deal is the task just
+    -- added (last), so run it.
+    if scheduled[#scheduled] then
+        local e = table.remove(scheduled, #scheduled)
+        e[2]()
+    end
 end
 local function setBoard(mj, tiles)
     mj.board = boardWith(tiles)

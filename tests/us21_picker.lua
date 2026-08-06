@@ -11,7 +11,8 @@
 -- 3 rows min, 9 slots, 3 cards in row 0). A throwaway "toy" layout is
 -- registered mid-test to exercise the 4th-card-falls-in-row-1 path. (US-22
 -- adds Ziggurat and US-23 adds Cloud, US-24/25/26 add Tic-Tac-Toe, Red Dragon
--- and Overpass, so the base registry now has 8 layouts and the toy makes 9.)
+-- and Overpass, and US-27/28/29 add Pyramid's Walls, Confounding Cross and
+-- Taipei, so the base registry now has 11 layouts and the toy makes 12.)
 
 local mock = require("mock")
 local ctx = mock.newContext()
@@ -99,17 +100,18 @@ expect(ids_match, "card ids match sorted registered layout ids")
 
 -- Every card has a non-nil thumbnail-backed content (the card was built).
 for _, c in ipairs(picker._card_rects) do
-    expect(c.id == "bridge" or c.id == "cloud" or c.id == "overpass"
-            or c.id == "red-dragon" or c.id == "spider" or c.id == "tictactoe"
+    expect(c.id == "bridge" or c.id == "cloud" or c.id == "confounding"
+            or c.id == "overpass" or c.id == "pyramid" or c.id == "red-dragon"
+            or c.id == "spider" or c.id == "taipei" or c.id == "tictactoe"
             or c.id == "turtle" or c.id == "ziggurat",
         "card id is a known layout (" .. tostring(c.id) .. ")")
 end
 
--- ---- Dynamic rows: a 9th layout fills row 2 -----------------------------------
+-- ---- Dynamic rows: 12 layouts fill 4 rows -------------------------------------
 
--- Register a throwaway toy layout: 9 layouts → ceil(9/3)=3 → max(3,3)=3 rows.
--- The 4th card (red-dragon) wraps to row 1, column 0; the toy (7th) fills the
--- first slot of row 2.
+-- Register a throwaway toy layout: 12 layouts → ceil(12/3)=4 → max(3,4)=4 rows.
+-- The 4th card (overpass) wraps to row 1, column 0; the toy (10th) is the
+-- first card of row 3.
 local toy_spec = {
     { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 0 },
     { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 1 },
@@ -122,19 +124,23 @@ local mj2 = Mahjong:new()
 mj2:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker2 = ctx.window_stack[#ctx.window_stack].widget
-expect(#picker2._card_rects == 9,
-    "9 layouts → 9 cards (got " .. #picker2._card_rects .. ")")
+expect(#picker2._card_rects == 12,
+    "12 layouts → 12 cards (got " .. #picker2._card_rects .. ")")
 
--- Sorted ids: {bridge, cloud, overpass, red-dragon, spider, tictactoe, toy, turtle, ziggurat}
-expect(picker2._card_rects[1].id == "bridge", "9th-layout grid: slot 1 = bridge")
-expect(picker2._card_rects[2].id == "cloud",  "9th-layout grid: slot 2 = cloud")
-expect(picker2._card_rects[3].id == "overpass", "9th-layout grid: slot 3 = overpass")
-expect(picker2._card_rects[4].id == "red-dragon", "9th-layout grid: slot 4 = red-dragon")
-expect(picker2._card_rects[5].id == "spider", "9th-layout grid: slot 5 = spider")
-expect(picker2._card_rects[6].id == "tictactoe", "9th-layout grid: slot 6 = tictactoe")
-expect(picker2._card_rects[7].id == "toy",    "9th-layout grid: slot 7 = toy")
-expect(picker2._card_rects[8].id == "turtle", "9th-layout grid: slot 8 = turtle")
-expect(picker2._card_rects[9].id == "ziggurat", "9th-layout grid: slot 9 = ziggurat")
+-- Sorted ids: {bridge, cloud, confounding, overpass, pyramid, red-dragon,
+-- spider, taipei, tictactoe, toy, turtle, ziggurat}
+expect(picker2._card_rects[1].id == "bridge", "12-layout grid: slot 1 = bridge")
+expect(picker2._card_rects[2].id == "cloud",  "12-layout grid: slot 2 = cloud")
+expect(picker2._card_rects[3].id == "confounding", "12-layout grid: slot 3 = confounding")
+expect(picker2._card_rects[4].id == "overpass", "12-layout grid: slot 4 = overpass")
+expect(picker2._card_rects[5].id == "pyramid", "12-layout grid: slot 5 = pyramid")
+expect(picker2._card_rects[6].id == "red-dragon", "12-layout grid: slot 6 = red-dragon")
+expect(picker2._card_rects[7].id == "spider", "12-layout grid: slot 7 = spider")
+expect(picker2._card_rects[8].id == "taipei", "12-layout grid: slot 8 = taipei")
+expect(picker2._card_rects[9].id == "tictactoe", "12-layout grid: slot 9 = tictactoe")
+expect(picker2._card_rects[10].id == "toy",    "12-layout grid: slot 10 = toy")
+expect(picker2._card_rects[11].id == "turtle", "12-layout grid: slot 11 = turtle")
+expect(picker2._card_rects[12].id == "ziggurat", "12-layout grid: slot 12 = ziggurat")
 
 -- First 3 cards share row 0; the 4th is in row 1 (lower y).
 expect(picker2._card_rects[1].y == picker2._card_rects[2].y
@@ -156,7 +162,7 @@ expect(picker2._card_rects[6].y == picker2._card_rects[4].y,
 expect(picker2._card_rects[6].x > picker2._card_rects[5].x,
     "6th card sits in row 1, column 2 (x=" .. picker2._card_rects[6].x .. ")")
 
--- The 7th card (toy) wraps to row 2, column 0; 8th and 9th sit beside it.
+-- The 7th card wraps to row 2, column 0; 8th and 9th sit beside it.
 expect(picker2._card_rects[7].y > picker2._card_rects[4].y,
     "7th card is in row 2 (lower than row 1)")
 expect(picker2._card_rects[7].x == EDGE_PAD,
@@ -168,7 +174,19 @@ expect(picker2._card_rects[8].x > picker2._card_rects[7].x
     and picker2._card_rects[9].x > picker2._card_rects[8].x,
     "8th and 9th cards sit in row 2, columns 1 and 2")
 
--- Deregister the toy layout (restore the eight built-ins).
+-- The 10th card (toy) wraps to row 3, column 0; 11th and 12th sit beside it.
+expect(picker2._card_rects[10].y > picker2._card_rects[7].y,
+    "10th card is in row 3 (lower than row 2)")
+expect(picker2._card_rects[10].x == EDGE_PAD,
+    "10th card wraps to column 0 (x=" .. picker2._card_rects[10].x .. ")")
+expect(picker2._card_rects[11].y == picker2._card_rects[10].y
+    and picker2._card_rects[12].y == picker2._card_rects[10].y,
+    "11th and 12th cards share the 10th card's row")
+expect(picker2._card_rects[11].x > picker2._card_rects[10].x
+    and picker2._card_rects[12].x > picker2._card_rects[11].x,
+    "11th and 12th cards sit in row 3, columns 1 and 2")
+
+-- Deregister the toy layout (restore the eleven built-ins).
 Logic.deregisterLayout("toy")
 
 -- ---- Pick a layout from the grid -----------------------------------------------
@@ -188,6 +206,7 @@ expect(turtle_card ~= nil, "Turtle card exists in the picker")
 if turtle_card then
     picker3:onTapSelect(nil, { pos = { x = turtle_card.x + turtle_card.w / 2,
                                        y = turtle_card.y + turtle_card.h / 2 } })
+    ctx.runScheduled() -- US-30: the picker deals on a deferred tick (flush it)
     expect(mj3.board ~= nil and Logic.tileCount(mj3.board) == 144,
         "picking Turtle deals a 144-tile board")
     expect(mj3.layout == "turtle", "the chosen layout is tracked as 'turtle'")

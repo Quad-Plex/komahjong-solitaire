@@ -76,6 +76,13 @@ function M.newContext()
     ctx.menu_registered = false
     ctx.dispatcher_actions = {}
     ctx.dirty_calls = {}
+    -- Scheduled-task capture (US-30): the picker defers its deal by a short
+    -- UIManager:scheduleIn so the pressed state paints on e-ink before the
+    -- board build replaces the picker. Harnesses run the deal with
+    -- ctx.runScheduled() (snapshot semantics — tasks added while one runs,
+    -- like the timer polling loop's reschedule, stay queued and are not
+    -- re-executed, so there is no spin).
+    ctx.scheduled = {}
 
     ctx.screen = {
         getWidth = function() return 1200 end,
@@ -113,8 +120,12 @@ function M.newContext()
         setDirty = function(_, widget, refreshtype)
             ctx.dirty_calls[#ctx.dirty_calls + 1] = { widget = widget, refreshtype = refreshtype }
         end,
-        scheduleIn = function() end,
-        nextTick = function() end,
+        scheduleIn = function(_, seconds, fn)
+            ctx.scheduled[#ctx.scheduled + 1] = { seconds = seconds, fn = fn }
+        end,
+        nextTick = function(_, fn)
+            ctx.scheduled[#ctx.scheduled + 1] = { seconds = 0, fn = fn }
+        end,
     }
 
     local frame_container = widget_base:extend{}
@@ -199,6 +210,12 @@ function M.newContext()
                     if o.dimen.h then size.h = o.dimen.h end
                 end
                 o._size = size
+                -- The real OverlapGroup exposes getSize() (returns its dimen),
+                -- so a nested OverlapGroup (e.g. the layout-picker thumbnail
+                -- wrapped with its trophy badge) is queryable by an outer one.
+                o.getSize = function(self)
+                    return self.dimen or self._size
+                end
                 if o.init then o:init() end
                 return o
             end,
@@ -309,6 +326,19 @@ function M.newContext()
     ctx.setMock = function(name, mod)
         ctx.mocks[name] = mod
         package.preload[name] = function() return mod end
+    end
+
+    -- Run the first `n` currently-pending scheduled tasks (default: all of
+    -- them), snapshot semantics: tasks scheduled while one of these runs stay
+    -- queued for a later call, so a self-rescheduling loop (the timer's
+    -- polling tick) cannot spin here. Returns how many tasks ran.
+    ctx.runScheduled = function(n)
+        local total = n and math.min(n, #ctx.scheduled) or #ctx.scheduled
+        for _ = 1, total do
+            local e = table.remove(ctx.scheduled, 1)
+            e.fn()
+        end
+        return total
     end
 
     -- Load a REAL plugin module as a preload chunk and require() it.

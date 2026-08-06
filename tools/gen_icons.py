@@ -87,7 +87,7 @@ FACE_W, FACE_H = 100, 140
 # outward bevel bands. Darker fills than the original pale grays give the
 # tiles contrast on e-ink (white face -> light right side -> dark base).
 FACE_BEVEL_RIGHT = '<rect x="100" y="0" width="10" height="154" fill="#78909c"/>'
-FACE_BEVEL_BOTTOM = '<rect x="0" y="140" width="100" height="14" fill="#546e7a"/>'
+FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L100 154 L10 154 Z" fill="#546e7a"/>'
 
 # Corner-diagonal bevels: when BOTH bevels are exposed (base variant) the two
 # side faces meet along a DIAGONAL line from the face's bottom-right corner
@@ -96,11 +96,20 @@ FACE_BEVEL_BOTTOM = '<rect x="0" y="140" width="100" height="14" fill="#546e7a"/
 # corner reads as one receding point (the implied rectangular box) instead of a
 # square L where the right face flatly covers the corner. The upper-left
 # triangle of the corner square belongs to the right face (medium #78909c), the
-# lower-right to the base/front face (dark #546e7a). Single-bevel variants
-# (only one exposed edge) keep plain rectangles — a lone strip has no other face
-# to meet, so its outer edge stays straight.
+# lower-right to the base/front face (dark #546e7a).
+#
+# The bottom bevel also carries a mirrored diagonal on its LEFT edge (0,140) to
+# (10,154): the board shifts each upper layer up-left by the bevel thickness, so
+# a raised tile's bottom bevel is the visible WEST step of the tower, and a
+# square corner there breaks the continuous diagonal that the tower's west face
+# would otherwise trace down the stack (right side diagonal, then left-side
+# diagonal of the tile below, and so on). Mirrored diagonals keep the stacking
+# edge crisp on the deeper multi-layer boards. Single-bevel variants (only one
+# exposed edge) keep the bevel band straight on the covered side: the "_nr"
+# bottom bevel's right edge is a seam against a same-layer neighbour's face,
+# while its left edge stays a receding corner like the base variant's.
 FACE_BEVEL_RIGHT_CORNER = '<path d="M100 0 L110 0 L110 154 L100 140 Z" fill="#78909c"/>'
-FACE_BEVEL_BOTTOM_CORNER = '<path d="M0 140 L100 140 L110 154 L0 154 Z" fill="#546e7a"/>'
+FACE_BEVEL_BOTTOM_CORNER = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"/>'
 
 # Face outline: thin medium-gray ring inside the face box, ~1 viewBox unit
 # (~1 device px on the target screen). Same tone as the side bevel. See the
@@ -372,6 +381,16 @@ def generate():
                             '<path d="M0 0h24v24H0z" fill="none"/>'
                             '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 '
                             '2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>')
+    # Trophy (layout picker win badge): Material Design "emoji_events" glyph,
+    # shown with the per-layout win count in the corner of every layout card
+    # (0 wins when a layout was never won).
+    written["trophy.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                             'viewBox="0 0 24 24" width="24">'
+                             '<path d="M0 0h24v24H0z" fill="none"/>'
+                             '<path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94'
+                             '.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 '
+                             '3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82'
+                             'C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>')
     return written
 
 

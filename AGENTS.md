@@ -331,11 +331,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `self.cropping_widget` to the scroll container so the UIManager confines
   repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..23, US-22a shipped)
+## Mahjong plugin — current state and key contracts (US-01..30, US-22a shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..23, US-22a
+per user story; `_completed` in the filename marks shipped stories — US-01..30, US-22a
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -433,8 +433,12 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    grid x=0..13, y=0..5.5, half-grid y=5.5 spine rows), and US-24/25/26 add Tic-Tac-Toe
    (`tictactoe`, per-layer 40/36/28/20/20, grid x=0..12, y=0..8), Red Dragon (`red-dragon`,
    per-layer 82/45/17, grid x=0..14, y=0..6.5, fractional-y horn/base tiles) and Overpass
-   (per-layer 52/20/16/32/24, grid x=0..11, y=0..8). The sorted built-in registry is
-   {bridge, cloud, overpass, red-dragon, spider, tictactoe, turtle, ziggurat}. Every layout-dependent function takes a layout id (defaulting to
+   (per-layer 52/20/16/32/24, grid x=0..11, y=0..8). US-27/28/29 add Pyramid's Walls
+   (`pyramid`, per-layer 41/34/27/20/13/6/3, grid x=0..11, y=1..7, the deepest board at 7
+   layers), Confounding Cross (`confounding`, per-layer 47/42/27/18/9/1, grid x=0..10, y=0..8)
+   and Taipei (`taipei`, per-layer 63/46/19/10/3/2/1, grid x=0..10, y=0..6). The sorted built-in registry is
+   {bridge, cloud, confounding, overpass, pyramid, red-dragon, spider, taipei, tictactoe,
+   turtle, ziggurat}. Every layout-dependent function takes a layout id (defaulting to
    `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
    `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,
    `freeTiles(board, id)`, `hasMoves`/`matchingFreePair*`/`countFreePairs` (all take a trailing
@@ -530,6 +534,50 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     nothing on first launch). `showLayoutPicker()` stops the auto-solver + timer first (so the
     polling loop doesn't flash behind the opaque picker); `onClose`/`onPick` resume. The board
     widget is rebuilt with `layout_id` so its geometry follows the chosen layout.
+ 15. **US-30 picker polish:** (a) card names are `COLOR_BLACK` (were gray);
+    (b) the thumbnail is centered by the tower's **face center of mass** —
+    `layoutThumbnail` averages every tile's face center (the per-layer up-left
+    shift means the bounding box center sits east/south of where the tower
+    reads, so bbox-centering left the picture leaning up-left; e.g. Turtle was
+    ~5px left in the real card). The tower scales to fit a box inset by
+    `margin` (≈5% of the smaller thumb axis, so a width-filling layout never
+    touches the thumbnail's edge — a flush tower reads as off-center), and if
+    the fit-box rounding leaves too little room to center a lopsided tower's
+    mass (Turtle's head/tail asymmetry), it shrinks one tile-width notch at a
+    time until the mass fits. The card ALSO centers the thumbnail in the card:
+    without a full-card-width wrapper, the content `VerticalGroup` is only as
+    wide as its widest child (the thumbnail) and sits flush against the card's
+    LEFT edge, so a width-filling tower looked left-flush even when internally
+    centered — the card wraps its content in a `CenterContainer`
+    (`dimen = card_w x card_h`). (c) every card shows a **trophy badge**
+    (`mahjong/trophy` + win count, Material `emoji_events` glyph, white rounded
+    `FrameContainer`) in the thumbnail's top-right corner via an `OverlapGroup`
+    wrapping the thumb; the count is `self.wins_by_layout[id] or 0`, fed from
+    `MahjongStats.layout_wins` (a `layout_id -> wins` map added to the stats
+    record, `defaults()`/`load()`-sanitized, bumped by
+    `MahjongStats.recordLayoutWin` inside the same human-win gate as `recordWin`
+    in `showWinDialog` — auto-solve wins never count); (d) tapping a card calls
+    `_pressCard` (darkens background + border) and defers the deal by
+    `UIManager:scheduleIn(TAP_FEEDBACK_SECONDS=0.2, ...)` → `_finishPick`, so
+    the press paints on e-ink before the synchronous board build replaces the
+    picker; `_pending_pick` guards the deferred callback (cleared by
+    `closeDialog`, so a closed/superseded picker never deals). Note the
+    picker-deal flow is now asynchronous on the device — harnesses must flush it
+    (see the picker test notes below).
+ 16. **US-30 bevel corner:** the bottom bevel's LEFT edge carries the same diagonal as its right
+    (`FACE_BEVEL_BOTTOM_CORNER` = `M0 140 L100 140 L110 154 L10 154 Z`, `FACE_BEVEL_BOTTOM` =
+    `M0 140 L100 140 L100 154 L10 154 Z` in `tools/gen_icons.py`). The board shifts each upper
+    layer up-left by the bevel thickness, so a raised tile's bottom bevel is the visible WEST
+    step of the tower; a square corner there broke the continuous diagonal the west face traces
+    down a stack. Mirrored diagonals keep the stacking edge crisp on the deep multi-layer boards
+    (US-27..29). `tools/check_icons.py` count is 180 SVGs now.
+ 17. **Fresh deals always have a move (US-30):** `MahjongLogic.newGame(id)` with a random
+    (nil) rng re-deals until the board has at least one matching free pair. Without this a
+    small fraction of deals (measured ~5% on Bridge) start dead, forcing the player to
+    shuffle a board they never played — and the layout picker tests that play a pair after
+    picking a layout crashed intermittently on those deals (`matchingFreePair` returns nil).
+    Seeded deals (self-tests, deterministic checks) are byte-identical — only the nil-rng
+    path re-deals.
 
 ### Test harness notes (and verification workflow)
 
@@ -551,14 +599,20 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 - A throwaway "toy" layout is registered for registry/picker tests and torn down with
   `Logic.deregisterLayout("toy")` (US-22a) — never mutate `Logic.layouts["toy"] = nil` directly,
   which leaves the module's caches stale.
-- The harness cannot run `UIManager:scheduleIn`; tests call cleanup/clear paths directly.
-- **US-14 picker in harness:** `startGame()` with no saved game now shows the layout picker
+- The mock captures `UIManager:scheduleIn`/`nextTick` into `ctx.scheduled` (US-30). Harnesses
+  flush pending tasks with `ctx.runScheduled()` (snapshot semantics: tasks scheduled while one
+  runs — like the timer polling loop's reschedule — stay queued, so nothing spins). Tests that
+  override `um.scheduleIn` themselves (us11/12/17/18/19) keep their own capture and must run
+  the deferred picker deal out of it.
+- **US-14/30 picker in harness:** `startGame()` with no saved game now shows the layout picker
   instead of dealing a board. Harnesses that drive `menu_items.mahjong.callback()` or the
   toolbar's New Game button must pick a layout to proceed — the shared idiom is a small
   `pickTurtle()` helper that finds the Turtle card's rect in the picker's `_card_rects` and
-  fires `picker:onTapSelect(nil, { pos = { x = r.x + r.w/2, y = r.y + r.h/2 } })`. Tests that
-  set `mj.board = ...; mj:buildUILayout()` directly bypass the picker. A restored game (save
-  present) still resumes directly, no picker.
+  fires `picker:onTapSelect(nil, { pos = { x = r.x + r.w/2, y = r.y + r.h/2 } })`, then
+  `ctx.runScheduled()` (or runs the just-scheduled deal) because the deal is deferred by
+  TAP_FEEDBACK_SECONDS. Tests that set `mj.board = ...; mj:buildUILayout()` directly bypass the
+  picker. A restored game (save present) still resumes directly, no picker. Cancel taps (outside
+  a card / close X) schedule no deal and need no flush.
 - Mock gotchas (keep the stubs faithful, or the suite won't catch real layout bugs):
   - `WidgetContainer:extend` must be `function(self, o)` (colon receiver) or `:extend{...}`
     silently drops the class table → "loop in gettable" at runtime.
@@ -567,7 +621,8 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     `o[1]`), (c) call `o:init()` if present. Skipping any makes the harness crash with a nil
     `self[1]` or silently skip `init()`.
   - The mock mirrors real `OverlapGroup:getSize()` (iterates children) — a lazy no-op stub let a
-    wrapper-table layout bug slip through to the device once.
+    wrapper-table layout bug slip through to the device once. Instances also expose `getSize()`
+    (the real overlapgroup is queryable), which the nested thumbnail-overlapgroup (US-30) needs.
 - KOReader UI code can't be exercised headlessly; the harness proves load-order, return values,
   and control flow. Visual checks still need the real device/emulator.
 

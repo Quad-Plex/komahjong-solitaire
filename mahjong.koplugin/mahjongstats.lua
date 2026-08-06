@@ -12,10 +12,14 @@
 --   current_streak   consecutive wins; reset to 0 by startGame() when the
 --                    previous game was abandoned (not won)
 --   longest_streak   all-time longest current_streak
+--   layout_wins      map layout_id -> human-played wins on that layout (the
+--                    layout picker's trophy badge reads it; auto-solve wins
+--                    never count, matching games_won)
 --
 -- UI code only reaches in through defaults() / load() / startGame() /
--- recordWin(), so the record stays a plain serializable table (LuaSettings
--- writes it under its own "stats" key, separate from the "game" key).
+-- recordWin() / recordLayoutWin(), so the record stays a plain serializable
+-- table (LuaSettings writes it under its own "stats" key, separate from the
+-- "game" key).
 --
 -- Self-test: `lua mahjongstats.lua` (or `lua mahjongstats.lua --selftest`).
 
@@ -31,6 +35,7 @@ function MahjongStats.defaults()
         total_time = 0, -- cumulative win seconds (average time per win)
         current_streak = 0,
         longest_streak = 0,
+        layout_wins = {},
     }
 end
 
@@ -52,6 +57,17 @@ function MahjongStats.load(saved)
     stats.total_time = num(saved.total_time) or 0
     stats.current_streak = num(saved.current_streak) or 0
     stats.longest_streak = num(saved.longest_streak) or 0
+    -- layout_wins is a per-id win map; garbage entries are sanitized to
+    -- non-negative integers (nil/0/garbage keys become absent, so the map
+    -- only ever holds real layout ids -> wins).
+    stats.layout_wins = {}
+    if type(saved.layout_wins) == "table" then
+        for id, n in pairs(saved.layout_wins) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 and n % 1 == 0 then
+                stats.layout_wins[id] = n
+            end
+        end
+    end
     return stats
 end
 
@@ -97,6 +113,17 @@ function MahjongStats.recordWin(stats, score, elapsed, pairs) -- luacheck: ignor
     return new_best_score, new_best_time
 end
 
+-- Records a human-played win on a specific layout (the layout picker's trophy
+-- badge). Shares recordWin's gating: the caller must NOT reach here for
+-- auto-solve wins. Missing layout_wins maps degrade to zero wins.
+function MahjongStats.recordLayoutWin(stats, layout_id)
+    if type(layout_id) ~= "string" or layout_id == "" then return end
+    if type(stats.layout_wins) ~= "table" then
+        stats.layout_wins = {}
+    end
+    stats.layout_wins[layout_id] = (stats.layout_wins[layout_id] or 0) + 1
+end
+
 -- Self-tests ---------------------------------------------------------------
 
 function MahjongStats.runSelfTests()
@@ -113,6 +140,8 @@ function MahjongStats.runSelfTests()
         and s.best_time == nil and s.total_time == 0
         and s.current_streak == 0 and s.longest_streak == 0,
         "defaults() is zeroed with best_time nil")
+    check(next(s.layout_wins) == nil,
+        "defaults() has an empty layout_wins map")
 
     -- startGame bumps games_played; it only breaks the streak when the
     -- previous game was abandoned (not won).
@@ -201,6 +230,31 @@ function MahjongStats.runSelfTests()
         "load() keeps best_time nil when the saved record has no best time")
     check(MahjongStats.load{ games_played = 5 }.total_time == 0,
         "load() defaults total_time when a pre-US-13 record lacks it")
+
+    -- layout_wins: recordLayoutWin bumps per-layout counters; it is
+    -- sanitized by load() and degrades gracefully for records without it.
+    local lw = MahjongStats.defaults()
+    MahjongStats.recordLayoutWin(lw, "turtle")
+    MahjongStats.recordLayoutWin(lw, "turtle")
+    MahjongStats.recordLayoutWin(lw, "spider")
+    check(lw.layout_wins.turtle == 2 and lw.layout_wins.spider == 1,
+        "recordLayoutWin bumps the per-layout win counters")
+    MahjongStats.recordLayoutWin(lw, nil)
+    MahjongStats.recordLayoutWin(lw, "")
+    check(lw.layout_wins.turtle == 2 and lw.layout_wins.spider == 1,
+        "recordLayoutWin ignores nil/empty layout ids")
+    local lw2 = MahjongStats.defaults()
+    lw2.layout_wins = nil
+    MahjongStats.recordLayoutWin(lw2, "turtle")
+    check(lw2.layout_wins ~= nil and lw2.layout_wins.turtle == 1,
+        "recordLayoutWin recreates a missing layout_wins map")
+    local lw3 = MahjongStats.load{ layout_wins = { turtle = 3, spider = "x", ziggurat = -1, [5] = 2 } }
+    check(lw3.layout_wins.turtle == 3 and lw3.layout_wins.spider == nil
+        and lw3.layout_wins.ziggurat == nil and lw3.layout_wins[5] == nil,
+        "load() keeps valid layout_wins entries and drops garbage")
+    check(next(MahjongStats.load(nil).layout_wins) == nil
+        and next(MahjongStats.load("garbage").layout_wins) == nil,
+        "load() defaults layout_wins for non-table records")
 
     io.write("All self-tests passed.\n")
     return true

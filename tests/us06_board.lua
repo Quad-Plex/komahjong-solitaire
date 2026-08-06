@@ -31,6 +31,7 @@ local function pickTurtle()
         if c.id == "turtle" then r = c break end
     end
     picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
+    ctx.runScheduled() -- US-30: the picker deals on a deferred tick (flush it)
 end
 
 -- ---- Board widget in isolation ------------------------------------------------

@@ -42,15 +42,17 @@ local function pickBridge()
     end
     picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2,
                                        y = r.y + r.h / 2 } })
+    ctx.runScheduled() -- US-30: the picker deals on a deferred tick (flush it)
 end
 
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-expect(#ids == 8 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "overpass"
-        and ids[4] == "red-dragon" and ids[5] == "spider" and ids[6] == "tictactoe"
-        and ids[7] == "turtle" and ids[8] == "ziggurat",
-    "registry enumerates {bridge, cloud, overpass, red-dragon, spider, tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
+expect(#ids == 11 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
+        and ids[4] == "overpass" and ids[5] == "pyramid" and ids[6] == "red-dragon"
+        and ids[7] == "spider" and ids[8] == "taipei" and ids[9] == "tictactoe"
+        and ids[10] == "turtle" and ids[11] == "ziggurat",
+    "registry enumerates {bridge, cloud, confounding, overpass, pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("bridge") == "Bridge", "layoutName returns 'Bridge'")
 expect(Logic.maxLayer("bridge") == 3, "maxLayer(bridge) == 3")
 
