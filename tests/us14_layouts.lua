@@ -323,6 +323,14 @@ expect(picker3_still, "a tap outside any card does NOT close the picker")
 expect(mj3.board == nil, "ignoring the tap deals no board")
 -- Clean up: only the close X cancels the picker.
 picker3:closeDialog()
+-- A bare UIManager:close would leave the e-ink panel stale when the picker is
+-- the topmost full-screen widget (no active board underneath) — the close must
+-- request a full refresh so the underlying screen actually repaints.
+local last_close3 = ctx.close_calls[#ctx.close_calls]
+expect(last_close3 and last_close3.widget == picker3
+        and last_close3.refreshtype == "full",
+    "closeDialog requests a full-screen refresh (got "
+    .. tostring(last_close3 and last_close3.refreshtype) .. ")")
 
 -- The close X button also cancels.
 store.game = nil
@@ -336,6 +344,11 @@ for _, e in ipairs(ctx.window_stack) do
     if e.widget == picker4 then picker4_gone = false end
 end
 expect(picker4_gone, "the close X closes the picker")
+local last_close4 = ctx.close_calls[#ctx.close_calls]
+expect(last_close4 and last_close4.widget == picker4
+        and last_close4.refreshtype == "full",
+    "the close X requests a full-screen refresh (got "
+    .. tostring(last_close4 and last_close4.refreshtype) .. ")")
 
 -- ---- A restored game keeps its layout (no picker) ---------------------------
 

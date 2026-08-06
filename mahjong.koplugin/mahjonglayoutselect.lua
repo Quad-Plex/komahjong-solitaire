@@ -478,10 +478,19 @@ end
 -- are ignored, see onTapSelect). The owner resumes the paused timer (or does
 -- nothing on the first-launch path where no game was running). Clears a
 -- pending pick so a deferred deal can never fire after the picker is gone.
+--
+-- The close MUST request a full-screen refresh ("full"). A bare
+-- UIManager:close(self) flags the uncovered widgets for repaint but enqueues
+-- no refresh, and _repaint's fallback region-less "partial" refresh does not
+-- actually update the e-ink panel — so when the picker is closed with no
+-- active game underneath (first launch, or a won board's Play-again), the
+-- picker's last frame stays on screen. Passing "full" is the same convention
+-- as the HUD quit X and the win/Close dialogs (UIManager:close(self, "full"))
+-- and the picker's own onShow (UIManager:setDirty(self, "full")).
 function LayoutSelect:closeDialog()
     self._pending_pick = nil
     if self.onClose then self.onClose() end
-    UIManager:close(self)
+    UIManager:close(self, "full")
 end
 
 -- US-30: tap feedback. Darkens the tapped card's background + border so the

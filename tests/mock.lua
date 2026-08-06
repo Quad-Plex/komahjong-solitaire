@@ -76,6 +76,7 @@ function M.newContext()
     ctx.menu_registered = false
     ctx.dispatcher_actions = {}
     ctx.dirty_calls = {}
+    ctx.close_calls = {} -- { { widget=, refreshtype= } } in close order
     -- Scheduled-task capture (US-30): the picker defers its deal by a short
     -- UIManager:scheduleIn so the pressed state paints on e-ink before the
     -- board build replaces the picker. Harnesses run the deal with
@@ -111,7 +112,8 @@ function M.newContext()
             end
             table.insert(ctx.window_stack, { widget = w })
         end,
-        close = function(_, w)
+        close = function(_, w, refreshtype)
+            ctx.close_calls[#ctx.close_calls + 1] = { widget = w, refreshtype = refreshtype }
             for i = #ctx.window_stack, 1, -1 do
                 if ctx.window_stack[i].widget == w then table.remove(ctx.window_stack, i) end
             end

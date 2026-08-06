@@ -212,6 +212,50 @@ for _, c in ipairs(picker4._card_rects) do
         "the thumbnail for '" .. c.id .. "' has one tile per layout position")
 end
 
+-- ---- Win-case close X exits the game (never returns to an empty board) ---------
+
+-- After a win, "Play again" shows the picker over the WON (empty) board. Tapping
+-- the picker's X must EXIT the game entirely — a bare close would land the player
+-- on the empty board (reported bug). The real ConfirmBox auto-closes itself after
+-- ok_callback runs, so mimic that before driving the picker's close X.
+store.game = nil
+local mj5 = Mahjong:new()
+mj5.board = { [pk(2, 2, 0)] = "d2", [pk(4, 2, 0)] = "d2" }
+mj5.layout = "turtle"
+mj5.score = 0
+mj5.last_match_kind = nil
+mj5.pairs_matched = 0
+mj5.history = {}
+mj5:buildUILayout()
+mj5:handleTileTap(2, 2, 0)
+mj5:handleTileTap(4, 2, 0)
+expect(Logic.isWin(mj5.board), "the second tiny board is won")
+local win_dlg = ctx.last_confirm
+win_dlg.ok_callback() -- "Play again" -> layout picker
+um.close(win_dlg)     -- the real ConfirmBox closes itself on OK
+local picker5 = ctx.window_stack[#ctx.window_stack].widget
+expect(picker5 ~= nil and picker5.name == "mahjonglayoutselect",
+    "win 'Play again' re-opens the layout picker")
+picker5:closeDialog() -- the close X
+-- The flow fix: closing the picker over a WON board must close the game itself,
+-- never return the player to the empty board. (The harness drives games without
+-- UIManager:show(self), so the stack never held the game; the close_calls record
+-- proves the Mahjong widget was actually closed.)
+local mj5_closed = false
+for _, c in ipairs(ctx.close_calls) do
+    if c.widget == mj5 then mj5_closed = true break end
+end
+expect(mj5_closed,
+    "the win-case close X closes the Mahjong game (no empty board)")
+expect(not um.isWidgetShown(picker5), "the win-case close X closes the picker")
+expect(store.game == nil,
+    "the exited won game is not saved (no empty board on next launch)")
+local last_close5 = ctx.close_calls[#ctx.close_calls]
+expect(last_close5 and last_close5.widget == picker5
+        and last_close5.refreshtype == "full",
+    "the win-case close X requests a full-screen refresh (got "
+    .. tostring(last_close5 and last_close5.refreshtype) .. ")")
+
 if failures == 0 then
     print("\nALL US-30 PICKER-POLISH CHECKS PASSED")
 else

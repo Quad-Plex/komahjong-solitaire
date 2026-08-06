@@ -535,7 +535,16 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     empty-space tap used to dump the user back to the file manager on first launch — reported
     as an app crash.) `showLayoutPicker()` stops the auto-solver + timer first (so the
     polling loop doesn't flash behind the opaque picker); `onClose`/`onPick` resume. The board
-    widget is rebuilt with `layout_id` so its geometry follows the chosen layout.
+    widget is rebuilt with `layout_id` so its geometry follows the chosen layout. **Closing the
+    picker MUST request a full refresh:** `closeDialog` (and `startGameWithLayout`'s drop of the
+    picker) call `UIManager:close(w, "full")` — a bare `UIManager:close` flags the uncovered
+    widgets for repaint but enqueues no refresh, and `_repaint`'s fallback region-less
+    `"partial"` doesn't take on e-ink, so with no active game underneath (first launch, or a
+    won board) the picker's last frame stays on screen. The picker's `onClose` also exits the
+    game when the board underneath is WON (the Play-again flow): an empty board must never be
+    returned to, so `onClose` does `UIManager:close(self, "full")` there (merges with the
+    picker's own close refresh instead of double-flashing); mid-game `onClose` resumes the
+    timer, first-launch `onClose` does nothing.
  15. **US-30 picker polish:** (a) card names are `COLOR_BLACK` (were gray);
     (b) the thumbnail is centered by the tower's **face center of mass** —
     `layoutThumbnail` averages every tile's face center (the per-layer up-left

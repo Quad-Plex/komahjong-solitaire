@@ -55,3 +55,18 @@ game loads; win games on a couple of layouts and confirm the badges count them.
   `ctx.runScheduled()` (snapshot semantics) so the deferred picker deal can be flushed;
   `OverlapGroup` stub gained `getSize()` (real overlapgroups are queryable), which the new
   nested thumbnail OverlapGroup needs.
+
+**Post-US-30 bugfix (picker close leaves the e-ink stale; win-case X stranded the player):**
+
+- `LayoutSelect:closeDialog` (and `startGameWithLayout`'s drop of the picker) now call
+  `UIManager:close(w, "full")`. A bare close flags the uncovered widgets for repaint but
+  enqueues no refresh, and `_repaint`'s fallback region-less `"partial"` doesn't take on the
+  e-ink panel — so with no active game underneath (first launch, or a won board) the picker's
+  last frame stayed on screen. The mid-game X only "worked" because `onClose`'s timer
+  repaint happened to enqueue a `"ui"` refresh.
+- The picker's `onClose` now exits the game when the board underneath is WON (the Play-again
+  flow): `UIManager:close(self, "full")` — an empty board is never returned to. Mid-game
+  `onClose` resumes the timer as before; first-launch `onClose` still does nothing.
+- `tests/mock.lua` captures the `refreshtype` argument into `ctx.close_calls`;
+  `us14_layouts.lua` asserts the picker closes with `"full"`; `us30_picker_wins.lua` drives a
+  real win → Play again → close X and asserts the game exits and no empty board is saved.

@@ -386,9 +386,9 @@ end
 
 -- US-14: shows the full-screen layout picker. Pauses the timer (if running)
 -- so the polling loop does not flash behind the opaque picker; the picker's
--- onClose resumes it. Used by startGame (first launch), the New Game button,
--- and the win dialog's "Play again" — choosing a layout IS the confirmation,
--- so the old New Game ConfirmBox is gone.
+-- onClose resumes it (or exits, see below). Used by startGame (first launch),
+-- the New Game button, and the win dialog's "Play again" — choosing a layout
+-- IS the confirmation, so the old New Game ConfirmBox is gone.
 function Mahjong:showLayoutPicker()
     self:stopAutoSolve()
     self:stopTimer()
@@ -399,11 +399,18 @@ function Mahjong:showLayoutPicker()
         onPick = function(id) self:startGameWithLayout(id) end,
         onClose = function()
             self._picker_dlg = nil
-            -- Resume the clock only if a game was actually running before
-            -- the picker opened (first launch with no board -> no resume).
             if self.board and not MahjongLogic.isWin(self.board) then
+                -- Active board under the picker (New Game / dead-board path):
+                -- closing the picker resumes the running game.
                 self:startTimer()
                 self:updateTimerDisplay()
+            elseif self.board then
+                -- Won (empty) board under the picker (the Play-again flow):
+                -- closing the picker must EXIT the game — the board is already
+                -- cleared, so returning to it would strand the player on an
+                -- empty board. The picker's own close (also "full") merges
+                -- with this refresh.
+                UIManager:close(self, "full")
             end
         end,
     }
@@ -414,11 +421,14 @@ end
 -- rebuilds it if already shown). Called by the picker's onPick.
 function Mahjong:startGameWithLayout(id)
     -- Drop the picker first; its onClose hook would otherwise resume the
-    -- timer for the OLD board, which we're about to replace.
+    -- timer for the OLD board, which we're about to replace. "full" so the
+    -- close enqueues a real refresh (a bare close leaves the e-ink stale;
+    -- see the LayoutSelect:closeDialog note) — it merges with the setDirty
+    -- below instead of double-flashing.
     if self._picker_dlg then
         local dlg = self._picker_dlg
         self._picker_dlg = nil
-        UIManager:close(dlg)
+        UIManager:close(dlg, "full")
     end
     if not MahjongLogic.layouts[id] then id = "turtle" end
     self.layout = id
