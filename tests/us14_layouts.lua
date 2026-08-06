@@ -52,11 +52,13 @@ end
 
 -- ---- Registry ---------------------------------------------------------------
 --
--- US-14 registered Turtle; US-15 adds Spider; US-16 adds Bridge. The registry
--- now enumerates exactly {"bridge", "spider", "turtle"} (sorted).
+-- US-14 registered Turtle; US-15 adds Spider; US-16 Bridge; US-22 Ziggurat.
+-- The registry now enumerates exactly {"bridge", "spider", "turtle", "ziggurat"}
+-- (sorted).
 local ids = Logic.layoutIds()
-expect(#ids == 3 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle",
-    "registry enumerates exactly {bridge, spider, turtle} (got " .. table.concat(ids, ",") .. ")")
+expect(#ids == 4 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle"
+        and ids[4] == "ziggurat",
+    "registry enumerates exactly {bridge, spider, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
 expect(Logic.layoutName("spider") == "Spider", "layoutName returns the registered Spider name")
 expect(Logic.layoutName("bridge") == "Bridge", "layoutName returns the registered Bridge name")
@@ -109,7 +111,8 @@ local toy_spec = {
 }
 Logic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
 local toy_ids = Logic.layoutIds()
-expect(#toy_ids == 4 and toy_ids[1] == "bridge" and toy_ids[2] == "spider" and toy_ids[3] == "toy" and toy_ids[4] == "turtle",
+expect(#toy_ids == 5 and toy_ids[1] == "bridge" and toy_ids[2] == "spider"
+        and toy_ids[3] == "toy" and toy_ids[4] == "turtle" and toy_ids[5] == "ziggurat",
     "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
 expect(#Logic.buildLayout("toy") == 5, "the toy layout has 5 positions")
 expect(Logic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -349,11 +352,12 @@ end
 expect(not restored_via_picker,
     "a restored game does NOT show the picker (resumes directly)")
 
--- ---- Deregister the toy layout (restore the {bridge, spider, turtle} registry) ----------
+-- ---- Deregister the toy layout (restore the {bridge, spider, turtle, ziggurat} registry) ----------
 
 Logic.layouts["toy"] = nil
-expect(#Logic.layoutIds() == 3 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "spider" and Logic.layoutIds()[3] == "turtle",
-    "deregistering the toy layout restores the {bridge, spider, turtle} registry")
+expect(#Logic.layoutIds() == 4 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "spider"
+        and Logic.layoutIds()[3] == "turtle" and Logic.layoutIds()[4] == "ziggurat",
+    "deregistering the toy layout restores the {bridge, spider, turtle, ziggurat} registry")
 
 if failures == 0 then
     print("\nALL US-14 LAYOUT-REGISTRY CHECKS PASSED")

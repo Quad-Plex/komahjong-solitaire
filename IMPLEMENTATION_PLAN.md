@@ -129,7 +129,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-21**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-22**.
 
 | Story | File | Status |
 |---|---|---|
@@ -154,7 +154,8 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-19 — Long-press Hint to auto-solve the board | [US-19_autosolve_completed.md](implementation-plan/US-19_autosolve_completed.md) | ✅ completed |
 | US-20 — Hint penalty per session + Pause in the bottom toolbar | [US-20_hint-session-and-pause-button_completed.md](implementation-plan/US-20_hint-session-and-pause-button_completed.md) | ✅ completed |
 | US-21 — Expand the layout picker grid to hold the full board set | [US-21_layout-picker-expansion_completed.md](implementation-plan/US-21_layout-picker-expansion_completed.md) | ✅ completed |
-| US-22 — Ziggurat layout | [US-22_ziggurat-layout.md](implementation-plan/US-22_ziggurat-layout.md) | ⏳ planned |
+| US-22 — Ziggurat layout | [US-22_ziggurat-layout_completed.md](implementation-plan/US-22_ziggurat-layout_completed.md) | ✅ completed |
+| US-22a — Extract board definitions into `mahjonglayouts.lua` | [US-22a_layouts-module.md](implementation-plan/US-22a_layouts-module.md) | ⏳ planned |
 | US-23 — Cloud layout | [US-23_cloud-layout.md](implementation-plan/US-23_cloud-layout.md) | ⏳ planned |
 | US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout.md](implementation-plan/US-24_tictactoe-layout.md) | ⏳ planned |
 | US-25 — Red Dragon layout | [US-25_red-dragon-layout.md](implementation-plan/US-25_red-dragon-layout.md) | ⏳ planned |
@@ -168,7 +169,10 @@ The US-21..US-29 stories add the GNOME Mahjongg layouts now that the registry + 
 Mahjongg sources lives at `/tmp/gnome-mahjongg` (`data/maps/mahjongg.map`); each board above is
 transcribed from that map and verified to have exactly 144 positions (the deck size).
 US-21 (picker grid expansion) is the prerequisite for US-22..US-29 — the picker's fixed 2×3
-(6-slot) grid holds only 6 cards and must grow before all 11 layouts fit. When a planned story
+(6-slot) grid holds only 6 cards and must grow before all 11 layouts fit. **US-22a** (extract
+the board definitions out of `mahjonglogic.lua` into a dedicated `mahjonglayouts.lua` module)
+is a **prerequisite for US-23..US-29**: it must ship before any further board story so that
+each later board is a single-file addition to `mahjonglayouts.lua`. When a planned story
 ships, rename its file to add the `_completed` suffix (and re-run the story index/status
 table above). The stories must be read in order — later stories assume the earlier ones'
 contracts.

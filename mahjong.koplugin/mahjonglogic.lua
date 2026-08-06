@@ -337,6 +337,60 @@ local BRIDGE_SPEC = {
 }
 MahjongLogic.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
 
+-- Ziggurat layout (US-22): "The Ziggurat" from GNOME Mahjongg's `ziggurat`
+-- map — a stepped pyramid with two tall outer walls and a center staircase,
+-- 144 tiles across 6 layers (64/20/18/18/14/10). The map's `<column>` runs
+-- are transcribed as blocks with x_min == x_max. The half-grid positions on
+-- layers 0/1/2 (x=2.5/3.5/6.5/7.5/11.5/14, y=0.5/1/6/6.5) feed the existing
+-- layout-agnostic bevel logic unchanged.
+--   L0: base (64) — walls at x=0/x=14 (y=0..7), caps at x=2.5/x=11.5,
+--       corner blocks x=1..3 / x=11..13 at y=3..4, center mid-columns
+--       x=6.5..7.5 (y=1..2 and y=5..6), and the y=0/y=7 center rows.
+--   L1: 20 — end tiles, 3x2 wall blocks, center columns at y=1/y=6.
+--   L2: 18 — inner 3x2 blocks x=2..4 / x=10..12 plus peak-ish tiles.
+--   L3: 18 — block x=3..11, y=3..4
+--   L4: 14 — block x=4..10, y=3..4
+--   L5: 10 — block x=5..9,  y=3..4
+-- Grid extents: x=0..14, y=0..7.
+local ZIGGURAT_SPEC = {
+    -- Layer 0: the base — outer walls, side columns, and center rows.
+    { layer = 0, kind = "block", x_min = 0,   x_max = 0,   y_min = 0, y_max = 7 },
+    { layer = 0, kind = "block", x_min = 1,   x_max = 3,   y_min = 3, y_max = 4 },
+    { layer = 0, kind = "block", x_min = 2.5, x_max = 2.5, y_min = 0, y_max = 2 },
+    { layer = 0, kind = "block", x_min = 2.5, x_max = 2.5, y_min = 5, y_max = 7 },
+    { layer = 0, kind = "row",   x_min = 3.5, x_max = 10.5, y = 0 },
+    { layer = 0, kind = "row",   x_min = 3.5, x_max = 10.5, y = 7 },
+    { layer = 0, kind = "block", x_min = 6.5, x_max = 7.5, y_min = 1, y_max = 2 },
+    { layer = 0, kind = "block", x_min = 6.5, x_max = 7.5, y_min = 5, y_max = 6 },
+    { layer = 0, kind = "block", x_min = 11.5, x_max = 11.5, y_min = 0, y_max = 2 },
+    { layer = 0, kind = "block", x_min = 11.5, x_max = 11.5, y_min = 5, y_max = 7 },
+    { layer = 0, kind = "block", x_min = 11,  x_max = 13,  y_min = 3, y_max = 4 },
+    { layer = 0, kind = "block", x_min = 14,  x_max = 14,  y_min = 0, y_max = 7 },
+    -- Layer 1.
+    { layer = 1, kind = "tile",  x = 3,    y = 0.5 },
+    { layer = 1, kind = "tile",  x = 11,   y = 0.5 },
+    { layer = 1, kind = "row",   x_min = 6.5, x_max = 7.5, y = 1 },
+    { layer = 1, kind = "block", x_min = 1, x_max = 3, y_min = 3, y_max = 4 },
+    { layer = 1, kind = "block", x_min = 11, x_max = 13, y_min = 3, y_max = 4 },
+    { layer = 1, kind = "row",   x_min = 6.5, x_max = 7.5, y = 6 },
+    { layer = 1, kind = "tile",  x = 3,    y = 6.5 },
+    { layer = 1, kind = "tile",  x = 11,   y = 6.5 },
+    -- Layer 2.
+    { layer = 2, kind = "tile",  x = 3,    y = 0.5 },
+    { layer = 2, kind = "tile",  x = 11,   y = 0.5 },
+    { layer = 2, kind = "tile",  x = 7,    y = 1 },
+    { layer = 2, kind = "block", x_min = 2, x_max = 4, y_min = 3, y_max = 4 },
+    { layer = 2, kind = "block", x_min = 10, x_max = 12, y_min = 3, y_max = 4 },
+    { layer = 2, kind = "tile",  x = 7,    y = 6 },
+    { layer = 2, kind = "tile",  x = 3,    y = 6.5 },
+    { layer = 2, kind = "tile",  x = 11,   y = 6.5 },
+    -- Layers 3-5: the stacked center staircase.
+    { layer = 3, kind = "block", x_min = 3, x_max = 11, y_min = 3, y_max = 4 },
+    { layer = 4, kind = "block", x_min = 4, x_max = 10, y_min = 3, y_max = 4 },
+    { layer = 5, kind = "block", x_min = 5, x_max = 9,  y_min = 3, y_max = 4 },
+}
+MahjongLogic.registerLayout{ id = "ziggurat", name = "Ziggurat", spec = ZIGGURAT_SPEC }
+
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
 -- paint lower layers first). The layout is static, so it is built once and
@@ -1055,14 +1109,15 @@ function MahjongLogic.runSelfTests()
         end
     end
 
-    -- Layout registry (US-14/US-15/US-16) ---------------------------------------
-    -- The registry now enumerates {"bridge", "spider", "turtle"} (US-15 adds
-    -- Spider, US-16 adds Bridge); the layout-dependent functions accept an id
-    -- and default to "turtle" so the byte-identical Turtle results fall out of
-    -- the parameterized paths.
+    -- Layout registry (US-14/US-15/US-16/US-22) --------------------------------
+    -- The registry now enumerates {"bridge", "spider", "turtle", "ziggurat"}
+    -- (US-15 adds Spider, US-16 Bridge, US-22 Ziggurat); the layout-dependent
+    -- functions accept an id and default to "turtle" so the byte-identical
+    -- Turtle results fall out of the parameterized paths.
     local ids = MahjongLogic.layoutIds()
-    check(#ids == 3 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle",
-        "layoutIds returns exactly {bridge, spider, turtle} (got " .. table.concat(ids, ",") .. ")")
+    check(#ids == 4 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle"
+        and ids[4] == "ziggurat",
+        "layoutIds returns exactly {bridge, spider, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
     check(MahjongLogic.layoutName("turtle") == "Turtle", "layoutName returns the registered name")
     check(MahjongLogic.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
     check(MahjongLogic.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
@@ -1091,8 +1146,8 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 4 and toy_ids[1] == "bridge" and toy_ids[2] == "spider"
-        and toy_ids[3] == "toy" and toy_ids[4] == "turtle",
+    check(#toy_ids == 5 and toy_ids[1] == "bridge" and toy_ids[2] == "spider"
+        and toy_ids[3] == "toy" and toy_ids[4] == "turtle" and toy_ids[5] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -1130,7 +1185,7 @@ function MahjongLogic.runSelfTests()
     _bounds_cache["toy"] = nil
     _layout_key_cache["toy"] = nil
     _max_layer_cache["toy"] = nil
-    check(#MahjongLogic.layoutIds() == 3, "deregistering toy restores the {bridge, spider, turtle} registry")
+    check(#MahjongLogic.layoutIds() == 4, "deregistering toy restores the {bridge, spider, turtle, ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
     -- The classic Spider board: 144 positions, 65/53/25/1 across 4 layers.
@@ -1219,6 +1274,54 @@ function MahjongLogic.runSelfTests()
         "deserialize restores a Bridge state")
     check(MahjongLogic.tileCount(bp_restored.board) == 142,
         "restored Bridge board has 142 tiles after one removal")
+
+    -- Ziggurat layout (US-22) ---------------------------------------------
+    -- "The Ziggurat" from GNOME Mahjongg: 144 positions, 64/20/18/18/14/10
+    -- across 6 layers.
+    local ziggurat = MahjongLogic.buildLayout("ziggurat")
+    check(#ziggurat == 144, "Ziggurat layout has 144 positions (got " .. #ziggurat .. ")")
+    local ziggurat_layers = {}
+    local ziggurat_seen = {}
+    for _, p in ipairs(ziggurat) do
+        ziggurat_layers[p.layer] = (ziggurat_layers[p.layer] or 0) + 1
+        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
+        check(not ziggurat_seen[key], "no duplicate Ziggurat position " .. key)
+        ziggurat_seen[key] = true
+    end
+    check(ziggurat_layers[0] == 64, "Ziggurat layer 0 has 64 tiles (got " .. tostring(ziggurat_layers[0]) .. ")")
+    check(ziggurat_layers[1] == 20, "Ziggurat layer 1 has 20 tiles (got " .. tostring(ziggurat_layers[1]) .. ")")
+    check(ziggurat_layers[2] == 18, "Ziggurat layer 2 has 18 tiles (got " .. tostring(ziggurat_layers[2]) .. ")")
+    check(ziggurat_layers[3] == 18, "Ziggurat layer 3 has 18 tiles (got " .. tostring(ziggurat_layers[3]) .. ")")
+    check(ziggurat_layers[4] == 14, "Ziggurat layer 4 has 14 tiles (got " .. tostring(ziggurat_layers[4]) .. ")")
+    check(ziggurat_layers[5] == 10, "Ziggurat layer 5 has 10 tiles (got " .. tostring(ziggurat_layers[5]) .. ")")
+    check(MahjongLogic.maxLayer("ziggurat") == 5, "maxLayer(ziggurat) == 5")
+    local ziggurat_bounds = MahjongLogic.gridBounds("ziggurat")
+    check(ziggurat_bounds.x_min == 0 and ziggurat_bounds.x_max == 14
+        and ziggurat_bounds.y_min == 0 and ziggurat_bounds.y_max == 7,
+        "Ziggurat grid bounds are x=0..14, y=0..7")
+    -- Ziggurat deal + free tiles + hasMoves.
+    local zg = MahjongLogic.newGame("ziggurat", 42)
+    check(MahjongLogic.tileCount(zg) == 144, "newGame('ziggurat', 42) deals 144 tiles")
+    local zg_free = MahjongLogic.freeTiles(zg, "ziggurat")
+    check(#zg_free > 0, "Ziggurat board has free tiles")
+    check(MahjongLogic.hasMoves(zg, "ziggurat"), "Ziggurat board has at least one move")
+    -- Top layer (L5) edge tile and a base-layer half-grid wall tile are free.
+    check(MahjongLogic.isFree(zg, 5, 3, 5), "Ziggurat's top-center west edge (5, 3, L5) is free")
+    check(MahjongLogic.isFree(zg, 0, 0, 0), "Ziggurat's base wall tile (0, 0, L0) is free")
+    -- Ziggurat persistence round-trip.
+    local zg_pair = MahjongLogic.matchingFreePair(zg, "ziggurat")
+    check(zg_pair ~= nil, "Ziggurat board has a matching free pair to remove")
+    local zg_ok, zg_ka, zg_kb = MahjongLogic.removePair(zg, zg_pair.a, zg_pair.b)
+    check(zg_ok, "removePair works on a Ziggurat board")
+    local zg_ser = MahjongLogic.serializeGameState(zg, {
+        { a = zg_pair.a, b = zg_pair.b, ka = zg_ka, kb = zg_kb, score = 10, prev_last = nil },
+    }, 10, zg_ka, 99, 0, 0, "ziggurat")
+    check(zg_ser.layout == "ziggurat", "serialized Ziggurat state carries layout=ziggurat")
+    local zg_restored = MahjongLogic.deserializeGameState(zg_ser)
+    check(zg_restored ~= nil and zg_restored.layout == "ziggurat",
+        "deserialize restores a Ziggurat state")
+    check(MahjongLogic.tileCount(zg_restored.board) == 142,
+        "restored Ziggurat board has 142 tiles after one removal")
 
     -- newGame: same seed is deterministic; different seed differs.
     local g1 = MahjongLogic.newGame(42)

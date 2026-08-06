@@ -16,4 +16,4 @@ As a player, I want the "Ziggurat" board shape to vary the game.
 per-layer counts match the spec, deal/free-tiles/hasMoves work, save/restore with the
 layout id, the picker lists the Ziggurat card.
 
-**Acceptance:** Manual — pick Ziggurat, play a full game, save/restore mid-game. (Planned.)
+**Acceptance:** Manual — pick Ziggurat, play a full game, save/restore mid-game. (Completed.)

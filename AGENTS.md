@@ -331,11 +331,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `self.cropping_widget` to the scroll container so the UIManager confines
   repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..21 shipped)
+## Mahjong plugin — current state and key contracts (US-01..22 shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..21
+per user story; `_completed` in the filename marks shipped stories — US-01..22
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -412,7 +412,8 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    `registerLayout(entry)`, `layoutIds()`, `layoutName(id)` manage it. Turtle is registered at
    module load (the canonical GNOME Mahjongg map: per-layer 87/36/16/4/1, grid x=0..14, y=0..7,
    fractional x/y on the head/tail/cap half-grid); US-15/16 add Spider/Bridge via one
-   `registerLayout` call each. Every layout-dependent function takes a layout id (defaulting to
+   `registerLayout` call each, and US-22 adds Ziggurat (per-layer 64/20/18/18/14/10, grid
+   x=0..14, y=0..7, half-grid on layers 0/1/2). Every layout-dependent function takes a layout id (defaulting to
    `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
    `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,
    `freeTiles(board, id)`, `hasMoves`/`matchingFreePair*`/`countFreePairs` (all take a trailing
