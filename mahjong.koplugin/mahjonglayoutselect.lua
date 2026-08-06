@@ -7,8 +7,8 @@
 -- clipping (US-21). Each card carries a small thumbnail (a miniature schematic
 -- of the layout's positions — small rounded rects per tile, per-layer up-left
 -- offset so the 3D shape reads) centered by the tower's face center of mass
--- (US-30), a trophy badge with the layout's human-win count (US-30), a score
--- chip with the layout's best winning score (US-31, only shown once a win
+-- (US-30), a circular-arrows badge with the layout's human-win count (US-30), a
+-- trophy score chip with the layout's best winning score (US-31, only shown once a win
 -- exists), and the layout name underneath (dark black, US-30). Tapping a card
 -- shows a pressed state and, after a short deferred tick, deals a game on that
 -- layout (US-30).
@@ -67,7 +67,7 @@ local LayoutSelect = InputContainer:extend{
     parent = nil,      -- the Mahjong instance
     onPick = nil,      -- function(layout_id) — deals a fresh game on the layout
     onClose = nil,     -- function() — close X / tap outside (owner resumes timer)
-    wins_by_layout = nil, -- map layout_id -> human wins (trophy badge, US-30)
+    wins_by_layout = nil, -- map layout_id -> human wins (sync badge, US-30)
     highscores_by_layout = nil, -- map layout_id -> best winning score (score chip)
     _card_rects = nil, -- { { id=, x=, y=, w=, h=, card= } } in widget-local coords
     _pending_pick = nil, -- layout id of a tapped-but-not-yet-dealt card (US-30)
@@ -169,8 +169,9 @@ local function layoutThumbnail(id, w, h)
 end
 LayoutSelect.layoutThumbnail = layoutThumbnail
 
--- Builds the small trophy badge shown in the top-right corner of every card:
--- a trophy glyph plus the human win count for that layout (0 when never won).
+-- Builds the small played-count badge shown in the top-right corner of every
+-- card: a circular-arrows glyph plus the human win count for that layout (0
+-- when never won).
 -- The badge is a real FrameContainer with a fixed dimen + getSize override, so
 -- it can sit as a child of an OverlapGroup (see the OverlapGroup child rules in
 -- AGENTS.md). The caller sets `overlap_offset` to position it on the thumb.
@@ -178,8 +179,8 @@ local function layoutBadge(wins)
     local pad = Screen:scaleBySize(3)
     local icon_size = Screen:scaleBySize(16)
     local gap = Screen:scaleBySize(4)
-    local trophy = IconWidget:new{
-        icon = "mahjong/trophy",
+    local sync = IconWidget:new{
+        icon = "mahjong/sync",
         width = icon_size,
         height = icon_size,
     }
@@ -194,7 +195,7 @@ local function layoutBadge(wins)
     local badge_h = math.max(icon_size, count_size.h) + 2 * pad
     local badge = FrameContainer:new{
         HorizontalGroup:new{
-            trophy,
+            sync,
             HorizontalSpan:new{ width = gap },
             count,
         },
@@ -214,8 +215,8 @@ local function layoutBadge(wins)
     return badge
 end
 
--- Builds the small score chip shown in the thumbnail's bottom-left corner:
--- just the layout's best winning score (a plain number — formatting keeps the
+-- Builds the small score chip shown in the thumbnail's bottom-right corner:
+-- a trophy glyph plus the layout's best winning score (formatting keeps the
 -- chip compact, and per-layout scores top out well below 1000 today). The chip
 -- is a real FrameContainer with a fixed dimen + getSize override, so it can sit
 -- as a child of an OverlapGroup (see the OverlapGroup child rules in
@@ -223,6 +224,13 @@ end
 -- only adds the chip to a card when the layout has a highscore (US-31).
 local function layoutScoreChip(score)
     local pad = Screen:scaleBySize(3)
+    local icon_size = Screen:scaleBySize(16)
+    local gap = Screen:scaleBySize(4)
+    local trophy = IconWidget:new{
+        icon = "mahjong/trophy",
+        width = icon_size,
+        height = icon_size,
+    }
     local text = TextWidget:new{
         text = tostring(score),
         padding = 0,
@@ -230,10 +238,14 @@ local function layoutScoreChip(score)
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local text_size = text:getSize()
-    local chip_w = text_size.w + 2 * pad
-    local chip_h = text_size.h + 2 * pad
+    local chip_w = icon_size + gap + text_size.w + 2 * pad
+    local chip_h = math.max(icon_size, text_size.h) + 2 * pad
     local chip = FrameContainer:new{
-        text,
+        HorizontalGroup:new{
+            trophy,
+            HorizontalSpan:new{ width = gap },
+            text,
+        },
         padding = pad,
         bordersize = 1,
         radius = Screen:scaleBySize(4),
@@ -324,23 +336,23 @@ function LayoutSelect:init()
             local id = ids[slot]
             if id then
                 local thumb = layoutThumbnail(id, thumb_w, thumb_h)
-                -- US-30: trophy badge in the top-right corner of the thumbnail,
-                -- counting human wins on this layout (0 until the first win).
+                -- US-30: played-count badge in the top-right corner of the
+                -- thumbnail, counting human wins on this layout.
                 local wins = (self.wins_by_layout and self.wins_by_layout[id]) or 0
                 local badge = layoutBadge(wins)
                 badge.overlap_offset = {
                     thumb_w - badge:getSize().w - badge_margin,
                     badge_margin,
                 }
-                -- US-31: score chip in the thumbnail's bottom-left corner
-                -- (opposite the trophy badge's top-right). Only added when the
+                -- US-31: score chip in the thumbnail's bottom-right corner
+                -- (opposite the played badge's top-right). Only added when the
                 -- layout has a highscore — a never-won layout shows no chip.
                 local thumb_children = { thumb, badge }
                 local highscore = (self.highscores_by_layout and self.highscores_by_layout[id]) or 0
                 if highscore > 0 then
                     local chip = layoutScoreChip(highscore)
                     chip.overlap_offset = {
-                        badge_margin,
+                        thumb_w - chip:getSize().w - badge_margin,
                         thumb_h - chip:getSize().h - badge_margin,
                     }
                     thumb_children[#thumb_children + 1] = chip

@@ -2,7 +2,7 @@
 --
 -- Verifies the picker's recent improvements:
 --   * Card names render dark black (fgcolor COLOR_BLACK) for readability;
---   * Every card carries a trophy badge (trophy icon + win count) in the
+--   * Every card carries a sync badge (circular-arrows icon + win count) in the
 --     thumbnail's top-right corner, starting at 0 for a never-won layout;
 --   * Human wins on a layout are tracked per-layout (MahjongStats.layout_wins,
 --     persisted under the "stats" key) and the badge reflects them; auto-solve
@@ -62,7 +62,7 @@ end
 --   card[1][1]     = VerticalGroup { span, OverlapGroup(thumb+badge), span, name }
 --   card[1][1][2]     = the thumbnail OverlapGroup
 --   card[1][1][2][2]  = the trophy badge FrameContainer
---   card[1][1][2][2][1] = HorizontalGroup { trophy, span, count }
+--   card[1][1][2][2][1] = HorizontalGroup { sync, span, count }
 --   card[1][1][2][2][1][3] = the win-count TextWidget
 --   card[1][1][4]     = the layout-name TextWidget
 local function cardNameWidget(c)
@@ -71,6 +71,10 @@ end
 
 local function cardBadgeCountWidget(c)
     return c.card[1][1][2][2][1][3]
+end
+
+local function cardBadgeIconWidget(c)
+    return c.card[1][1][2][2][1][1]
 end
 
 -- ---- Card names are dark black -----------------------------------------------
@@ -88,8 +92,10 @@ end
 for _, c in ipairs(picker._card_rects) do
     local count = cardBadgeCountWidget(c)
     expect(count ~= nil and count.text == "0",
-        "badge for layout '" .. c.id .. "' starts at 0 wins (got "
+        "played badge for layout '" .. c.id .. "' starts at 0 wins (got "
         .. tostring(count and count.text) .. ")")
+    expect(cardBadgeIconWidget(c) ~= nil and cardBadgeIconWidget(c).icon == "mahjong/sync",
+        "played badge for layout '" .. c.id .. "' uses circular arrows")
 end
 
 -- ---- Per-layout win tracking (pure stats) ------------------------------------

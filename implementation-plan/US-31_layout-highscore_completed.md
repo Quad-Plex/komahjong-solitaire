@@ -3,9 +3,10 @@
 As a player, I want the layout picker to show each map's best score, so I can
 compare layouts and chase a record without remembering my scores.
 
-- Each picker card shows a **score chip** (the layout's best winning score, as
-  a plain number) in the thumbnail's **bottom-left corner**, opposite the
-  trophy badge's top-right.
+- Each picker card shows a **score chip** (a trophy glyph plus the layout's best
+  winning score) in the thumbnail's **bottom-right corner**.
+- The per-layout human-win count remains in the thumbnail's **top-right corner**
+  and uses a circular-arrows glyph.
 - A layout with no human win shows **no chip** (nothing to display).
 - Auto-solve wins never record a highscore, matching the existing `layout_wins`
   gating.
@@ -16,7 +17,7 @@ right value and corner position; a human win records + persists the score and
 the chip appears after "Play again"; auto-solve wins record no chip.
 
 **Acceptance:** Manual — win games on two layouts and confirm the picker shows
-each layout's best score in its card's bottom-left corner; confirm a never-won
+each layout's best score in its card's bottom-right corner; confirm a never-won
 layout has no chip.
 
 **Implementation notes:**
@@ -31,9 +32,9 @@ layout has no chip.
   the existing human-win gate (auto-solve never sets a highscore), and
   `showLayoutPicker` passes `highscores_by_layout = self.stats.layout_highscores`
   to the picker.
-- `mahjonglayoutselect.lua`: a new `layoutScoreChip(score)` widget mirrors
-  `layoutBadge` (white rounded `FrameContainer`, dark border, `getSize`
-  override); the card appends it as the **third child** of the thumbnail's
-  `OverlapGroup` (badge stays child 2 — the US-30 badge assertions are
-  unaffected) only when `highscores_by_layout[id] > 0`, positioned bottom-left
-  via `overlap_offset` at the same `badge_margin` as the badge.
+- `mahjonglayoutselect.lua`: `layoutScoreChip(score)` is a white rounded
+  `FrameContainer` containing a trophy icon and score, with a `getSize`
+  override; the card appends it as the **third child** of the thumbnail's
+  `OverlapGroup` (played badge stays child 2) only when
+  `highscores_by_layout[id] > 0`, positioned bottom-right via `overlap_offset`
+  at the same `badge_margin` as the played badge.

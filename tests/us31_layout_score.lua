@@ -5,8 +5,8 @@
 --     layout_wins, persisted under the "stats" key and sanitized by load()
 --     (the pure module self-tests cover the record semantics in depth);
 --   * The picker shows a score chip as the THIRD child of the thumbnail
---     OverlapGroup (the trophy badge stays child 2) in the thumbnail's
---     bottom-left corner, opposite the badge;
+--     OverlapGroup (the played badge stays child 2) in the thumbnail's
+--     bottom-right corner, opposite the badge;
 --   * A layout with no highscore shows NO chip at all;
 --   * The chip reads the best score as a plain number, using the same corner
 --     margin as the badge;
@@ -61,13 +61,18 @@ end
 --   card[1][1][2]     = the thumbnail OverlapGroup
 --   card[1][1][2][2]  = the trophy badge FrameContainer
 --   card[1][1][2][3]  = the score chip FrameContainer (only when a highscore exists)
---   card[1][1][2][3][1] = the score TextWidget
+--   card[1][1][2][3][1] = HorizontalGroup { trophy, span, score }
+--   card[1][1][2][3][1][3] = the score TextWidget
 local function cardScoreChip(c)
     return c.card[1][1][2][3]
 end
 
 local function cardBadge(c)
     return c.card[1][1][2][2]
+end
+
+local function cardScoreIcon(c)
+    return cardScoreChip(c)[1][1]
 end
 
 -- ---- Fresh stats: no chips anywhere -------------------------------------------
@@ -88,24 +93,24 @@ local scard = cardById(picker2, "spider")
 local ocard = cardById(picker2, "bridge")
 if tcard then
     local chip = cardScoreChip(tcard)
-    expect(chip ~= nil and chip[1] ~= nil and chip[1].text == "123",
+    expect(chip ~= nil and chip[1] ~= nil and chip[1][3] ~= nil
+        and chip[1][3].text == "123",
         "Turtle's chip shows its best score (123) as a plain number")
     if chip then
+        expect(cardScoreIcon(tcard).icon == "mahjong/trophy",
+            "Turtle's highscore chip uses a trophy icon")
         local badge = cardBadge(tcard)
-        -- Bottom-left corner, opposite the top-right badge: same corner margin,
-        -- and the y offset drops below the badge's y (chip on the left of the
-        -- thumbnail, badge on the right).
-        expect(chip.overlap_offset[1] == badge.overlap_offset[2],
-            "the score chip uses the badge's corner margin")
-        expect(chip.overlap_offset[1] < badge.overlap_offset[1],
-            "the score chip sits on the left, the badge on the right")
+        -- Bottom-right corner, opposite the top-right badge.
+        expect(chip.overlap_offset[1] == tcard.w - 2 * 6
+            - chip:getSize().w - badge.overlap_offset[2],
+            "the score chip uses the thumbnail's bottom-right margin")
         local thumb_h = tcard.h - 28 - 2 * 6
         expect(chip.overlap_offset[2] == thumb_h - chip:getSize().h - badge.overlap_offset[2],
-            "the score chip sits in the thumbnail's bottom-left corner")
+            "the score chip sits in the thumbnail's bottom-right corner")
     end
 end
 expect(scard ~= nil and cardScoreChip(scard) ~= nil
-    and cardScoreChip(scard)[1].text == "456",
+    and cardScoreChip(scard)[1][3].text == "456",
     "Spider's chip shows its own best score (456)")
 expect(ocard ~= nil and cardScoreChip(ocard) == nil,
     "a layout without a highscore shows no chip")
@@ -136,8 +141,9 @@ local picker3 = ctx.window_stack[#ctx.window_stack].widget
 local tcard3 = cardById(picker3, "turtle")
 if tcard3 then
     local chip = cardScoreChip(tcard3)
-    expect(chip ~= nil and chip[1] ~= nil and chip[1].text == tostring(winning_score),
-        "Turtle's chip shows the just-won score after Play again")
+        expect(chip ~= nil and chip[1] ~= nil and chip[1][3] ~= nil
+            and chip[1][3].text == tostring(winning_score),
+            "Turtle's chip shows the just-won score after Play again")
 end
 
 -- ---- Auto-solve wins never record a layout highscore --------------------------

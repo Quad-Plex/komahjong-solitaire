@@ -348,11 +348,20 @@ def generate():
                                 'c0 2.4 1.2 4.5 3 5.7V17c0 .5.4 1 1 1h6c.6 0 1-.5 1-1v-2.3c1.8-1.3 3-3.4 '
                                 '3-5.7 0-3.9-3.1-7-7-7z"/></svg>')
     written["shuffle.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
-                              'viewBox="0 0 24 24" width="24">'
-                              '<path d="M0 0h24v24H0z" fill="none"/>'
-                              '<path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 '
-                              '2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 '
-                              '3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>')
+                               'viewBox="0 0 24 24" width="24">'
+                               '<path d="M0 0h24v24H0z" fill="none"/>'
+                               '<path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 '
+                               '2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 '
+                               '3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>')
+    # Played-count icon: Material Design "sync" glyph — two arrows circling
+    # each other, shown beside the per-layout human-win count.
+    written["sync.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
+                            'viewBox="0 0 24 24" width="24">'
+                            '<path d="M0 0h24v24H0z" fill="none"/>'
+                            '<path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 '
+                            '1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm-6 8c0-1.01.25-1.97.7-2.8L5.24 '
+                            '7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3c-3.31 0-6-2.69-6-6z"/>'
+                            '</svg>')
     # Quit X (title bar): KOReader's stock "close" icon is a thin 1.5px-stroke
     # X; this is a heavier 4px rounded X, full-bleed in the 24x24 canvas. It is
     # the title bar's right icon ("mahjong/close"), see createStatusBar().
@@ -395,9 +404,8 @@ def generate():
                             '<path d="M0 0h24v24H0z" fill="none"/>'
                             '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 '
                             '2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>')
-    # Trophy (layout picker win badge): Material Design "emoji_events" glyph,
-    # shown with the per-layout win count in the corner of every layout card
-    # (0 wins when a layout was never won).
+    # Trophy (layout picker highscore chip): Material Design "emoji_events"
+    # glyph, shown beside the best winning score for a layout.
     written["trophy.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" height="24" '
                              'viewBox="0 0 24 24" width="24">'
                              '<path d="M0 0h24v24H0z" fill="none"/>'
