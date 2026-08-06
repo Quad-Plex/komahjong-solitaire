@@ -578,6 +578,18 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     picking a layout crashed intermittently on those deals (`matchingFreePair` returns nil).
     Seeded deals (self-tests, deterministic checks) are byte-identical — only the nil-rng
     path re-deals.
+ 18. **Per-layout highscore chip (US-31):** each picker card shows the layout's best
+    winning score as a plain-number chip in the thumbnail's **bottom-left corner**
+    (opposite the trophy badge's top-right), only when a human win has recorded one.
+    The value comes from `MahjongStats.layout_highscores` (a `layout_id -> best score`
+    map added to the stats record, `defaults()`/`load()`-sanitized — old pre-US-31
+    records default to `{}`). `MahjongStats.recordLayoutWin(stats, id, score)` takes an
+    optional third `score` arg and keeps the highscore at its max (the two-argument
+    form still just bumps `layout_wins`, so existing callers/saves stay valid). `main.lua`
+    passes `self.score` at win time inside the same human-win gate as `recordWin`
+    (auto-solve never sets a highscore) and hands the picker `highscores_by_layout`; the
+    chip is the thumbnail OverlapGroup's **third child** (badge stays child 2, so the
+    US-30 badge assertions hold) and is simply absent when there is no record.
 
 ### Test harness notes (and verification workflow)
 

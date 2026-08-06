@@ -372,6 +372,7 @@ function Mahjong:showLayoutPicker()
     self._picker_dlg = LayoutSelect:new{
         parent = self,
         wins_by_layout = (self.stats and self.stats.layout_wins) or {},
+        highscores_by_layout = (self.stats and self.stats.layout_highscores) or {},
         onPick = function(id) self:startGameWithLayout(id) end,
         onClose = function()
             self._picker_dlg = nil
@@ -974,7 +975,9 @@ function Mahjong:showWinDialog()
             self.stats, self.score, elapsed, pairs)
         -- US-30: the layout picker's trophy badge counts human wins per layout
         -- (auto-solve wins never reach recordWin, so they never count either).
-        MahjongStats.recordLayoutWin(self.stats, self.layout)
+        -- US-31: the same call records the layout's best winning score for the
+        -- picker's score chip (auto-solve wins never set it, matching recordWin).
+        MahjongStats.recordLayoutWin(self.stats, self.layout, self.score)
         self:saveStats()
         self.game_won = true
     end

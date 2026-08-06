@@ -15,6 +15,9 @@
 --   layout_wins      map layout_id -> human-played wins on that layout (the
 --                    layout picker's trophy badge reads it; auto-solve wins
 --                    never count, matching games_won)
+--   layout_highscores map layout_id -> best winning score on that layout (the
+--                    layout picker's score chip reads it; auto-solve wins
+--                    never count, matching layout_wins)
 --
 -- UI code only reaches in through defaults() / load() / startGame() /
 -- recordWin() / recordLayoutWin(), so the record stays a plain serializable
@@ -36,6 +39,7 @@ function MahjongStats.defaults()
         current_streak = 0,
         longest_streak = 0,
         layout_wins = {},
+        layout_highscores = {},
     }
 end
 
@@ -65,6 +69,17 @@ function MahjongStats.load(saved)
         for id, n in pairs(saved.layout_wins) do
             if type(id) == "string" and type(n) == "number" and n >= 0 and n % 1 == 0 then
                 stats.layout_wins[id] = n
+            end
+        end
+    end
+    -- layout_highscores is a per-id best-score map, sanitized like layout_wins
+    -- (non-negative numbers; garbage keys become absent). Old records saved
+    -- before this map existed default to {}.
+    stats.layout_highscores = {}
+    if type(saved.layout_highscores) == "table" then
+        for id, n in pairs(saved.layout_highscores) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 then
+                stats.layout_highscores[id] = n
             end
         end
     end
@@ -115,13 +130,23 @@ end
 
 -- Records a human-played win on a specific layout (the layout picker's trophy
 -- badge). Shares recordWin's gating: the caller must NOT reach here for
--- auto-solve wins. Missing layout_wins maps degrade to zero wins.
-function MahjongStats.recordLayoutWin(stats, layout_id)
+-- auto-solve wins. Missing layout_wins maps degrade to zero wins. The optional
+-- `score` also records the best winning score for the layout (the picker's
+-- score chip); passing nil/omitting it keeps the win counter behavior so
+-- existing two-argument callers stay valid.
+function MahjongStats.recordLayoutWin(stats, layout_id, score)
     if type(layout_id) ~= "string" or layout_id == "" then return end
     if type(stats.layout_wins) ~= "table" then
         stats.layout_wins = {}
     end
     stats.layout_wins[layout_id] = (stats.layout_wins[layout_id] or 0) + 1
+    if type(score) == "number" and score >= 0 then
+        if type(stats.layout_highscores) ~= "table" then
+            stats.layout_highscores = {}
+        end
+        stats.layout_highscores[layout_id] =
+            math.max(stats.layout_highscores[layout_id] or 0, score)
+    end
 end
 
 -- Self-tests ---------------------------------------------------------------
@@ -142,6 +167,8 @@ function MahjongStats.runSelfTests()
         "defaults() is zeroed with best_time nil")
     check(next(s.layout_wins) == nil,
         "defaults() has an empty layout_wins map")
+    check(next(s.layout_highscores) == nil,
+        "defaults() has an empty layout_highscores map")
 
     -- startGame bumps games_played; it only breaks the streak when the
     -- previous game was abandoned (not won).
@@ -255,6 +282,44 @@ function MahjongStats.runSelfTests()
     check(next(MahjongStats.load(nil).layout_wins) == nil
         and next(MahjongStats.load("garbage").layout_wins) == nil,
         "load() defaults layout_wins for non-table records")
+
+    -- layout_highscores: recordLayoutWin(id, score) records the best winning
+    -- score per layout; a lower score never replaces the record, and a
+    -- two-argument call (score omitted) still bumps the win counter without
+    -- touching the highscore.
+    local hs = MahjongStats.defaults()
+    MahjongStats.recordLayoutWin(hs, "turtle", 100)
+    check(hs.layout_highscores.turtle == 100 and hs.layout_wins.turtle == 1,
+        "recordLayoutWin(id, score) sets the layout highscore")
+    MahjongStats.recordLayoutWin(hs, "turtle", 50)
+    MahjongStats.recordLayoutWin(hs, "turtle", 150)
+    check(hs.layout_highscores.turtle == 150,
+        "a lower win never replaces the layout highscore")
+    MahjongStats.recordLayoutWin(hs, "spider")
+    check(hs.layout_highscores.spider == nil and hs.layout_wins.spider == 1,
+        "a two-argument recordLayoutWin bumps wins but not the highscore")
+    MahjongStats.recordLayoutWin(hs, nil, 50)
+    MahjongStats.recordLayoutWin(hs, "", 50)
+    check(hs.layout_highscores.turtle == 150 and hs.layout_wins.turtle == 3,
+        "recordLayoutWin ignores nil/empty layout ids for both maps")
+    local hs2 = MahjongStats.defaults()
+    hs2.layout_highscores = nil
+    MahjongStats.recordLayoutWin(hs2, "turtle", 42)
+    check(hs2.layout_highscores ~= nil and hs2.layout_highscores.turtle == 42,
+        "recordLayoutWin recreates a missing layout_highscores map")
+    local hs3 = MahjongStats.load{ layout_highscores = { turtle = 300, spider = "x", ziggurat = -1, [5] = 2 } }
+    check(hs3.layout_highscores.turtle == 300 and hs3.layout_highscores.spider == nil
+        and hs3.layout_highscores.ziggurat == nil and hs3.layout_highscores[5] == nil,
+        "load() keeps valid layout_highscores entries and drops garbage")
+    check(next(MahjongStats.load(nil).layout_highscores) == nil
+        and next(MahjongStats.load("garbage").layout_highscores) == nil,
+        "load() defaults layout_highscores for non-table records")
+    local old_record = MahjongStats.load{ games_played = 5, layout_wins = { turtle = 1 } }
+    check(old_record.layout_highscores ~= nil and next(old_record.layout_highscores) == nil,
+        "load() defaults layout_highscores for pre-feature records")
+    MahjongStats.recordLayoutWin(old_record, "turtle", 77)
+    check(old_record.layout_highscores.turtle == 77,
+        "a pre-feature record gains a highscore after its first scored win")
 
     io.write("All self-tests passed.\n")
     return true
