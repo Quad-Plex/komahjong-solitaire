@@ -125,13 +125,72 @@ mj4.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
 mj4.layout = "turtle"
 mj4:buildUILayout()
 mj4.history = {}
+um:show(mj4)
 mj4:handleNoMoves()
--- The Mahjong widget is on the stack if built through startGame; buildUILayout
--- alone does not show it.  Just verify the cancel callback runs: it calls
--- UIManager:close(self, "full"), which in the mock cleans up the widget.
+-- The Close button runs cancel_callback, which exits the game (documented
+-- US-32 behavior: Close -> exit the game).
 ctx.last_confirm.cancel_callback()  -- Close
-local mj_closed = true
--- no crash – cancel_callback succeeded
+local mj4_still_on_stack = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == mj4 then mj4_still_on_stack = true end
+end
+expect(not mj4_still_on_stack,
+    "the loss dialog's Close button exits the game")
+
+-- ---- Tap-outside the loss dialog does NOT exit the game ----------------------------
+
+-- The mock's ConfirmBox now models the real onTapClose: a tap outside the
+-- dialog's movable dimen triggers the dialog's close path. The loss dialog
+-- overrides onTapClose so a stray tap next to the dialog only dismisses the
+-- dialog — it must never close the whole game (the reported "crash").
+local mj_tap = Mahjong:new()
+mj_tap.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
+mj_tap.layout = "turtle"
+mj_tap:buildUILayout()
+mj_tap.history = {}
+um:show(mj_tap)
+mj_tap:handleNoMoves()
+local tap_dlg = ctx.last_confirm
+expect(tap_dlg.onTapClose ~= nil, "loss dialog carries a tap-outside handler")
+local stack_before = #ctx.window_stack
+tap_dlg:onTapClose(nil, { pos = { x = 1, y = 1 } })  -- tap next to the dialog
+local game_still_open = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == mj_tap then game_still_open = true end
+end
+local dlg_still_up = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == tap_dlg then dlg_still_up = true end
+end
+expect(game_still_open, "tap-outside the loss dialog keeps the game open")
+expect(not dlg_still_up, "tap-outside the loss dialog dismisses the dialog")
+expect(#ctx.window_stack == stack_before - 1,
+    "tap-outside only removes the dialog, nothing else")
+
+-- ---- Tap-outside the shuffle prompt does NOT exit the game --------------------------
+
+-- Not-provably-dead board -> shuffle prompt; a stray tap next to it dismisses
+-- the prompt but the game keeps running (previously it closed the whole app).
+local mj_tap2 = Mahjong:new()
+mj_tap2.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
+mj_tap2.layout = "turtle"
+mj_tap2:buildUILayout()
+mj_tap2.history = {}
+um:show(mj_tap2)
+local orig_dead = Logic.isPermanentlyDead
+Logic.isPermanentlyDead = function() return false end
+mj_tap2:handleNoMoves()
+Logic.isPermanentlyDead = orig_dead
+local shuffle_dlg = ctx.last_confirm
+expect(tostring(shuffle_dlg.text):find("No moves left", 1, true) ~= nil,
+    "shuffle prompt shown (not dead board)")
+shuffle_dlg:onTapClose(nil, { pos = { x = 1, y = 1 } })  -- tap next to the prompt
+local game2_still_open = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == mj_tap2 then game2_still_open = true end
+end
+expect(game2_still_open,
+    "tap-outside the shuffle prompt keeps the game open (no app exit)")
 
 -- ---- Not-provably-dead board → shuffle prompt (existing behaviour) ---------------
 

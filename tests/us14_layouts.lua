@@ -304,9 +304,10 @@ pickTurtle()
 expect(Logic.tileCount(mj2.board) == 144 and mj2.layout == "turtle",
     "Play again -> pick Turtle deals a fresh turtle board")
 
--- ---- Picker close X / tap outside cancels ----------------------------------
+-- ---- Picker close X / tap outside ----------------------------------------------
 
--- A tap outside any card calls onClose (the picker closes without dealing).
+-- A tap outside any card is ignored (it must not close the picker — on first
+-- launch that dumped the user back to the file manager, reading as a crash).
 store.game = nil
 local mj3 = Mahjong:new()
 mj3:addToMainMenu(menu_items)
@@ -314,12 +315,14 @@ menu_items.mahjong.callback()
 local picker3 = ctx.window_stack[#ctx.window_stack].widget
 -- Tap the very top-left corner (the title row, above the grid) — outside cards.
 picker3:onTapSelect(nil, { pos = { x = 1, y = 1 } })
-local picker3_gone = true
+local picker3_still = false
 for _, e in ipairs(ctx.window_stack) do
-    if e.widget == picker3 then picker3_gone = false end
+    if e.widget == picker3 then picker3_still = true end
 end
-expect(picker3_gone, "a tap outside any card closes the picker (cancel)")
-expect(mj3.board == nil, "canceling the picker on first launch deals no board")
+expect(picker3_still, "a tap outside any card does NOT close the picker")
+expect(mj3.board == nil, "ignoring the tap deals no board")
+-- Clean up: only the close X cancels the picker.
+picker3:closeDialog()
 
 -- The close X button also cancels.
 store.game = nil

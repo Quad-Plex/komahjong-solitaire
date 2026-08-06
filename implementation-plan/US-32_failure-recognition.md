@@ -50,6 +50,14 @@ At no-moves time (`checkGameState`, `showHint`'s dead branch, and the
    - **Undo** (pops one move, restarts the timer; hidden when history is empty)
 3. **Not provably dead** → existing shuffle `ConfirmBox` (unchanged).
 
+> **Tap-outside fix (after shipping):** KOReader fires a ConfirmBox's
+> `cancel_callback` for a tap OUTSIDE the dialog too, so a stray tap next to
+> the loss dialog (or the shuffle prompt, or the win dialog) used to run the
+> "Close = exit" callback and close the whole app — reported as a crash. All
+> three dialogs now wrap their options in `dismissDialogOnTapOutside`
+> (`main.lua`), an `onTapClose` override so a tap outside only dismisses the
+> dialog; the Close button still runs `cancel_callback` and exits.
+
 The same loss dialog fires when `shuffleBoard`'s auto-repeat loop exhausts and
 when `autoSolveStep`'s mid-solve shuffle loop exhausts. In the auto-solve case
 history is cleared, so Undo is naturally absent.

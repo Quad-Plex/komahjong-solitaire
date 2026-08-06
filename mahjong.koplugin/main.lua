@@ -89,6 +89,23 @@ local SETTINGS_DEFAULTS = {
 -- Smallest interval the timer loop will honor (dialog offers 1..60).
 local MIN_TIMER_INTERVAL = 1
 
+-- Tap-outside on a ConfirmBox normally runs `cancel_callback` — the same
+-- action as the Close button. The shuffle / loss / win dialogs use
+-- cancel_callback to EXIT the game, so a stray tap next to the dialog would
+-- close the whole app (reported by users as a crash). This per-dialog
+-- onTapClose override makes a tap outside only DISMISS the dialog; the Close
+-- button (which calls cancel_callback directly) keeps its documented action.
+local function dismissDialogOnTapOutside(opts)
+    opts.onTapClose = function(self, _, ges)
+        if ges and ges.pos and (not self.movable or not self.movable.dimen
+                or ges.pos:notIntersectWith(self.movable.dimen)) then
+            UIManager:close(self)
+        end
+        return true
+    end
+    return opts
+end
+
 -- A ButtonWidget that surfaces the "long-press released" event. KOReader's
 -- Button registers a "hold" gesture (fires ~ges_hold_interval_ms after
 -- contact) that calls `hold_callback`, and it consumes the matching
@@ -953,7 +970,10 @@ function Mahjong:handleNoMoves()
     if MahjongLogic.isPermanentlyDead(self.board) then
         self:showDeadBoardDialog()
     else
-        UIManager:show(ConfirmBox:new{
+        -- US-32's tap-outside fix (dismissDialogOnTapOutside): a stray tap next
+        -- to this dialog must only dismiss it — the old cancel_callback here
+        -- exited the whole game.
+        UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
             text = _("No moves left! Shuffle the board?"),
             ok_text = _("Shuffle"),
             ok_callback = function() self:shuffleBoard(true) end,
@@ -961,7 +981,7 @@ function Mahjong:handleNoMoves()
             cancel_callback = function()
                 UIManager:close(self, "full")
             end,
-        })
+        }))
     end
 end
 
@@ -997,7 +1017,10 @@ Undo your last move to try a different approach, or start a new game.]]),
         } }
         opts.other_buttons_first = true
     end
-    UIManager:show(ConfirmBox:new(opts))
+    -- Tap-outside only dismisses (the Close button still exits the game); a
+    -- stray tap next to the dialog must never close the app (see
+    -- dismissDialogOnTapOutside).
+    UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new(opts)))
 end
 
 -- After every removal: win dialog when the board is empty, otherwise an
@@ -1056,7 +1079,8 @@ function Mahjong:showWinDialog()
     if (self.shuffles_used or 0) > 0 then
         summary_lines[#summary_lines + 1] = string.format(_("Shuffles: %d"), self.shuffles_used)
     end
-    UIManager:show(ConfirmBox:new{
+    -- Tap-outside only dismisses the summary; the Close button still exits.
+    UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
         text = table.concat(summary_lines, "\n"),
         ok_text = _("Play again"),
         ok_callback = function() self:showLayoutPicker() end,
@@ -1064,7 +1088,7 @@ function Mahjong:showWinDialog()
         cancel_callback = function()
             UIManager:close(self, "full")
         end,
-    })
+    }))
 end
 
 -- US-08: Undo, hint, and shuffle ---------------------------------------------

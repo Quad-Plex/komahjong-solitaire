@@ -295,7 +295,29 @@ function M.newContext()
             end,
         },
         ["ui/widget/confirmbox"] = {
-            new = function(_, o) o = o or {}; return o end,
+            new = function(_, o)
+                o = o or {}
+                -- Faithful to the real ConfirmBox: onClose runs cancel_callback
+                -- (used by the Close button AND the tap-outside gesture), and
+                -- onTapClose calls onClose when the tap is outside the dialog's
+                -- movable dimen. The mock has no real dimen, so tests set
+                -- o.movable.dimen to delimit the dialog; without it every tap
+                -- is "outside".
+                o.onClose = function(self)
+                    if self.cancel_callback then self.cancel_callback() end
+                    require("ui/uimanager"):close(self)
+                    return true
+                end
+                o.onTapClose = function(self, arg, ges)
+                    local d = self.movable and self.movable.dimen
+                    local inside = d and ges and ges.pos
+                        and ges.pos.x >= d.x and ges.pos.x < d.x + d.w
+                        and ges.pos.y >= d.y and ges.pos.y < d.y + d.h
+                    if not inside then self:onClose() end
+                    return true
+                end
+                return o
+            end,
         },
         ["libs/libkoreader-lfs"] = {
             attributes = function() return "file" end,

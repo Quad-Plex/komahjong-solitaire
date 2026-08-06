@@ -15,8 +15,10 @@
 --
 -- Interaction model (mirrors the board's hit-test): one full-screen tap
 -- gesture; the handler hit-tests the tap against each card's rect and fires
--- `onPick(layout_id)` for the hit, or `onClose()` for a tap outside any card
--- (and the close X in the top-right corner). The owner (main.lua) pauses the
+-- `onPick(layout_id)` for the hit. A tap that misses every card (empty space)
+-- is ignored — only the close X in the top-right corner cancels (closing the
+-- picker on an empty-space tap dumped the user back to the file manager on
+-- first launch, which read as an app crash). The owner (main.lua) pauses the
 -- timer while the picker is up and resumes it on close (exactly like the
 -- settings/stats dialogs).
 --
@@ -472,10 +474,10 @@ function LayoutSelect:onShow()
     return true
 end
 
--- Closes the picker and notifies the owner (close X or a tap outside any
--- card). The owner resumes the paused timer (or does nothing on the
--- first-launch path where no game was running). Clears a pending pick so a
--- deferred deal can never fire after the picker is gone.
+-- Closes the picker and notifies the owner (the close X — empty-space taps
+-- are ignored, see onTapSelect). The owner resumes the paused timer (or does
+-- nothing on the first-launch path where no game was running). Clears a
+-- pending pick so a deferred deal can never fire after the picker is gone.
 function LayoutSelect:closeDialog()
     self._pending_pick = nil
     if self.onClose then self.onClose() end
@@ -502,10 +504,12 @@ function LayoutSelect:_finishPick(id)
     if self.onPick then self.onPick(id) end
 end
 
--- A tap inside the picker: hit-test the card rects, fire onPick for the hit
--- or closeDialog for a tap outside any card. `ges` is the second argument
--- (the first is the gesture spec's `args`, nil here) — see the Input-handling
--- pitfall in AGENTS.md.
+-- A tap inside the picker: hit-test the card rects, fire onPick for the hit.
+-- A tap that misses every card is a NO-OP — closing the picker on empty space
+-- (gaps, the title row, the padding below the last row) dumped the user back
+-- to the file manager on first launch, which reads as "the app crashed". Only
+-- the close X cancels. `ges` is the second argument (the first is the gesture
+-- spec's `args`, nil here) — see the Input-handling pitfall in AGENTS.md.
 function LayoutSelect:onTapSelect(_, ges)
     if not ges or not ges.pos then return true end
     local lx, ly = ges.pos.x - self.dimen.x, ges.pos.y - self.dimen.y
@@ -522,7 +526,7 @@ function LayoutSelect:onTapSelect(_, ges)
             return true
         end
     end
-    self:closeDialog()
+    -- Empty space: ignore the tap (do not closeDialog).
     return true
 end
 

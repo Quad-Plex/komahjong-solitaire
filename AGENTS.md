@@ -530,8 +530,10 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     shape reads) plus the layout name. A single full-screen `TapSelect` gesture hit-tests the
     card rects (the board's pattern, not per-card gestures): a hit fires `onPick(id)` →
     `startGameWithLayout(id)` (deals, persists `layout` as the last-chosen default, shows the
-    game); a miss / the close X fires `onClose` (resumes the timer if a game was running, does
-    nothing on first launch). `showLayoutPicker()` stops the auto-solver + timer first (so the
+    game); a miss (empty space) is **ignored** — only the close X fires `onClose` (resumes the
+    timer if a game was running, does nothing on first launch). (Closing the picker on an
+    empty-space tap used to dump the user back to the file manager on first launch — reported
+    as an app crash.) `showLayoutPicker()` stops the auto-solver + timer first (so the
     polling loop doesn't flash behind the opaque picker); `onClose`/`onPick` resume. The board
     widget is rebuilt with `layout_id` so its geometry follows the chosen layout.
  15. **US-30 picker polish:** (a) card names are `COLOR_BLACK` (were gray);
@@ -590,6 +592,14 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     (auto-solve never sets a highscore) and hands the picker `highscores_by_layout`; the
     chip is the thumbnail OverlapGroup's **third child** (badge stays child 2, so the
     US-30 badge assertions hold) and is simply absent when there is no record.
+ 19. **Tap-outside a dialog never closes the game.** The shuffle / dead-board / win
+    ConfirmBoxes use `cancel_callback` to exit the game (the "Close" button's documented
+    action), but KOReader fires `cancel_callback` for a tap OUTSIDE the dialog too — so a
+    stray tap next to the dialog used to close the whole app (reported as a crash). These
+    three dialogs are wrapped in `dismissDialogOnTapOutside` (`main.lua`), which overrides
+    the per-instance `onTapClose` so a tap outside merely dismisses the dialog (`UIManager:close`)
+    and never runs `cancel_callback`; the Close button keeps its exit behavior. Likewise the
+    layout picker ignores taps on empty space (only the close X cancels — see contract 14).
 
 ### Test harness notes (and verification workflow)
 

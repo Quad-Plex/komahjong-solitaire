@@ -230,7 +230,7 @@ end
 expect(gone4, "close X dismisses the picker")
 expect(mj4.board == nil, "canceling the picker deals no board")
 
--- ---- Tap outside cancels -------------------------------------------------------
+-- ---- Tap outside (empty space) is ignored ---------------------------------------
 
 store.game = nil
 local mj5 = Mahjong:new()
@@ -239,12 +239,15 @@ mj5:addToMainMenu(mi5)
 mi5.mahjong.callback()
 local picker5 = ctx.window_stack[#ctx.window_stack].widget
 -- Tap top-left corner (the title row, above the grid — outside any card).
+-- Empty-space taps must NOT close the picker: on first launch closing it
+-- dumped the user back to the file manager (reads as an app crash). Only the
+-- close X cancels.
 picker5:onTapSelect(nil, { pos = { x = 1, y = 1 } })
-local gone5 = true
+local still5 = false
 for _, e in ipairs(ctx.window_stack) do
-    if e.widget == picker5 then gone5 = false end
+    if e.widget == picker5 then still5 = true end
 end
-expect(gone5, "tap outside any card cancels the picker")
+expect(still5, "tap on empty space does NOT close the picker")
 
 if failures == 0 then
     print("\nALL US-21 PICKER CHECKS PASSED")
