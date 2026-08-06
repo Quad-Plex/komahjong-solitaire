@@ -4,11 +4,24 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 
 ## Features
 
-- **3D Turtle Layout:** Renders the classic 144-tile pyramid using an outward-bevel 3D stack.
-- **E-ink Optimized:** High-contrast tile symbols and crisp grid lines designed for grayscale screens.
+- **11 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
+  Dragon, Overpass, Pyramid's Walls, Confounding Cross, and Taipei — a
+  full-screen layout picker lets you choose one to start a game. Picker cards
+  show a thumbnail schematic, a win-count trophy badge, and a best-score chip
+  per layout.
+- **3D Board:** Renders the 144-tile stack as an outward-bevel 3D structure
+  with portrait tiles and per-layer up-left offsets; bevels step cleanly onto
+  the tiles beneath.
+- **E-ink Optimized:** High-contrast tile symbols and crisp bevels designed for grayscale screens.
 - **Adaptive Sizing:** Automatically fits the board to your device's screen resolution.
 - **Core Gameplay:** Tap matching free tiles to remove them. Flowers match any flower, and seasons match any season.
-- **Automatic Shuffle:** Reshuffles remaining tiles if no moves are left.
+- **Scoring:** 10 points per pair, +5 chain bonus for consecutive same-group matches; hint and shuffle cost score penalties.
+- **Undo / Hint / Shuffle:** Undo restores a pair (and its score), a hint highlights a matching free pair, and dead boards offer a confirm-gated reshuffle with bounded auto-repeat.
+- **Auto-solve:** Long-press the Hint button to let the solver clear the board automatically.
+- **Failure recognition:** Provably-dead boards (e.g. two identical tiles stacked) trigger a loss dialog instead of an endless shuffle loop.
+- **Pause:** Freeze the game clock behind a tap-consuming overlay.
+- **Persistence:** Game state and settings are saved and restored on relaunch; lifetime stats (wins, times) survive across sessions.
+- **Win summary + stats:** A win dialog and a lifetime-stats screen, with a confirm-gated reset.
 
 ## Installation
 
@@ -28,6 +41,8 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 ## Scoring
 
 - **Base Score:** 10 points per matched pair.
+- **Chain Bonus:** +5 when consecutive matches are of the same tile group.
+- **Penalties:** 5 per hint session, 10 per manual shuffle (floor at 0, not refunded by undo).
 
 ## License
 
