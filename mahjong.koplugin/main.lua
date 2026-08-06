@@ -93,14 +93,13 @@ local MIN_TIMER_INTERVAL = 1
 -- action as the Close button. The shuffle / loss / win dialogs use
 -- cancel_callback to EXIT the game, so a stray tap next to the dialog would
 -- close the whole app (reported by users as a crash). This per-dialog
--- onTapClose override makes a tap outside only DISMISS the dialog; the Close
--- button (which calls cancel_callback directly) keeps its documented action.
+-- onTapClose override makes a tap outside do NOTHING — the dialog stays up
+-- and only its buttons (Close keeps cancel_callback's documented action)
+-- dismiss it.
 local function dismissDialogOnTapOutside(opts)
-    opts.onTapClose = function(self, _, ges)
-        if ges and ges.pos and (not self.movable or not self.movable.dimen
-                or ges.pos:notIntersectWith(self.movable.dimen)) then
-            UIManager:close(self)
-        end
+    opts.onTapClose = function(_self, _, _ges)
+        -- consume the stray tap; the dialog stays open. Only the dialog's own
+        -- buttons (Close runs cancel_callback) dismiss it.
         return true
     end
     return opts
@@ -981,7 +980,7 @@ function Mahjong:handleNoMoves()
         self:showDeadBoardDialog()
     else
         -- US-32's tap-outside fix (dismissDialogOnTapOutside): a stray tap next
-        -- to this dialog must only dismiss it — the old cancel_callback here
+        -- to this dialog must only keep it open — the old cancel_callback here
         -- exited the whole game.
         UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
             text = _("No moves left! Shuffle the board?"),
@@ -1089,7 +1088,7 @@ function Mahjong:showWinDialog()
     if (self.shuffles_used or 0) > 0 then
         summary_lines[#summary_lines + 1] = string.format(_("Shuffles: %d"), self.shuffles_used)
     end
-    -- Tap-outside only dismisses the summary; the Close button still exits.
+    -- Tap-outside keeps the summary up; the Close button still exits.
     UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
         text = table.concat(summary_lines, "\n"),
         ok_text = _("Play again"),

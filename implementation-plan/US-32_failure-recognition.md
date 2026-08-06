@@ -67,8 +67,9 @@ At no-moves time (`checkGameState`, `showHint`'s dead branch, and the
 > the loss dialog (or the shuffle prompt, or the win dialog) used to run the
 > "Close = exit" callback and close the whole app — reported as a crash. All
 > three dialogs now wrap their options in `dismissDialogOnTapOutside`
-> (`main.lua`), an `onTapClose` override so a tap outside only dismisses the
-> dialog; the Close button still runs `cancel_callback` and exits.
+> (`main.lua`), an `onTapClose` override that CONSUMES the stray tap — the
+> dialog stays open and only its own buttons dismiss it; the Close button
+> still runs `cancel_callback` and exits.
 
 The same loss dialog fires when `shuffleBoard`'s auto-repeat loop exhausts and
 when `autoSolveStep`'s mid-solve shuffle loop exhausts. In the auto-solve case

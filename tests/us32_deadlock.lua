@@ -145,8 +145,9 @@ expect(not mj4_still_on_stack,
 
 -- The mock's ConfirmBox now models the real onTapClose: a tap outside the
 -- dialog's movable dimen triggers the dialog's close path. The loss dialog
--- overrides onTapClose so a stray tap next to the dialog only dismisses the
--- dialog — it must never close the whole game (the reported "crash").
+-- overrides onTapClose so a stray tap next to the dialog does NOTHING — the
+-- dialog stays open, and only its buttons (Close) exit/dismiss — it must
+-- never close the whole game (the reported "crash").
 local mj_tap = Mahjong:new()
 mj_tap.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
 mj_tap.layout = "turtle"
@@ -167,14 +168,14 @@ for _, e in ipairs(ctx.window_stack) do
     if e.widget == tap_dlg then dlg_still_up = true end
 end
 expect(game_still_open, "tap-outside the loss dialog keeps the game open")
-expect(not dlg_still_up, "tap-outside the loss dialog dismisses the dialog")
-expect(#ctx.window_stack == stack_before - 1,
-    "tap-outside only removes the dialog, nothing else")
+expect(dlg_still_up, "tap-outside the loss dialog keeps the dialog open")
+expect(#ctx.window_stack == stack_before,
+    "tap-outside leaves the dialog + game untouched")
 
 -- ---- Tap-outside the shuffle prompt does NOT exit the game --------------------------
 
--- Not-provably-dead board -> shuffle prompt; a stray tap next to it dismisses
--- the prompt but the game keeps running (previously it closed the whole app).
+-- Not-provably-dead board -> shuffle prompt; a stray tap next to it keeps the
+-- prompt up (the game keeps running, and previously it closed the whole app).
 local mj_tap2 = Mahjong:new()
 mj_tap2.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
 mj_tap2.layout = "turtle"
@@ -195,6 +196,12 @@ for _, e in ipairs(ctx.window_stack) do
 end
 expect(game2_still_open,
     "tap-outside the shuffle prompt keeps the game open (no app exit)")
+local shuffle_still_up = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == shuffle_dlg then shuffle_still_up = true end
+end
+expect(shuffle_still_up,
+    "tap-outside the shuffle prompt keeps the prompt open")
 
 -- ---- Not-provably-dead board → shuffle prompt (existing behaviour) ---------------
 

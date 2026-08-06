@@ -606,8 +606,8 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     action), but KOReader fires `cancel_callback` for a tap OUTSIDE the dialog too — so a
     stray tap next to the dialog used to close the whole app (reported as a crash). These
     three dialogs are wrapped in `dismissDialogOnTapOutside` (`main.lua`), which overrides
-    the per-instance `onTapClose` so a tap outside merely dismisses the dialog (`UIManager:close`)
-    and never runs `cancel_callback`; the Close button keeps its exit behavior. Likewise the
+    the per-instance `onTapClose` to CONSUME the stray tap — the dialog stays open and only
+    its own buttons dismiss it (the Close button keeps its exit behavior). Likewise the
     layout picker ignores taps on empty space (only the close X cancels — see contract 14).
 
 ### Test harness notes (and verification workflow)
