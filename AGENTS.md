@@ -319,13 +319,23 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   called `getSize()` on children, so the wrapper-table bug above passed tests and only crashed on
   device. `tests/mock.lua` now mirrors the real `OverlapGroup:getSize()` (iterates children,
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
-  `getSize`/`init` behavior or the suite can't catch layout crashes.
+   `getSize`/`init` behavior or the suite can't catch layout crashes.
+- **`ScrollableContainer` pitfalls (US-21).** The scroll container module is
+  `ui/widget/container/scrollablecontainer` (class `ScrollableContainer`), **not**
+  `svcontainer` — the latter does not exist on the device and a bad `require`
+  path causes a load-time error that silently drops the entire plugin.
+  `ScrollableContainer:initState()` reads `self[1]:getSize()` for its content,
+  so the content **must** be passed as a positional child
+  (`ScrollableContainer:new{ child, dimen = ... }`), not a named `content` field.
+  Finally, the parent widget passed to `UIManager:show` must set
+  `self.cropping_widget` to the scroll container so the UIManager confines
+  repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..20 shipped)
+## Mahjong plugin — current state and key contracts (US-01..21 shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..20
+per user story; `_completed` in the filename marks shipped stories — US-01..21
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the

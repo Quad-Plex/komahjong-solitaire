@@ -213,6 +213,13 @@ function M.newContext()
         ["ui/widget/container/centercontainer"] = {
             new = function(_, o) return o end,
         },
+        -- ScrollableContainer — a pass-through stub. The real widget clips +
+        -- scrolls its `content` child; the stub just keeps the options table so
+        -- picker layout code that wraps the grid in a ScrollableContainer loads
+        -- and the card-rect math is unaffected.
+        ["ui/widget/container/scrollablecontainer"] = {
+            new = function(_, o) return o end,
+        },
         ["ui/widget/verticalgroup"] = {
             new = function(_, o) return o end,
         },

@@ -158,8 +158,9 @@ menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "first launch shows the layout picker")
-expect(#picker._card_rects == 3,
-    "picker lists 3 cards for {bridge, spider, turtle} (got " .. #picker._card_rects .. ")")
+expect(#picker._card_rects == #Logic.layoutIds(),
+    "picker lists one card per registered layout (got " .. #picker._card_rects .. " cards, "
+    .. #Logic.layoutIds() .. " ids)")
 
 local has_spider_card = false
 local has_turtle_card = false

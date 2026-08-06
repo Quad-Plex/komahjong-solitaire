@@ -115,7 +115,8 @@ kindle_majong/
 │   ├── us16_bridge.lua           # Bridge layout (shipped)
 │   ├── us17_pause.lua            # pause overlay
 │   ├── us18_penalties.lua        # hint/shuffle score penalties
-│   └── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
+│   ├── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
+│   └── us21_picker.lua           # dynamic 3-col picker grid + scroll (US-21)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
@@ -128,7 +129,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-20**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-21**.
 
 | Story | File | Status |
 |---|---|---|
@@ -152,7 +153,7 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-18 — Hint/shuffle score penalties | [US-18_penalties_completed.md](implementation-plan/US-18_penalties_completed.md) | ✅ completed |
 | US-19 — Long-press Hint to auto-solve the board | [US-19_autosolve_completed.md](implementation-plan/US-19_autosolve_completed.md) | ✅ completed |
 | US-20 — Hint penalty per session + Pause in the bottom toolbar | [US-20_hint-session-and-pause-button_completed.md](implementation-plan/US-20_hint-session-and-pause-button_completed.md) | ✅ completed |
-| US-21 — Expand the layout picker grid to hold the full board set | [US-21_layout-picker-expansion.md](implementation-plan/US-21_layout-picker-expansion.md) | ⏳ planned |
+| US-21 — Expand the layout picker grid to hold the full board set | [US-21_layout-picker-expansion_completed.md](implementation-plan/US-21_layout-picker-expansion_completed.md) | ✅ completed |
 | US-22 — Ziggurat layout | [US-22_ziggurat-layout.md](implementation-plan/US-22_ziggurat-layout.md) | ⏳ planned |
 | US-23 — Cloud layout | [US-23_cloud-layout.md](implementation-plan/US-23_cloud-layout.md) | ⏳ planned |
 | US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout.md](implementation-plan/US-24_tictactoe-layout.md) | ⏳ planned |
