@@ -152,6 +152,10 @@ expect(win_text:find("You cleared the board!", 1, true) ~= nil,
 expect(win_text:find("Score: 25", 1, true) ~= nil, "the summary shows the final score")
 expect(win_text:find("Time: 00:45", 1, true) ~= nil, "the summary shows the elapsed time")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil, "the summary shows the pairs matched")
+expect(win_text:find("Hints used: 0", 1, true) ~= nil,
+    "the summary shows zero hints used on a clean win")
+expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
+    "the summary shows zero shuffles on a clean win")
 expect(win_text:find("Best score: 25", 1, true) ~= nil, "the summary shows the best score")
 expect(win_text:find("Best time: 00:45", 1, true) ~= nil, "the summary shows the best time")
 expect(win_text:find("Current streak: 1", 1, true) ~= nil, "the summary shows the current streak")
@@ -181,9 +185,15 @@ setBoard(mj1, {
     {2,2,0,"b1"}, {4,2,0,"b1"},
     {6,2,0,"b1"}, {8,2,0,"b1"},
 })
+mj1.hints_used = 2
+mj1.shuffles_used = 1
 mj1.elapsed_base = 60
 playAndWin(mj1, 2)
 win_text = tostring(ctx.last_confirm.text)
+expect(win_text:find("Hints used: 2", 1, true) ~= nil,
+    "the summary shows the number of hints used")
+expect(win_text:find("Shuffles: 1", 1, true) ~= nil,
+    "the summary shows the number of shuffles used")
 expect(win_text:find("New best!", 1, true) == nil,
     "a win that beats no record shows no New best! marker")
 expect(mj1.stats.games_won == 2 and mj1.stats.current_streak == 2,
@@ -255,6 +265,8 @@ mj2.board = boardWith{
 }
 mj2:buildUILayout()
 mj2.score = 0
+mj2.hints_used = 1
+mj2.shuffles_used = 2
 scheduled = {}
 mj2.hint_button.hold_callback()
 local arm = scheduled[1][2]
@@ -278,6 +290,10 @@ expect(win_text:find("New best!", 1, true) == nil,
     "an auto-solve win never marks a New best!")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil,
     "the auto-solve win dialog still shows the pair count")
+expect(win_text:find("Hints used: 1", 1, true) ~= nil,
+    "the auto-solve win dialog shows hints used")
+expect(win_text:find("Shuffles: 2", 1, true) ~= nil,
+    "the auto-solve win dialog shows shuffles used")
 
 -- Play again after an auto-solve win: a genuinely new game DOES bump
 -- games_played (the auto-solve itself recorded nothing).

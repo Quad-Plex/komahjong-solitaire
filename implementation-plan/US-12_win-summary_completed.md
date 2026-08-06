@@ -17,9 +17,10 @@ reason to replay.
   `recordWin`; New Game/reset → `startGame(stats, self.game_won)`; set a `self.game_won` flag in
   `showWinDialog()`.
 - Replace the one-line win dialog text with a summary: score, elapsed time, pairs matched (72),
-  best score, best time, current streak. Mark best-score/best-time lines with "New best!" the first
-  time each record is set. Keep "Play again" / "Close" (Play again still calls `resetGame()` until
-  US-14 reroutes it through the layout picker).
+  hints used, shuffles used, best score, best time, and current streak. The hint/shuffle lines are
+  always shown, including `0`, and appear after pairs matched. Mark best-score/best-time lines with
+  "New best!" the first time each record is set. Keep "Play again" / "Close" (Play again still
+  calls `resetGame()` until US-14 reroutes it through the layout picker).
 - Bests are computed from the real game (score + `getElapsed()`), so they are genuine records.
 - **Auto-solve games never count toward stats (US-19 note):** a board cleared by the long-press
   Hint auto-solver is considered "cheated". The auto-solve win must NOT call `recordWin` or
@@ -34,7 +35,8 @@ reason to replay.
   wasn't won; `recordWin` updates every field; best_time starts nil and only ever decreases;
   streak increments across consecutive wins and resets on an abandoned game.
 - `tests/us12_stats.lua` (registered in `tests/run.sh`): stats survive a fresh plugin instance;
-  the win dialog text contains score/time/pairs/bests and the "New best!" marker on a first
-  record; Play again starts a new game; a mid-game New Game resets the streak.
+  the win dialog text contains score/time/pairs/help counters/bests and the "New best!" marker on
+  a first record; zero and nonzero help counts are covered for human wins, and help counts are
+  shown for auto-solve wins; Play again starts a new game; a mid-game New Game resets the streak.
 - Manual: win → summary matches the game; a later win with a higher score updates best_score;
   abandoning resets the streak.

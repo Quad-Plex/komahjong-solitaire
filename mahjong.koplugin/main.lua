@@ -1138,14 +1138,10 @@ function Mahjong:showWinDialog()
         string.format(_("Best time: %s%s"), best_time_str, best_time_marker),
         string.format(_("Current streak: %d"), self.stats.current_streak),
     }
-    -- US-18: the per-game help counters are shown only when they matter, so a
-    -- clean win keeps the summary short.
-    if (self.hints_used or 0) > 0 then
-        summary_lines[#summary_lines + 1] = string.format(_("Hints used: %d"), self.hints_used)
-    end
-    if (self.shuffles_used or 0) > 0 then
-        summary_lines[#summary_lines + 1] = string.format(_("Shuffles: %d"), self.shuffles_used)
-    end
+    -- US-18: always report the per-game help counters, including clean wins,
+    -- so the summary explicitly tells the player whether either was used.
+    summary_lines[#summary_lines + 1] = string.format(_("Hints used: %d"), self.hints_used or 0)
+    summary_lines[#summary_lines + 1] = string.format(_("Shuffles: %d"), self.shuffles_used or 0)
     -- Tap-outside keeps the summary up; the Close button still exits.
     UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
         text = table.concat(summary_lines, "\n"),
