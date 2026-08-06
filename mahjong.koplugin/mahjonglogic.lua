@@ -766,9 +766,11 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 6 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "spider" and toy_ids[4] == "toy"
-        and toy_ids[5] == "turtle" and toy_ids[6] == "ziggurat",
+    check(#toy_ids == 9 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "overpass" and toy_ids[4] == "red-dragon"
+        and toy_ids[5] == "spider" and toy_ids[6] == "tictactoe"
+        and toy_ids[7] == "toy" and toy_ids[8] == "turtle"
+        and toy_ids[9] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -802,8 +804,9 @@ function MahjongLogic.runSelfTests()
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
     MahjongLogic.deregisterLayout("toy")
-    check(#MahjongLogic.layoutIds() == 5,
-        "deregistering toy restores the {bridge, cloud, spider, turtle, ziggurat} registry")
+    check(#MahjongLogic.layoutIds() == 8,
+        "deregistering toy restores the {bridge, cloud, overpass, red-dragon,\n"
+        .. "spider, tictactoe, turtle, ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
     -- Shape checks (144 positions, per-layer counts, grid bounds) live in
@@ -886,6 +889,105 @@ function MahjongLogic.runSelfTests()
         "deserialize restores a Ziggurat state")
     check(MahjongLogic.tileCount(zg_restored.board) == 142,
         "restored Ziggurat board has 142 tiles after one removal")
+
+    -- Tic-Tac-Toe layout (US-24) ------------------------------------------
+    -- Shape checks (144 positions, per-layer counts, grid bounds) live in
+    -- mahjonglayouts.lua; here we exercise the gameplay paths on a Tic-Tac-Toe
+    -- deal (free tiles / hasMoves / persistence round-trip).
+    -- Tic-Tac-Toe deal + free tiles + hasMoves.
+    local ttg = MahjongLogic.newGame("tictactoe", 42)
+    check(MahjongLogic.tileCount(ttg) == 144, "newGame('tictactoe', 42) deals 144 tiles")
+    local ttg_free = MahjongLogic.freeTiles(ttg, "tictactoe")
+    check(#ttg_free > 0, "Tic-Tac-Toe board has free tiles")
+    check(MahjongLogic.hasMoves(ttg, "tictactoe"), "Tic-Tac-Toe board has at least one move")
+    -- L4 (top) tiles are never covered; the free column tiles have both sides
+    -- open and the base-frame corner (12, 6, L0) has an open east side.
+    check(MahjongLogic.isFree(ttg, 3, 3, 4), "Tic-Tac-Toe's L4 column interior (3, 3, L4) is free")
+    check(MahjongLogic.isFree(ttg, 9, 2, 4), "Tic-Tac-Toe's L4 column cap (9, 2, L4) is free")
+    check(MahjongLogic.isFree(ttg, 12, 6, 0), "Tic-Tac-Toe's base frame corner (12, 6, L0) is free")
+    check(not MahjongLogic.isFree(ttg, 6, 2, 4),
+        "Tic-Tac-Toe's L4 center row interior (6, 2, L4) is boxed in on both sides")
+    -- Tic-Tac-Toe persistence round-trip.
+    local tt_pair = MahjongLogic.matchingFreePair(ttg, "tictactoe")
+    check(tt_pair ~= nil, "Tic-Tac-Toe board has a matching free pair to remove")
+    local tt_ok, tt_ka, tt_kb = MahjongLogic.removePair(ttg, tt_pair.a, tt_pair.b)
+    check(tt_ok, "removePair works on a Tic-Tac-Toe board")
+    local tt_ser = MahjongLogic.serializeGameState(ttg, {
+        { a = tt_pair.a, b = tt_pair.b, ka = tt_ka, kb = tt_kb, score = 10, prev_last = nil },
+    }, 10, tt_ka, 99, 0, 0, "tictactoe")
+    check(tt_ser.layout == "tictactoe", "serialized Tic-Tac-Toe state carries layout=tictactoe")
+    local tt_restored = MahjongLogic.deserializeGameState(tt_ser)
+    check(tt_restored ~= nil and tt_restored.layout == "tictactoe",
+        "deserialize restores a Tic-Tac-Toe state")
+    check(MahjongLogic.tileCount(tt_restored.board) == 142,
+        "restored Tic-Tac-Toe board has 142 tiles after one removal")
+
+    -- Red Dragon layout (US-25) -------------------------------------------
+    -- Shape checks live in mahjonglayouts.lua; here we exercise the gameplay
+    -- paths on a Red Dragon deal (free tiles / hasMoves / persistence). The
+    -- fractional-y horn tiles (y=1.5/3/4.5/6.5) and the angled peak tile
+    -- (11, 4, L2) exercise the half-grid overlap logic.
+    local dg = MahjongLogic.newGame("red-dragon", 42)
+    check(MahjongLogic.tileCount(dg) == 144, "newGame('red-dragon', 42) deals 144 tiles")
+    local dg_free = MahjongLogic.freeTiles(dg, "red-dragon")
+    check(#dg_free > 0, "Red Dragon board has free tiles")
+    check(MahjongLogic.hasMoves(dg, "red-dragon"), "Red Dragon board has at least one move")
+    -- L2 ridge edge tiles and the L0 horn tips are free.
+    check(MahjongLogic.isFree(dg, 5, 1, 2), "Red Dragon's L2 ridge west edge (5, 1, L2) is free")
+    check(MahjongLogic.isFree(dg, 8, 4, 2), "Red Dragon's L2 ridge east edge (8, 4, L2) is free")
+    check(MahjongLogic.isFree(dg, 0, 6, 0), "Red Dragon's left horn tip (0, 6, L0) is free")
+    check(MahjongLogic.isFree(dg, 14, 0, 0), "Red Dragon's right horn tip (14, 0, L0) is free")
+    -- L1 ridge tiles under the L2 block are covered; the off-center peak tile
+    -- (11, 4, L2) has nothing on L3 above it, so it is free despite the angled
+    -- L1 column sitting below it.
+    check(not MahjongLogic.isFree(dg, 6, 2, 1), "Red Dragon's L1 ridge tile (6, 2, L1) is covered")
+    check(MahjongLogic.isFree(dg, 11, 4, 2),
+        "Red Dragon's peak tile (11, 4, L2) has no L3 above it and is free")
+    -- Red Dragon persistence round-trip.
+    local dg_pair = MahjongLogic.matchingFreePair(dg, "red-dragon")
+    check(dg_pair ~= nil, "Red Dragon board has a matching free pair to remove")
+    local dg_ok, dg_ka, dg_kb = MahjongLogic.removePair(dg, dg_pair.a, dg_pair.b)
+    check(dg_ok, "removePair works on a Red Dragon board")
+    local dg_ser = MahjongLogic.serializeGameState(dg, {
+        { a = dg_pair.a, b = dg_pair.b, ka = dg_ka, kb = dg_kb, score = 10, prev_last = nil },
+    }, 10, dg_ka, 99, 0, 0, "red-dragon")
+    check(dg_ser.layout == "red-dragon", "serialized Red Dragon state carries layout=red-dragon")
+    local dg_restored = MahjongLogic.deserializeGameState(dg_ser)
+    check(dg_restored ~= nil and dg_restored.layout == "red-dragon",
+        "deserialize restores a Red Dragon state")
+    check(MahjongLogic.tileCount(dg_restored.board) == 142,
+        "restored Red Dragon board has 142 tiles after one removal")
+
+    -- Overpass layout (US-26) ---------------------------------------------
+    -- Shape checks live in mahjonglayouts.lua; here we exercise the gameplay
+    -- paths on an Overpass deal (free tiles / hasMoves / persistence). The
+    -- two top deck layers (L3/L4) and the tower tiles exercise the cover rule.
+    local og = MahjongLogic.newGame("overpass", 42)
+    check(MahjongLogic.tileCount(og) == 144, "newGame('overpass', 42) deals 144 tiles")
+    local og_free = MahjongLogic.freeTiles(og, "overpass")
+    check(#og_free > 0, "Overpass board has free tiles")
+    check(MahjongLogic.hasMoves(og, "overpass"), "Overpass board has at least one move")
+    -- L4 (top) deck edge tiles and the L0 tower corner are free; a tower tile
+    -- under an L1 column is covered.
+    check(MahjongLogic.isFree(og, 3, 3, 4), "Overpass's L4 deck west edge (3, 3, L4) is free")
+    check(MahjongLogic.isFree(og, 8, 6, 4), "Overpass's L4 deck corner (8, 6, L4) is free")
+    check(MahjongLogic.isFree(og, 1, 2, 0), "Overpass's left tower corner tile (1, 2, L0) is free")
+    check(not MahjongLogic.isFree(og, 0, 2, 0),
+        "Overpass's left tower base (0, 2, L0) is covered by the L1 column")
+    -- Overpass persistence round-trip.
+    local og_pair = MahjongLogic.matchingFreePair(og, "overpass")
+    check(og_pair ~= nil, "Overpass board has a matching free pair to remove")
+    local og_ok, og_ka, og_kb = MahjongLogic.removePair(og, og_pair.a, og_pair.b)
+    check(og_ok, "removePair works on an Overpass board")
+    local og_ser = MahjongLogic.serializeGameState(og, {
+        { a = og_pair.a, b = og_pair.b, ka = og_ka, kb = og_kb, score = 10, prev_last = nil },
+    }, 10, og_ka, 99, 0, 0, "overpass")
+    check(og_ser.layout == "overpass", "serialized Overpass state carries layout=overpass")
+    local og_restored = MahjongLogic.deserializeGameState(og_ser)
+    check(og_restored ~= nil and og_restored.layout == "overpass",
+        "deserialize restores an Overpass state")
+    check(MahjongLogic.tileCount(og_restored.board) == 142,
+        "restored Overpass board has 142 tiles after one removal")
 
     -- newGame: same seed is deterministic; different seed differs.
     local g1 = MahjongLogic.newGame(42)

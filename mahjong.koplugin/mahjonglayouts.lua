@@ -234,6 +234,138 @@ local CLOUD_SPEC = {
     { layer = 2, kind = "tile",  x = 6,      y = 5.5 },
 }
 
+-- Tic-Tac-Toe layout (US-24): GNOME Mahjongg's `tictactoe` map — a 3x3 grid
+-- of nested blocks (the center block and two tall side columns), 144 tiles
+-- across 5 layers (40/36/28/20/20). The center 5-wide rows and the two 9-tall
+-- columns repeat on every layer, shrinking one row per layer; the x=0/2 and
+-- x=10/12 edge blocks step down layer by layer. All coordinates are on the
+-- full grid, so the regular row/block spec terms express it directly.
+--   L0: columns x=3/x=9 (y=0..8, 9 each) + 3-wide edge rows at y=2/y=6 and
+--       the 5-wide center rows (3+5+3 per row) = 40
+--   L1: columns x=3/x=9 (y=0..8) + edge rows narrowed to 2 (x=1..2, x=10..11)
+--       and the same 5-wide center rows = 36
+--   L2: columns x=3/x=9 (y=1..7, 7 each) + single edge tiles x=2/x=10 at
+--       y=2/y=6 and the 5-wide center rows = 28
+--   L3/L4: columns x=3/x=9 (y=2..6) + 5-wide center rows = 20 each
+-- Grid extents: x=0..12, y=0..8.
+local TICTACTOE_SPEC = {
+    -- Layer 0: the two tall side columns plus the full 3x3 frame rows.
+    { layer = 0, kind = "block", x_min = 3, x_max = 3, y_min = 0, y_max = 8 },
+    { layer = 0, kind = "block", x_min = 9, x_max = 9, y_min = 0, y_max = 8 },
+    { layer = 0, kind = "row",   x_min = 0, x_max = 2,  y = 2 },
+    { layer = 0, kind = "row",   x_min = 0, x_max = 2,  y = 6 },
+    { layer = 0, kind = "row",   x_min = 4, x_max = 8,  y = 2 },
+    { layer = 0, kind = "row",   x_min = 4, x_max = 8,  y = 6 },
+    { layer = 0, kind = "row",   x_min = 10, x_max = 12, y = 2 },
+    { layer = 0, kind = "row",   x_min = 10, x_max = 12, y = 6 },
+    -- Layer 1: columns unchanged; the edge rows step in by one tile.
+    { layer = 1, kind = "block", x_min = 3, x_max = 3, y_min = 0, y_max = 8 },
+    { layer = 1, kind = "block", x_min = 9, x_max = 9, y_min = 0, y_max = 8 },
+    { layer = 1, kind = "row",   x_min = 1, x_max = 2,  y = 2 },
+    { layer = 1, kind = "row",   x_min = 1, x_max = 2,  y = 6 },
+    { layer = 1, kind = "row",   x_min = 4, x_max = 8,  y = 2 },
+    { layer = 1, kind = "row",   x_min = 4, x_max = 8,  y = 6 },
+    { layer = 1, kind = "row",   x_min = 10, x_max = 11, y = 2 },
+    { layer = 1, kind = "row",   x_min = 10, x_max = 11, y = 6 },
+    -- Layer 2: columns shrink vertically; the edge rows collapse to single
+    -- tiles.
+    { layer = 2, kind = "block", x_min = 3, x_max = 3, y_min = 1, y_max = 7 },
+    { layer = 2, kind = "block", x_min = 9, x_max = 9, y_min = 1, y_max = 7 },
+    { layer = 2, kind = "tile",  x = 2, y = 2 },
+    { layer = 2, kind = "tile",  x = 2, y = 6 },
+    { layer = 2, kind = "row",   x_min = 4, x_max = 8, y = 2 },
+    { layer = 2, kind = "row",   x_min = 4, x_max = 8, y = 6 },
+    { layer = 2, kind = "tile",  x = 10, y = 2 },
+    { layer = 2, kind = "tile",  x = 10, y = 6 },
+    -- Layers 3-4: only the columns and the 5-wide center rows remain.
+    { layer = 3, kind = "block", x_min = 3, x_max = 3, y_min = 2, y_max = 6 },
+    { layer = 3, kind = "block", x_min = 9, x_max = 9, y_min = 2, y_max = 6 },
+    { layer = 3, kind = "row",   x_min = 4, x_max = 8, y = 2 },
+    { layer = 3, kind = "row",   x_min = 4, x_max = 8, y = 6 },
+    { layer = 4, kind = "block", x_min = 3, x_max = 3, y_min = 2, y_max = 6 },
+    { layer = 4, kind = "block", x_min = 9, x_max = 9, y_min = 2, y_max = 6 },
+    { layer = 4, kind = "row",   x_min = 4, x_max = 8, y = 2 },
+    { layer = 4, kind = "row",   x_min = 4, x_max = 8, y = 6 },
+}
+
+-- Red Dragon layout (US-25): GNOME Mahjongg's `dragon` map — two curved "horn"
+-- towers on the left/right edges joined by a wide body block, with a raised
+-- ridge and a single off-center peak tile, 144 tiles across 3 layers
+-- (82/45/17). The horns use the half-grid (y=1.5/3/4.5/6 and the x=6.5 base
+-- row), which the layout-agnostic bevel/free-tile logic handles unchanged.
+--   L0: body block x=2..12, y=0..5 (66) + five-tile horns at x=0/x=14
+--       (y=0..6) + the six-tile base row at y=6.5 (x=2..12, even) = 82
+--   L1: ridge block x=3.5..10.5, y=0.5..4.5 (40) + right horn column
+--       x=11.5 (y=1.5..3.5) + two left horn tiles x=2.5 (y=1.5, 4.5) = 45
+--   L2: top ridge block x=5..8, y=1..4 (16) + the peak tile (11, 4) = 17
+-- Grid extents: x=0..14, y=0..6.5.
+local RED_DRAGON_SPEC = {
+    -- Layer 0: the body block, the two horn towers, and the base row.
+    { layer = 0, kind = "block", x_min = 2, x_max = 12, y_min = 0, y_max = 5 },
+    { layer = 0, kind = "tile",  x = 0,  y = 0 },
+    { layer = 0, kind = "tile",  x = 0,  y = 1.5 },
+    { layer = 0, kind = "tile",  x = 0,  y = 3 },
+    { layer = 0, kind = "tile",  x = 0,  y = 4.5 },
+    { layer = 0, kind = "tile",  x = 0,  y = 6 },
+    { layer = 0, kind = "tile",  x = 14, y = 0 },
+    { layer = 0, kind = "tile",  x = 14, y = 1.5 },
+    { layer = 0, kind = "tile",  x = 14, y = 3 },
+    { layer = 0, kind = "tile",  x = 14, y = 4.5 },
+    { layer = 0, kind = "tile",  x = 14, y = 6 },
+    { layer = 0, kind = "tile",  x = 2,  y = 6.5 },
+    { layer = 0, kind = "tile",  x = 4,  y = 6.5 },
+    { layer = 0, kind = "tile",  x = 6,  y = 6.5 },
+    { layer = 0, kind = "tile",  x = 8,  y = 6.5 },
+    { layer = 0, kind = "tile",  x = 10, y = 6.5 },
+    { layer = 0, kind = "tile",  x = 12, y = 6.5 },
+    -- Layer 1: the raised ridge plus the horns' upper tiles.
+    { layer = 1, kind = "block", x_min = 3.5,  x_max = 10.5, y_min = 0.5, y_max = 4.5 },
+    { layer = 1, kind = "block", x_min = 11.5, x_max = 11.5, y_min = 1.5, y_max = 3.5 },
+    { layer = 1, kind = "tile",  x = 2.5, y = 1.5 },
+    { layer = 1, kind = "tile",  x = 2.5, y = 4.5 },
+    -- Layer 2: the top ridge and the off-center peak tile.
+    { layer = 2, kind = "block", x_min = 5, x_max = 8, y_min = 1, y_max = 4 },
+    { layer = 2, kind = "tile",  x = 11, y = 4 },
+}
+
+-- Overpass layout (US-26): GNOME Mahjongg's `overpass` map — twin towers on
+-- the far left/right linked by two deck layers that cross over/under each
+-- other, 144 tiles across 5 layers (52/20/16/32/24). The center deck is a
+-- 4-wide full-height block on L0; the two towers step in by one tile per layer
+-- while the deck spans L2 (two 2-wide segments), L3 (8-wide) and L4 (6-wide).
+-- All coordinates are on the full grid.
+--   L0: left tower column x=0 (y=2..7) + corner tiles x=1 at y=2/y=7 + center
+--       deck block x=4..7 (y=0..8) + mirror corner tiles x=10 + right tower
+--       column x=11 (y=2..7) = 6+1+1+36+1+1+6 = 52
+--   L1: the four tower columns x=0 (y=2..7), x=1 (y=3..6), x=10 (y=3..6),
+--       x=11 (y=2..7) = 6+4+4+6 = 20
+--   L2: two 2-wide deck segments x=1..2 and x=9..10 (y=3..6) = 8+8 = 16
+--   L3: the 8-wide lower deck x=2..9 (y=3..6) = 32
+--   L4: the 6-wide upper deck x=3..8 (y=3..6) = 24
+-- Grid extents: x=0..11, y=0..8.
+local OVERPASS_SPEC = {
+    -- Layer 0: the towers and the center deck.
+    { layer = 0, kind = "block", x_min = 0, x_max = 0, y_min = 2, y_max = 7 },
+    { layer = 0, kind = "tile",  x = 1, y = 2 },
+    { layer = 0, kind = "tile",  x = 1, y = 7 },
+    { layer = 0, kind = "block", x_min = 4, x_max = 7, y_min = 0, y_max = 8 },
+    { layer = 0, kind = "tile",  x = 10, y = 2 },
+    { layer = 0, kind = "tile",  x = 10, y = 7 },
+    { layer = 0, kind = "block", x_min = 11, x_max = 11, y_min = 2, y_max = 7 },
+    -- Layer 1: the four tower columns.
+    { layer = 1, kind = "block", x_min = 0,  x_max = 0,  y_min = 2, y_max = 7 },
+    { layer = 1, kind = "block", x_min = 1,  x_max = 1,  y_min = 3, y_max = 6 },
+    { layer = 1, kind = "block", x_min = 10, x_max = 10, y_min = 3, y_max = 6 },
+    { layer = 1, kind = "block", x_min = 11, x_max = 11, y_min = 2, y_max = 7 },
+    -- Layer 2: two short deck segments.
+    { layer = 2, kind = "block", x_min = 1, x_max = 2,  y_min = 3, y_max = 6 },
+    { layer = 2, kind = "block", x_min = 9, x_max = 10, y_min = 3, y_max = 6 },
+    -- Layer 3: the 8-wide lower deck.
+    { layer = 3, kind = "block", x_min = 2, x_max = 9, y_min = 3, y_max = 6 },
+    -- Layer 4: the 6-wide upper deck.
+    { layer = 4, kind = "block", x_min = 3, x_max = 8, y_min = 3, y_max = 6 },
+}
+
 -- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
 -- the entries (the cached layout tables reference the spec).
 Layouts.layouts = {}
@@ -327,13 +459,16 @@ function Layouts.layoutName(id)
 end
 
 -- Turtle is registered in US-14; US-15 adds Spider; US-16 adds Bridge; US-22
--- adds Ziggurat; US-23 adds Cloud. Future boards (US-24..29) add their
--- registerLayout call here.
+-- adds Ziggurat; US-23 adds Cloud; US-24/25/26 add Tic-Tac-Toe, Red Dragon and
+-- Overpass. Future boards (US-27..29) add their registerLayout call here.
 Layouts.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
 Layouts.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
 Layouts.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
 Layouts.registerLayout{ id = "ziggurat", name = "Ziggurat", spec = ZIGGURAT_SPEC }
 Layouts.registerLayout{ id = "cloud", name = "Cloud", spec = CLOUD_SPEC }
+Layouts.registerLayout{ id = "tictactoe", name = "Tic-Tac-Toe", spec = TICTACTOE_SPEC }
+Layouts.registerLayout{ id = "red-dragon", name = "Red Dragon", spec = RED_DRAGON_SPEC }
+Layouts.registerLayout{ id = "overpass", name = "Overpass", spec = OVERPASS_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -482,8 +617,10 @@ function Layouts.runSelfTests()
         end
     end
 
-    -- Per-layout shape (US-04/15/16/22/23): Turtle 87/36/16/4/1, Spider 65/53/25/1,
-    -- Bridge 88/36/16/4, Ziggurat 64/20/18/18/14/10, Cloud 79/36/29.
+    -- Per-layout shape (US-04/15/16/22/23/24/25/26): Turtle 87/36/16/4/1,
+    -- Spider 65/53/25/1, Bridge 88/36/16/4, Ziggurat 64/20/18/18/14/10,
+    -- Cloud 79/36/29, Tic-Tac-Toe 40/36/28/20/20, Red Dragon 82/45/17,
+    -- Overpass 52/20/16/32/24.
     checkShape("turtle", { [0] = 87, [1] = 36, [2] = 16, [3] = 4, [4] = 1 },
         { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
     checkShape("spider", { [0] = 65, [1] = 53, [2] = 25, [3] = 1 },
@@ -494,6 +631,12 @@ function Layouts.runSelfTests()
         { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
     checkShape("cloud", { [0] = 79, [1] = 36, [2] = 29 },
         { x_min = 0, x_max = 13, y_min = 0, y_max = 5.5 })
+    checkShape("tictactoe", { [0] = 40, [1] = 36, [2] = 28, [3] = 20, [4] = 20 },
+        { x_min = 0, x_max = 12, y_min = 0, y_max = 8 })
+    checkShape("red-dragon", { [0] = 82, [1] = 45, [2] = 17 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 6.5 })
+    checkShape("overpass", { [0] = 52, [1] = 20, [2] = 16, [3] = 32, [4] = 24 },
+        { x_min = 0, x_max = 11, y_min = 0, y_max = 8 })
 
     -- maxLayer per layout.
     check(Layouts.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
@@ -501,19 +644,27 @@ function Layouts.runSelfTests()
     check(Layouts.maxLayer("bridge") == 3, "maxLayer(bridge) == 3")
     check(Layouts.maxLayer("ziggurat") == 5, "maxLayer(ziggurat) == 5")
     check(Layouts.maxLayer("cloud") == 2, "maxLayer(cloud) == 2")
+    check(Layouts.maxLayer("tictactoe") == 4, "maxLayer(tictactoe) == 4")
+    check(Layouts.maxLayer("red-dragon") == 2, "maxLayer(red-dragon) == 2")
+    check(Layouts.maxLayer("overpass") == 4, "maxLayer(overpass) == 4")
 
-    -- Registry behavior (US-14/US-15/US-16/US-22/US-23): the five built-ins are
-    -- enumerated sorted; memoization is per-id; an unknown id falls back to the
-    -- id itself.
+    -- Registry behavior (US-14..US-26): the eight built-ins are enumerated
+    -- sorted; memoization is per-id; an unknown id falls back to the id itself.
     local ids = Layouts.layoutIds()
-    check(#ids == 5 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "spider"
-        and ids[4] == "turtle" and ids[5] == "ziggurat",
-        "layoutIds returns exactly {bridge, cloud, spider, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
+    check(#ids == 8 and ids[1] == "bridge" and ids[2] == "cloud"
+        and ids[3] == "overpass" and ids[4] == "red-dragon"
+        and ids[5] == "spider" and ids[6] == "tictactoe"
+        and ids[7] == "turtle" and ids[8] == "ziggurat",
+        "layoutIds returns exactly {bridge, cloud, overpass, red-dragon, spider,\n"
+        .. "tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
     check(Layouts.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
     check(Layouts.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
     check(Layouts.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
     check(Layouts.layoutName("ziggurat") == "Ziggurat", "layoutName returns Ziggurat's registered name")
     check(Layouts.layoutName("cloud") == "Cloud", "layoutName returns Cloud's registered name")
+    check(Layouts.layoutName("tictactoe") == "Tic-Tac-Toe", "layoutName returns Tic-Tac-Toe's registered name")
+    check(Layouts.layoutName("red-dragon") == "Red Dragon", "layoutName returns Red Dragon's registered name")
+    check(Layouts.layoutName("overpass") == "Overpass", "layoutName returns Overpass's registered name")
     check(Layouts.layoutName("nope") == "nope",
         "layoutName falls back to the id for an unknown layout")
     check(Layouts.buildLayout("turtle") == Layouts.buildLayout(),
@@ -539,9 +690,11 @@ function Layouts.runSelfTests()
     }
     Layouts.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = Layouts.layoutIds()
-    check(#toy_ids == 6 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "spider" and toy_ids[4] == "toy"
-        and toy_ids[5] == "turtle" and toy_ids[6] == "ziggurat",
+    check(#toy_ids == 9 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "overpass" and toy_ids[4] == "red-dragon"
+        and toy_ids[5] == "spider" and toy_ids[6] == "tictactoe"
+        and toy_ids[7] == "toy" and toy_ids[8] == "turtle"
+        and toy_ids[9] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
     check(#Layouts.buildLayout("toy") == 5, "the toy layout has 5 positions")
     check(Layouts.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -563,10 +716,10 @@ function Layouts.runSelfTests()
     check(Layouts.layoutName("toy") == "Toy2", "re-registering an id replaces its name")
 
     Layouts.deregisterLayout("toy")
-    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 5,
+    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 8,
         "deregisterLayout removes the entry and restores the built-in registry")
     Layouts.deregisterLayout("toy")
-    check(#Layouts.layoutIds() == 5,
+    check(#Layouts.layoutIds() == 8,
         "deregisterLayout is a no-op for an already-deregistered id")
 
     local function checkError(fn, msg)

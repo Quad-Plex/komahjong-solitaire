@@ -353,10 +353,11 @@ mahjong.koplugin/            # the deliverable
 │                            #   shuffle, scoring, persistence (v2 with layout field),
 │                            #   re-exports mahjonglayouts.lua's registry API, self-tests
 ├── mahjonglayouts.lua       # PURE layout module (US-22a): the spec tables (Turtle/Spider/
-│                            #   Bridge/Ziggurat/Cloud) + registerLayout calls, the registry and
+│                            #   Bridge/Ziggurat/Cloud/Tic-Tac-Toe/Red Dragon/Overpass) +
+│                            #   registerLayout calls, the registry and
 │                            #   per-id caches, buildLayout/posKey/maxLayer/gridBounds/
 │                            #   isLayoutPosition/deregisterLayout, shape+registry self-tests.
-│                            #   US-24..US-29 add a board HERE (spec + self-test) only
+│                            #   US-27..US-29 add a board HERE (spec + self-test) only
 ├── mahjongstats.lua         # PURE lifetime stats (US-12): defaults/load/startGame/recordWin,
 │                            #   total_time, self-tests (no ui/ requires)
 ├── mahjongboard.lua         # 3D board widget (InputContainer): IconWidgets in an
@@ -428,8 +429,12 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    module load (the canonical GNOME Mahjongg map: per-layer 87/36/16/4/1, grid x=0..14, y=0..7,
    fractional x/y on the head/tail/cap half-grid); US-15/16 add Spider/Bridge via one
    `registerLayout` call each, US-22 adds Ziggurat (per-layer 64/20/18/18/14/10, grid
-   x=0..14, y=0..7, half-grid on layers 0/1/2), and US-23 adds Cloud (per-layer 79/36/29,
-   grid x=0..13, y=0..5.5, half-grid y=5.5 spine rows). Every layout-dependent function takes a layout id (defaulting to
+   x=0..14, y=0..7, half-grid on layers 0/1/2), US-23 adds Cloud (per-layer 79/36/29,
+   grid x=0..13, y=0..5.5, half-grid y=5.5 spine rows), and US-24/25/26 add Tic-Tac-Toe
+   (`tictactoe`, per-layer 40/36/28/20/20, grid x=0..12, y=0..8), Red Dragon (`red-dragon`,
+   per-layer 82/45/17, grid x=0..14, y=0..6.5, fractional-y horn/base tiles) and Overpass
+   (per-layer 52/20/16/32/24, grid x=0..11, y=0..8). The sorted built-in registry is
+   {bridge, cloud, overpass, red-dragon, spider, tictactoe, turtle, ziggurat}. Every layout-dependent function takes a layout id (defaulting to
    `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
    `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,
    `freeTiles(board, id)`, `hasMoves`/`matchingFreePair*`/`countFreePairs` (all take a trailing

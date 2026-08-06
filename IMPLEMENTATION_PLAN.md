@@ -160,9 +160,9 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-22 — Ziggurat layout | [US-22_ziggurat-layout_completed.md](implementation-plan/US-22_ziggurat-layout_completed.md) | ✅ completed |
 | US-22a — Extract board definitions into `mahjonglayouts.lua` | [US-22a_layouts-module_completed.md](implementation-plan/US-22a_layouts-module_completed.md) | ✅ completed |
 | US-23 — Cloud layout | [US-23_cloud-layout_completed.md](implementation-plan/US-23_cloud-layout_completed.md) | ✅ completed |
-| US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout.md](implementation-plan/US-24_tictactoe-layout.md) | ⏳ planned |
-| US-25 — Red Dragon layout | [US-25_red-dragon-layout.md](implementation-plan/US-25_red-dragon-layout.md) | ⏳ planned |
-| US-26 — Overpass layout | [US-26_overpass-layout.md](implementation-plan/US-26_overpass-layout.md) | ⏳ planned |
+| US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout_completed.md](implementation-plan/US-24_tictactoe-layout_completed.md) | ✅ completed |
+| US-25 — Red Dragon layout | [US-25_red-dragon-layout_completed.md](implementation-plan/US-25_red-dragon-layout_completed.md) | ✅ completed |
+| US-26 — Overpass layout | [US-26_overpass-layout_completed.md](implementation-plan/US-26_overpass-layout_completed.md) | ✅ completed |
 | US-27 — Pyramid's Walls layout | [US-27_pyramid-walls-layout.md](implementation-plan/US-27_pyramid-walls-layout.md) | ⏳ planned |
 | US-28 — Confounding Cross layout | [US-28_confounding-cross-layout.md](implementation-plan/US-28_confounding-cross-layout.md) | ⏳ planned |
 | US-29 — Taipei layout | [US-29_taipei-layout.md](implementation-plan/US-29_taipei-layout.md) | ⏳ planned |
