@@ -132,7 +132,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-22, US-22a**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-23, US-22a**.
 
 | Story | File | Status |
 |---|---|---|
@@ -159,7 +159,7 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-21 — Expand the layout picker grid to hold the full board set | [US-21_layout-picker-expansion_completed.md](implementation-plan/US-21_layout-picker-expansion_completed.md) | ✅ completed |
 | US-22 — Ziggurat layout | [US-22_ziggurat-layout_completed.md](implementation-plan/US-22_ziggurat-layout_completed.md) | ✅ completed |
 | US-22a — Extract board definitions into `mahjonglayouts.lua` | [US-22a_layouts-module_completed.md](implementation-plan/US-22a_layouts-module_completed.md) | ✅ completed |
-| US-23 — Cloud layout | [US-23_cloud-layout.md](implementation-plan/US-23_cloud-layout.md) | ⏳ planned |
+| US-23 — Cloud layout | [US-23_cloud-layout_completed.md](implementation-plan/US-23_cloud-layout_completed.md) | ✅ completed |
 | US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout.md](implementation-plan/US-24_tictactoe-layout.md) | ⏳ planned |
 | US-25 — Red Dragon layout | [US-25_red-dragon-layout.md](implementation-plan/US-25_red-dragon-layout.md) | ⏳ planned |
 | US-26 — Overpass layout | [US-26_overpass-layout.md](implementation-plan/US-26_overpass-layout.md) | ⏳ planned |

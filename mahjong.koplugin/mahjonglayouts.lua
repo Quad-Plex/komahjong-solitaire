@@ -200,6 +200,40 @@ local ZIGGURAT_SPEC = {
     { layer = 5, kind = "block", x_min = 5, x_max = 9,  y_min = 3, y_max = 4 },
 }
 
+-- Cloud layout (US-23): GNOME Mahjongg's `cloud` map — a rounded body with
+-- seven pillared columns on top, 144 tiles across 3 layers (79/36/29). The
+-- body is a wide 14x5 block; the lower spine row (L0) and the two spine rows
+-- above it sit on the half-grid at y=5.5, with a single L2 spine tile at
+-- (6, 5.5) capping the stack. The layout-agnostic bevel/free-tile logic
+-- (US-14) handles those fractional y coordinates unchanged.
+--   L0: body block x=0..13, y=0..4 (70) + spine row x=2.5..10.5, y=5.5 (9) = 79
+--   L1: spine row x=3..10, y=5.5 (8) + seven columns at even x, y=0..3 (28) = 36
+--   L2: seven columns at even x, y=0..3 (28) + spine tile (6, 5.5) = 29
+-- Grid extents: x=0..13, y=0..5.5.
+local CLOUD_SPEC = {
+    -- Layer 0: the cloud body plus the lower spine row.
+    { layer = 0, kind = "block", x_min = 0,   x_max = 13, y_min = 0, y_max = 4 },
+    { layer = 0, kind = "row",   x_min = 2.5, x_max = 10.5, y = 5.5 },
+    -- Layer 1: the middle spine row plus seven columns.
+    { layer = 1, kind = "row",   x_min = 3, x_max = 10, y = 5.5 },
+    { layer = 1, kind = "block", x_min = 0,  x_max = 0,  y_min = 0, y_max = 3 },
+    { layer = 1, kind = "block", x_min = 2,  x_max = 2,  y_min = 0, y_max = 3 },
+    { layer = 1, kind = "block", x_min = 4,  x_max = 4,  y_min = 0, y_max = 3 },
+    { layer = 1, kind = "block", x_min = 6,  x_max = 6,  y_min = 0, y_max = 3 },
+    { layer = 1, kind = "block", x_min = 8,  x_max = 8,  y_min = 0, y_max = 3 },
+    { layer = 1, kind = "block", x_min = 10, x_max = 10, y_min = 0, y_max = 3 },
+    { layer = 1, kind = "block", x_min = 12, x_max = 12, y_min = 0, y_max = 3 },
+    -- Layer 2: the same seven columns on top, plus the spine tile.
+    { layer = 2, kind = "block", x_min = 0,  x_max = 0,  y_min = 0, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 2,  x_max = 2,  y_min = 0, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 4,  x_max = 4,  y_min = 0, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 6,  x_max = 6,  y_min = 0, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 8,  x_max = 8,  y_min = 0, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 10, x_max = 10, y_min = 0, y_max = 3 },
+    { layer = 2, kind = "block", x_min = 12, x_max = 12, y_min = 0, y_max = 3 },
+    { layer = 2, kind = "tile",  x = 6,      y = 5.5 },
+}
+
 -- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
 -- the entries (the cached layout tables reference the spec).
 Layouts.layouts = {}
@@ -293,11 +327,13 @@ function Layouts.layoutName(id)
 end
 
 -- Turtle is registered in US-14; US-15 adds Spider; US-16 adds Bridge; US-22
--- adds Ziggurat. Future boards (US-23..29) add their registerLayout call here.
+-- adds Ziggurat; US-23 adds Cloud. Future boards (US-24..29) add their
+-- registerLayout call here.
 Layouts.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
 Layouts.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
 Layouts.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
 Layouts.registerLayout{ id = "ziggurat", name = "Ziggurat", spec = ZIGGURAT_SPEC }
+Layouts.registerLayout{ id = "cloud", name = "Cloud", spec = CLOUD_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -446,8 +482,8 @@ function Layouts.runSelfTests()
         end
     end
 
-    -- Per-layout shape (US-04/15/16/22): Turtle 87/36/16/4/1, Spider 65/53/25/1,
-    -- Bridge 88/36/16/4, Ziggurat 64/20/18/18/14/10.
+    -- Per-layout shape (US-04/15/16/22/23): Turtle 87/36/16/4/1, Spider 65/53/25/1,
+    -- Bridge 88/36/16/4, Ziggurat 64/20/18/18/14/10, Cloud 79/36/29.
     checkShape("turtle", { [0] = 87, [1] = 36, [2] = 16, [3] = 4, [4] = 1 },
         { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
     checkShape("spider", { [0] = 65, [1] = 53, [2] = 25, [3] = 1 },
@@ -456,24 +492,28 @@ function Layouts.runSelfTests()
         { x_min = 0, x_max = 12, y_min = 0, y_max = 8 })
     checkShape("ziggurat", { [0] = 64, [1] = 20, [2] = 18, [3] = 18, [4] = 14, [5] = 10 },
         { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("cloud", { [0] = 79, [1] = 36, [2] = 29 },
+        { x_min = 0, x_max = 13, y_min = 0, y_max = 5.5 })
 
     -- maxLayer per layout.
     check(Layouts.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
     check(Layouts.maxLayer("spider") == 3, "maxLayer(spider) == 3")
     check(Layouts.maxLayer("bridge") == 3, "maxLayer(bridge) == 3")
     check(Layouts.maxLayer("ziggurat") == 5, "maxLayer(ziggurat) == 5")
+    check(Layouts.maxLayer("cloud") == 2, "maxLayer(cloud) == 2")
 
-    -- Registry behavior (US-14/US-15/US-16/US-22): the four built-ins are
+    -- Registry behavior (US-14/US-15/US-16/US-22/US-23): the five built-ins are
     -- enumerated sorted; memoization is per-id; an unknown id falls back to the
     -- id itself.
     local ids = Layouts.layoutIds()
-    check(#ids == 4 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle"
-        and ids[4] == "ziggurat",
-        "layoutIds returns exactly {bridge, spider, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
+    check(#ids == 5 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "spider"
+        and ids[4] == "turtle" and ids[5] == "ziggurat",
+        "layoutIds returns exactly {bridge, cloud, spider, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
     check(Layouts.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
     check(Layouts.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
     check(Layouts.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
     check(Layouts.layoutName("ziggurat") == "Ziggurat", "layoutName returns Ziggurat's registered name")
+    check(Layouts.layoutName("cloud") == "Cloud", "layoutName returns Cloud's registered name")
     check(Layouts.layoutName("nope") == "nope",
         "layoutName falls back to the id for an unknown layout")
     check(Layouts.buildLayout("turtle") == Layouts.buildLayout(),
@@ -499,8 +539,9 @@ function Layouts.runSelfTests()
     }
     Layouts.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = Layouts.layoutIds()
-    check(#toy_ids == 5 and toy_ids[1] == "bridge" and toy_ids[2] == "spider"
-        and toy_ids[3] == "toy" and toy_ids[4] == "turtle" and toy_ids[5] == "ziggurat",
+    check(#toy_ids == 6 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "spider" and toy_ids[4] == "toy"
+        and toy_ids[5] == "turtle" and toy_ids[6] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
     check(#Layouts.buildLayout("toy") == 5, "the toy layout has 5 positions")
     check(Layouts.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -522,10 +563,10 @@ function Layouts.runSelfTests()
     check(Layouts.layoutName("toy") == "Toy2", "re-registering an id replaces its name")
 
     Layouts.deregisterLayout("toy")
-    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 4,
+    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 5,
         "deregisterLayout removes the entry and restores the built-in registry")
     Layouts.deregisterLayout("toy")
-    check(#Layouts.layoutIds() == 4,
+    check(#Layouts.layoutIds() == 5,
         "deregisterLayout is a no-op for an already-deregistered id")
 
     local function checkError(fn, msg)

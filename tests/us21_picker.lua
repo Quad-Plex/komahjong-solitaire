@@ -10,7 +10,8 @@
 -- At US-21 time the registry holds {bridge, spider, turtle} (3 layouts →
 -- 3 rows min, 9 slots, 3 cards in row 0). A throwaway "toy" layout is
 -- registered mid-test to exercise the 4th-card-falls-in-row-1 path. (US-22
--- adds Ziggurat, so the base registry now has 4 layouts and the toy makes 5.)
+-- adds Ziggurat and US-23 adds Cloud, so the base registry now has 5 layouts
+-- and the toy makes 6.)
 
 local mock = require("mock")
 local ctx = mock.newContext()
@@ -98,16 +99,16 @@ expect(ids_match, "card ids match sorted registered layout ids")
 
 -- Every card has a non-nil thumbnail-backed content (the card was built).
 for _, c in ipairs(picker._card_rects) do
-    expect(c.id == "bridge" or c.id == "spider" or c.id == "turtle"
-            or c.id == "ziggurat",
+    expect(c.id == "bridge" or c.id == "cloud" or c.id == "spider"
+            or c.id == "turtle" or c.id == "ziggurat",
         "card id is a known layout (" .. tostring(c.id) .. ")")
 end
 
--- ---- Dynamic rows: a 5th layout puts cards in row 1 ---------------------------
+-- ---- Dynamic rows: a 6th layout fills row 1 ------------------------------------
 
--- Register a throwaway toy layout: 5 layouts → ceil(5/3)=2 → max(3,2)=3 rows.
--- The 4th card (turtle) falls into row 1 (slot index = 4 in row-major order),
--- and the 5th (ziggurat) wraps to row 1, column 1.
+-- Register a throwaway toy layout: 6 layouts → ceil(6/3)=2 → max(3,2)=3 rows.
+-- The 4th card (toy) wraps to row 1, column 0; the 5th and 6th (turtle,
+-- ziggurat) fill out the rest of row 1.
 local toy_spec = {
     { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 0 },
     { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 1 },
@@ -120,15 +121,16 @@ local mj2 = Mahjong:new()
 mj2:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker2 = ctx.window_stack[#ctx.window_stack].widget
-expect(#picker2._card_rects == 5,
-    "5 layouts → 5 cards (got " .. #picker2._card_rects .. ")")
+expect(#picker2._card_rects == 6,
+    "6 layouts → 6 cards (got " .. #picker2._card_rects .. ")")
 
--- Sorted ids: {bridge, spider, toy, turtle, ziggurat}
-expect(picker2._card_rects[1].id == "bridge", "5th-layout grid: slot 1 = bridge")
-expect(picker2._card_rects[2].id == "spider", "5th-layout grid: slot 2 = spider")
-expect(picker2._card_rects[3].id == "toy",    "5th-layout grid: slot 3 = toy")
-expect(picker2._card_rects[4].id == "turtle", "5th-layout grid: slot 4 = turtle")
-expect(picker2._card_rects[5].id == "ziggurat", "5th-layout grid: slot 5 = ziggurat")
+-- Sorted ids: {bridge, cloud, spider, toy, turtle, ziggurat}
+expect(picker2._card_rects[1].id == "bridge", "6th-layout grid: slot 1 = bridge")
+expect(picker2._card_rects[2].id == "cloud",  "6th-layout grid: slot 2 = cloud")
+expect(picker2._card_rects[3].id == "spider", "6th-layout grid: slot 3 = spider")
+expect(picker2._card_rects[4].id == "toy",    "6th-layout grid: slot 4 = toy")
+expect(picker2._card_rects[5].id == "turtle", "6th-layout grid: slot 5 = turtle")
+expect(picker2._card_rects[6].id == "ziggurat", "6th-layout grid: slot 6 = ziggurat")
 
 -- First 3 cards share row 0; the 4th is in row 1 (lower y).
 expect(picker2._card_rects[1].y == picker2._card_rects[2].y
@@ -137,15 +139,20 @@ expect(picker2._card_rects[1].y == picker2._card_rects[2].y
 expect(picker2._card_rects[4].y > picker2._card_rects[1].y,
     "4th card is in a lower row (grid has >= 2 rows)")
 
--- The 4th card wraps to column 0 (x = EDGE_PAD); the 5th sits beside it in row 1.
+-- The 4th card wraps to column 0 (x = EDGE_PAD); the 5th and 6th sit beside
+-- it in row 1.
 expect(picker2._card_rects[4].x == EDGE_PAD,
     "4th card wraps to column 0 (x=" .. picker2._card_rects[4].x .. ")")
 expect(picker2._card_rects[5].y == picker2._card_rects[4].y,
     "5th card shares the 4th card's row")
 expect(picker2._card_rects[5].x > picker2._card_rects[4].x,
     "5th card sits in row 1, column 1 (x=" .. picker2._card_rects[5].x .. ")")
+expect(picker2._card_rects[6].y == picker2._card_rects[4].y,
+    "6th card shares the 4th card's row")
+expect(picker2._card_rects[6].x > picker2._card_rects[5].x,
+    "6th card sits in row 1, column 2 (x=" .. picker2._card_rects[6].x .. ")")
 
--- Deregister the toy layout (restore {bridge, spider, turtle}).
+-- Deregister the toy layout (restore the five built-ins).
 Logic.deregisterLayout("toy")
 
 -- ---- Pick a layout from the grid -----------------------------------------------

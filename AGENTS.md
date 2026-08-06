@@ -331,11 +331,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `self.cropping_widget` to the scroll container so the UIManager confines
   repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..22, US-22a shipped)
+## Mahjong plugin — current state and key contracts (US-01..23, US-22a shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..22, US-22a
+per user story; `_completed` in the filename marks shipped stories — US-01..23, US-22a
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -353,10 +353,10 @@ mahjong.koplugin/            # the deliverable
 │                            #   shuffle, scoring, persistence (v2 with layout field),
 │                            #   re-exports mahjonglayouts.lua's registry API, self-tests
 ├── mahjonglayouts.lua       # PURE layout module (US-22a): the spec tables (Turtle/Spider/
-│                            #   Bridge/Ziggurat) + registerLayout calls, the registry and
+│                            #   Bridge/Ziggurat/Cloud) + registerLayout calls, the registry and
 │                            #   per-id caches, buildLayout/posKey/maxLayer/gridBounds/
 │                            #   isLayoutPosition/deregisterLayout, shape+registry self-tests.
-│                            #   US-23..US-29 add a board HERE (spec + self-test) only
+│                            #   US-24..US-29 add a board HERE (spec + self-test) only
 ├── mahjongstats.lua         # PURE lifetime stats (US-12): defaults/load/startGame/recordWin,
 │                            #   total_time, self-tests (no ui/ requires)
 ├── mahjongboard.lua         # 3D board widget (InputContainer): IconWidgets in an
@@ -427,8 +427,9 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    + shape self-test) plus a harness. Turtle is registered at
    module load (the canonical GNOME Mahjongg map: per-layer 87/36/16/4/1, grid x=0..14, y=0..7,
    fractional x/y on the head/tail/cap half-grid); US-15/16 add Spider/Bridge via one
-   `registerLayout` call each, and US-22 adds Ziggurat (per-layer 64/20/18/18/14/10, grid
-   x=0..14, y=0..7, half-grid on layers 0/1/2). Every layout-dependent function takes a layout id (defaulting to
+   `registerLayout` call each, US-22 adds Ziggurat (per-layer 64/20/18/18/14/10, grid
+   x=0..14, y=0..7, half-grid on layers 0/1/2), and US-23 adds Cloud (per-layer 79/36/29,
+   grid x=0..13, y=0..5.5, half-grid y=5.5 spine rows). Every layout-dependent function takes a layout id (defaulting to
    `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
    `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,
    `freeTiles(board, id)`, `hasMoves`/`matchingFreePair*`/`countFreePairs` (all take a trailing

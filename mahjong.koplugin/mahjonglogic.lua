@@ -766,8 +766,9 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 5 and toy_ids[1] == "bridge" and toy_ids[2] == "spider"
-        and toy_ids[3] == "toy" and toy_ids[4] == "turtle" and toy_ids[5] == "ziggurat",
+    check(#toy_ids == 6 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+        and toy_ids[3] == "spider" and toy_ids[4] == "toy"
+        and toy_ids[5] == "turtle" and toy_ids[6] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -801,7 +802,8 @@ function MahjongLogic.runSelfTests()
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
     MahjongLogic.deregisterLayout("toy")
-    check(#MahjongLogic.layoutIds() == 4, "deregistering toy restores the {bridge, spider, turtle, ziggurat} registry")
+    check(#MahjongLogic.layoutIds() == 5,
+        "deregistering toy restores the {bridge, cloud, spider, turtle, ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
     -- Shape checks (144 positions, per-layer counts, grid bounds) live in
