@@ -73,7 +73,7 @@ captured from `example_app/casualkochess.koplugin`.
 kindle_majong/
 ├── AGENTS.md                     # this repo's plugin-writing guide (already written)
 ├── IMPLEMENTATION_PLAN.md        # this file — the overview (design + story index)
-├── implementation-plan/          # one file per user story (US-01..19)
+├── implementation-plan/          # one file per user story (US-01..33, US-22a)
 │   ├── US-01_plugin-skeleton_completed.md
 │   ├── US-02_game-shell_completed.md
 │   ├── US-03_tile-deck_completed.md
@@ -93,7 +93,21 @@ kindle_majong/
 │   ├── US-17_pause_completed.md
 │   ├── US-18_penalties_completed.md
 │   ├── US-19_autosolve_completed.md
-│   └── US-20_hint-session-and-pause-button_completed.md
+│   ├── US-20_hint-session-and-pause-button_completed.md
+│   ├── US-21_layout-picker-expansion_completed.md
+│   ├── US-22_ziggurat-layout_completed.md
+│   ├── US-22a_layouts-module_completed.md
+│   ├── US-23_cloud-layout_completed.md
+│   ├── US-24_tictactoe-layout_completed.md
+│   ├── US-25_red-dragon-layout_completed.md
+│   ├── US-26_overpass-layout_completed.md
+│   ├── US-27_pyramid-walls-layout_completed.md
+│   ├── US-28_confounding-cross-layout_completed.md
+│   ├── US-29_taipei-layout_completed.md
+│   ├── US-30_picker-polish_completed.md
+│   ├── US-31_layout-highscore_completed.md
+│   ├── US-32_failure-recognition_completed.md
+│   └── US-33_autosolve-lock_completed.md
 ├── tests/                        # official test suite (tests/run.sh)
 │   ├── run.sh                    # luac -p + luacheck + logic self-tests + harnesses
 │   ├── mock.lua                  # shared KOReader stubs (fresh mock.newContext() per test)
@@ -111,29 +125,46 @@ kindle_majong/
 │   ├── us12_stats.lua            # win summary + lifetime stats
 │   ├── us13_stats.lua            # stats button + floating stats card
 │   ├── us14_layouts.lua          # layout registry + picker (US-14)
-│   ├── us15_spider.lua           # Spider layout (planned)
+│   ├── us15_spider.lua           # Spider layout (US-15)
 │   ├── us16_bridge.lua           # Bridge layout (shipped)
 │   ├── us17_pause.lua            # pause overlay
 │   ├── us18_penalties.lua        # hint/shuffle score penalties
 │   ├── us19_autosolve.lua        # long-press Hint auto-solver (US-19)
 │   ├── us21_picker.lua           # dynamic 3-col picker grid + scroll (US-21)
-│   └── us30_picker_wins.lua      # picker polish: badges, tap feedback (US-30)
+│   ├── us22_ziggurat.lua         # Ziggurat layout (US-22)
+│   ├── us23_cloud.lua            # Cloud layout (US-23)
+│   ├── us24_tictactoe.lua        # Tic-Tac-Toe layout (US-24)
+│   ├── us25_red_dragon.lua       # Red Dragon layout (US-25)
+│   ├── us26_overpass.lua         # Overpass layout (US-26)
+│   ├── us27_pyramid.lua          # Pyramid's Walls layout (US-27)
+│   ├── us28_confounding.lua      # Confounding Cross layout (US-28)
+│   ├── us29_taipei.lua           # Taipei layout (US-29)
+│   ├── us30_picker_wins.lua      # picker polish: badges, tap feedback (US-30)
+│   ├── us31_layout_score.lua     # per-layout highscore chip (US-31)
+│   ├── us32_deadlock.lua         # failure recognition / loss dialog (US-32)
+│   └── us33_autosolve_lock.lua   # uninterruptible auto-solve (US-33)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
     ├── mahjonglogic.lua          # pure logic: deck, free-tiles, match, win, shuffle, scoring,
     │                             #   persistence; re-exports the layout API (US-22a)
     ├── mahjonglayouts.lua        # pure layout module (US-22a): board specs + registry +
-    │                             #   geometry; a new board (US-23..29) is one change here
+    │                             #   geometry; a new board is one change here
+    ├── mahjongstats.lua          # pure lifetime stats (US-12)
     ├── mahjongboard.lua          # offset-layer 3D board widget (IconWidget/OverlapGroup + hit-test)
+    ├── hudbar.lua                # 2-row top bar: buttons, title, stat chips, quit X
+    ├── mahjongsettings.lua       # floating settings dialog
+    ├── mahjongstatswidget.lua    # floating stats screen (US-13)
+    ├── mahjongpause.lua          # pause overlay (US-17)
+    ├── mahjonglayoutselect.lua   # full-screen layout picker (US-14)
     ├── icons/*.svg               # tile + overlay icons
-    └── README.md                 # install/usage (write at the end)
+    └── README.md                 # install/usage
 ```
 
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-31, US-22a, US-33**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-33, US-22a**.
 
 | Story | File | Status |
 |---|---|---|
@@ -169,18 +200,18 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-29 — Taipei layout | [US-29_taipei-layout_completed.md](implementation-plan/US-29_taipei-layout_completed.md) | ✅ completed |
 | US-30 — Layout picker polish + bevel corner fix | [US-30_picker-polish_completed.md](implementation-plan/US-30_picker-polish_completed.md) | ✅ completed |
 | US-31 — Per-layout highscore chip on the layout picker | [US-31_layout-highscore_completed.md](implementation-plan/US-31_layout-highscore_completed.md) | ✅ completed |
-| US-32 — Failure recognition (deadlock detection) | [US-32_failure-recognition.md](implementation-plan/US-32_failure-recognition.md) | 🚧 planned |
+| US-32 — Failure recognition (deadlock detection) | [US-32_failure-recognition_completed.md](implementation-plan/US-32_failure-recognition_completed.md) | ✅ completed |
 | US-33 — Uninterruptible auto-solve (input lock + tainted save + resume-on-reload) | [US-33_autosolve-lock_completed.md](implementation-plan/US-33_autosolve-lock_completed.md) | ✅ completed |
 
-The US-21..US-29 stories add the GNOME Mahjongg layouts now that the registry + picker
-(US-14) and two extra layouts (Spider, Bridge) are shipped. A full git checkout of the GNOME
-Mahjongg sources lives at `/tmp/gnome-mahjongg` (`data/maps/mahjongg.map`); each board above is
+The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
+(US-14) and two extra layouts (Spider, Bridge) had shipped. A full git checkout of the GNOME
+Mahjongg sources lives at `/tmp/gnome-mahjongg` (`data/maps/mahjongg.map`); every board is
 transcribed from that map and verified to have exactly 144 positions (the deck size).
-US-21 (picker grid expansion) is the prerequisite for US-22..US-29 — the picker's fixed 2×3
-(6-slot) grid holds only 6 cards and must grow before all 11 layouts fit. **US-22a** (extract
+US-21 (picker grid expansion) was the prerequisite for US-22..US-29 — the picker's fixed 2×3
+(6-slot) grid held only 6 cards and had to grow before all 11 layouts fit. **US-22a** (extract
 the board definitions out of `mahjonglogic.lua` into a dedicated `mahjonglayouts.lua` module)
-is a **prerequisite for US-23..US-29**: it must ship before any further board story so that
-each later board is a single-file addition to `mahjonglayouts.lua`. When a planned story
+was the **prerequisite for US-23..US-29**: it shipped before any further board story so that
+each later board was a single-file addition to `mahjonglayouts.lua`. When a planned story
 ships, rename its file to add the `_completed` suffix (and re-run the story index/status
 table above). The stories must be read in order — later stories assume the earlier ones'
 contracts.
@@ -229,9 +260,6 @@ they are not lost. Revisited after US-10/11 — see status below.
 ## Later / optional enhancements (not in the current scope)
 
 - Half-tile-offset rendering for a true "stacked" look.
-- Additional layouts beyond Spider/Bridge (the registry + picker make this a data-only
-  addition). **Now tracked as US-22..US-29**, transcribed from the GNOME Mahjongg map at
-  `/tmp/gnome-mahjongg/data/maps/mahjongg.map`.
 - Keyboard/d-pad navigation for non-touch Kindles.
 - Dark/night-mode theme (KOReader night mode inverts the framebuffer; a proper dark theme needs
   dark tile SVGs + a theme setting).
@@ -253,8 +281,9 @@ instead). `confirm_new_game` no longer exists anywhere in code, config, or tests
 
 ## Reference / external sources
 
-The built-in layout specs (Turtle, Spider, Bridge) are transcribed from the upstream
-GNOME Mahjongg layout maps so the boards are byte-identical to the canonical game.
+The built-in layout specs (all 11: Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe,
+Red Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei) are transcribed from the
+upstream GNOME Mahjongg layout maps so the boards are byte-identical to the canonical game.
 A full git checkout of the GNOME Mahjongg sources is available on the dev machine at
 `/tmp/gnome-mahjongg` (map data lives at `/tmp/gnome-mahjongg/data/maps/mahjongg.map`).
 Use it to verify tile counts, grid extents, and per-layer breakdowns when adding or

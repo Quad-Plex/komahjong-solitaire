@@ -331,11 +331,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `self.cropping_widget` to the scroll container so the UIManager confines
   repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..31, US-22a shipped; US-32, US-33 in flight)
+## Mahjong plugin — current state and key contracts (US-01..US-33, US-22a shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..31, US-22a
+per user story; `_completed` in the filename marks shipped stories — US-01..US-33, US-22a
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
