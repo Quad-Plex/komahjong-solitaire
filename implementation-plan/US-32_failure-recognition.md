@@ -24,11 +24,23 @@ sound (never false-positive) check composed of two cheap heuristics:
    count can never fully clear → immediately dead. (Example: a lone leftover
    flower after its partner was matched away.)
 
-2. **Stacked-kind deadlock (B).** For a kind K with ≥2 remaining tiles, if at
-   most ONE K-tile is free *and* every non-free K-tile is covered (from above,
-   within ±0.5 in both axes) by a K-tile, the K's form a self-blocking chain —
-   no pair can ever escape. This catches the 2-stack, the 4-in-one-column stack,
-   and the whole stacked-identical family.
+2. **Single-free-tile stack (B).** If at most one tile on the whole board is
+   free, the board is a single-column stack and is permanently stuck: no move
+   can ever be made, because a shuffle only re-assigns *kinds* to the fixed
+   set of positions — which positions are *free* depends purely on the
+   occupancy pattern (nothing covers the tile, an open horizontal side), never
+   on kinds. This catches the named 2-stack, the 4-in-one-column stack, and
+   any single-column stack.
+
+   > **Corrected after shipping (this was the "reloading a 0-moves game never
+   > prompts to shuffle" bug):** the first version of B ("a kind K with ≥2
+   > tiles, ≤1 free K, every covered K covered by a K") was UNSOUND. When the
+   > board has other positions, a shuffle separates the stacked kinds into a
+   > matching free pair, so those boards must still be offered a shuffle. The
+   > sound rule is B above; any board with ≥2 free tiles is NOT provably dead
+   > (a shuffle can place two copies of a kind with count ≥2 on two free
+   > positions — if every kind had count 1, parity A already fired) and keeps
+   > the shuffle offer, with the retries-exhausted fallback closing the loop.
 
 A third candidate (geometric position-trapping closure) was considered and
 rejected: on these grids "out of grid = open side" guarantees every position is
@@ -78,10 +90,12 @@ pattern).
 ## Acceptance
 
 - Logic self-tests: odd-count board, stacked-identical board, 4-stack, single
-  flower → all true; free-pair board, full newGame → false.
+  flower, mixed single-column stack → all true; free-pair board, full newGame,
+  stacked pair WITH other free tiles (shuffle-fixable regression) → all false.
 - Harness (`tests/us32_deadlock.lua`): provably-dead → loss dialog; Undo
   restores and resumes; New Game → picker; Close → exit; shuffle retries
   exhaust → dialog; auto-solve exhaust → dialog (no Undo); monkeypatched
-  not-dead → shuffle prompt.
+  not-dead → shuffle prompt; reload of a saved 0-moves fixable board → shuffle
+  prompt (not the loss dialog).
 - Existing tests (`us07_gameplay`, `us08_features`, `us18_penalties`) updated
   for the changed flow on boards that are now provably dead.

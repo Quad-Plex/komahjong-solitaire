@@ -542,13 +542,25 @@ end
 --      the same group (kind / "flower" / "season"), so any group with an odd
 --      remaining count can never fully clear.  A single leftover flower after
 --      its partner was already removed is the canonical example.
---   B. Stacked-kind deadlock.  For a kind K with at least 2 remaining tiles,
---      if at most one K-tile is free AND every non-free K-tile is covered
---      (from above, within ±0.5 in both axes) by a K-tile, the K's form a
---      self-blocking column — no pair can ever escape because freeing a
---      covered K-tile always requires first removing a K-tile (impossible
---      with ≤1 free match).  The named "two identical stacked" trap falls
---      under this rule, as does an n-tile stack all in one column.
+--   B. Single-free-tile stack.  A shuffle only re-assigns KINDS to the fixed
+--      set of positions; which positions are FREE depends purely on the
+--      occupancy pattern (nothing covers a free tile and at least one
+--      horizontal side is open), never on kinds.  So if at most one tile is
+--      currently free, no shuffle can ever make two tiles free at once and
+--      no move can ever be made — the board is a single-column stack and is
+--      permanently stuck.  Conversely, if at least two tiles are free, a
+--      shuffle can always place two copies of some kind (every kind has
+--      count >= 2 here, else check A already fired) on two free positions
+--      and create a move, so the board is NOT provably dead and the shuffle
+--      offer must stay available.  The named "two identical stacked" trap
+--      falls under this rule (a 2-stack has exactly one free tile), as does
+--      any n-tile stack all in one column.
+--
+-- (The first shipped heuristic flagged a kind with at most one free tile as
+-- a "self-blocking chain" regardless of the rest of the board — but that is
+-- UNSOUND: when other positions are free a shuffle separates the stacked
+-- kinds into a matching pair, so such boards must still be offered a shuffle.
+-- This was the "reloading a game with 0 moves never prompts to shuffle" bug.)
 --
 -- The checks are NOT complete: exotic deadlocks that survive both (e.g. a
 -- no-moves board whose kinds are all even-count and whose covered tiles are
@@ -568,54 +580,24 @@ function MahjongLogic.isPermanentlyDead(board)
         if n % 2 == 1 then return true end
     end
 
-    -- B: stacked-kind deadlock. Collect positions per kind in one pass.
-    local positions_by_kind = {}
-    for key, kind in pairs(board) do
+    -- B: at most one free tile. Freeness depends only on the occupancy
+    -- pattern (never on kinds), and a shuffle preserves the position set,
+    -- so a single-free-tile board can never produce a move.
+    local free_count = 0
+    for key in pairs(board) do
         local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
         if not x then
             error("isPermanentlyDead: malformed board key " .. tostring(key))
         end
         x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
-        local list = positions_by_kind[kind]
-        if not list then
-            list = {}
-            positions_by_kind[kind] = list
-        end
-        list[#list + 1] = { x = x, y = y, layer = layer }
-    end
-
-    for kind, positions in pairs(positions_by_kind) do
-        if #positions >= 2 then
-            local free_count = 0
-            for _, p in ipairs(positions) do
-                if MahjongLogic.isFree(board, p.x, p.y, p.layer) then
-                    free_count = free_count + 1
-                end
-            end
-            if free_count <= 1 then
-                local all_covered_by_same = true
-                for _, p in ipairs(positions) do
-                    if not MahjongLogic.isFree(board, p.x, p.y, p.layer) then
-                        local covered_by_same = false
-                        for dx = -0.5, 0.5, 0.5 do
-                            for dy = -0.5, 0.5, 0.5 do
-                                if MahjongLogic.tileAt(board, p.x + dx, p.y + dy, p.layer + 1) == kind then
-                                    covered_by_same = true
-                                    break
-                                end
-                            end
-                            if covered_by_same then break end
-                        end
-                        if not covered_by_same then
-                            all_covered_by_same = false
-                            break
-                        end
-                    end
-                end
-                if all_covered_by_same then return true end
-            end
+        if MahjongLogic.isFree(board, x, y, layer) then
+            free_count = free_count + 1
         end
     end
+    -- An empty board has zero free tiles but is WON, not dead; every real
+    -- board holds at least one free tile (a stack's top), so the <= 1 rule
+    -- only fires on genuinely single-free-tile (single-column) boards.
+    if free_count <= 1 and MahjongLogic.tileCount(board) > 0 then return true end
 
     return false
 end
@@ -1455,6 +1437,25 @@ function MahjongLogic.runSelfTests()
     local d_cross = boardWith{ {2,2,0,"b1"}, {2,2,1,"b2"}, {3,2,0,"b1"}, {3,3,0,"b2"} }
     check(not MahjongLogic.isPermanentlyDead(d_cross),
         "covered b1 under a b2 is not a same-kind chain → winnable")
+
+    -- B regression: a stacked identical pair is NOT provably dead when the
+    -- board has other free positions. A shuffle re-assigns kinds across the
+    -- fixed position set, so it can separate the pair into a matching free
+    -- pair. The old stacked-kind check flagged this as permanently dead,
+    -- which made a reload of such a 0-moves game show the loss dialog
+    -- instead of the shuffle prompt. (That a shuffle then creates a move is
+    -- verified empirically; it is not asserted here because shuffleBoard's
+    -- pairs() iteration order makes the outcome run-dependent.)
+    local d_fixable = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {3,2,0,"c1"}, {4,2,0,"c1"} }
+    check(not MahjongLogic.isPermanentlyDead(d_fixable),
+        "stacked identical pair + other free tiles is NOT permanently dead")
+
+    -- B: a single-column stack of mixed kinds (even parity per kind, so
+    -- check A passes) is still permanently dead — only the top tile is ever
+    -- free, so no move can ever be made.
+    local d_mixedstack = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"}, {2,2,2,"b2"}, {2,2,3,"b2"} }
+    check(MahjongLogic.isPermanentlyDead(d_mixedstack),
+        "a single-column stack of mixed kinds (1 free tile) is permanently dead")
 
     -- Empty board → not dead (it was won, not stuck).
     check(not MahjongLogic.isPermanentlyDead({}),

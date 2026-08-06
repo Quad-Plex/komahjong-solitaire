@@ -13,7 +13,11 @@
 --   * auto-solver retries-exhausted triggers the loss dialog (no Undo — the
 --     solver clears history);
 --   * not-provably-dead boards still show the shuffle prompt (existing
---     behaviour unchanged).
+--     behaviour unchanged);
+--   * a reload of a saved 0-moves game that is NOT provably dead (a stacked
+--     pair with other free positions) offers the shuffle again, and the
+--     in-game no-moves path does the same (regression: the old stacked-kind
+--     check wrongly sent these to the loss dialog).
 --
 -- The geometric closure check is skipped: on these grids "out of grid =
 -- open side" guarantees every position is eventually freeable, so
@@ -291,6 +295,95 @@ expect(ctx.last_confirm ~= nil, "loss dialog appears when auto-solver's shuffle 
 expect(ctx.last_confirm.other_buttons == nil,
     "auto-solver cleared history → no Undo button")
 um.scheduleIn = orig_schedule
+
+-- ---- Reload of a saved 0-moves game must offer the shuffle -------------------
+--
+-- Regression: a board that is dead (no move) but NOT permanently dead must
+-- show the shuffle prompt again on reload. The old stacked-kind check wrongly
+-- flagged a stacked identical pair with other free positions as permanently
+-- dead, so reloading such a saved game showed the loss dialog ("shuffling
+-- can't help") instead of the shuffle prompt.
+--
+-- Board (all real turtle positions): two identical tiles stacked in one
+-- column plus another kind stacked beside it — exactly one free tile of each
+-- kind, so no match exists, even parity, and a shuffle can separate the pair.
+local reload_board = {}
+for _, t in ipairs{
+    {4,2,0,"b1"}, {4,2,1,"b1"},
+    {5,2,0,"c1"}, {5,2,1,"c1"},
+} do
+    reload_board[pk(t[1], t[2], t[3])] = t[4]
+end
+expect(not Logic.hasMoves(reload_board), "the saved board has no moves")
+expect(Logic.tileCount(reload_board) == 4, "saved board holds 4 tiles")
+expect(not Logic.isPermanentlyDead(reload_board),
+    "stacked pair + other free tiles is NOT provably dead (a shuffle can fix it)")
+
+-- Pad history to a valid save (n + 2 * #history == 144).
+local reload_history = {}
+local used_keys = {}
+for key in pairs(reload_board) do used_keys[key] = true end
+local needed_hist = (144 - 4) / 2
+local filled_hist = 0
+for _, p in ipairs(Logic.buildLayout("turtle")) do
+    if filled_hist >= needed_hist then break end
+    local k = pk(p.x, p.y, p.layer)
+    if not used_keys[k] then
+        for _, q in ipairs(Logic.buildLayout("turtle")) do
+            local qk = pk(q.x, q.y, q.layer)
+            if (q.x ~= p.x or q.y ~= p.y or q.layer ~= p.layer) and not used_keys[qk] then
+                reload_history[#reload_history + 1] = {
+                    a = { x = p.x, y = p.y, layer = p.layer },
+                    b = { x = q.x, y = q.y, layer = q.layer },
+                    ka = "d1", kb = "d1", score = 10, prev_last = nil,
+                }
+                used_keys[k] = true
+                used_keys[qk] = true
+                filled_hist = filled_hist + 1
+                break
+            end
+        end
+    end
+end
+expect(4 + 2 * #reload_history == 144, "the reload save is a valid 144-tile state")
+
+local mj_save = Mahjong:new()
+mj_save.board = reload_board
+mj_save.layout = "turtle"
+mj_save.history = reload_history
+mj_save.score = 0
+mj_save.hints_used = 0
+mj_save.shuffles_used = 0
+mj_save:saveGameState()
+
+-- Reload in a fresh instance: startGame must restore the game and offer a
+-- shuffle, NOT show the loss dialog.
+local mj_reload = Mahjong:new()
+ctx.last_confirm = nil
+mj_reload:startGame()
+expect(ctx.last_confirm ~= nil, "reload of a 0-moves game shows a dialog")
+expect(lastConfirmText():find("Shuffle the board", 1, true) ~= nil,
+    "reload prompts to shuffle (not the loss dialog)")
+expect(lastConfirmText():find("can't help", 1, true) == nil,
+    "reload does NOT claim shuffling can't help")
+local reload_game_shown = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget and e.widget.name == "mahjong" then reload_game_shown = true end
+end
+expect(reload_game_shown, "reload restored the game itself (not the layout picker)")
+
+-- The same board reached in-game (checkGameState) also offers the shuffle.
+local mj_ingame = Mahjong:new()
+mj_ingame.board = {}
+for key, kind in pairs(reload_board) do mj_ingame.board[key] = kind end
+mj_ingame.layout = "turtle"
+mj_ingame:buildUILayout()
+mj_ingame.history = {}
+ctx.last_confirm = nil
+mj_ingame:handleNoMoves()
+expect(ctx.last_confirm ~= nil
+        and lastConfirmText():find("Shuffle the board", 1, true) ~= nil,
+    "in-game no-moves on a fixable board also offers the shuffle")
 
 if failures == 0 then
     print("\nALL US-32 DEADLOCK CHECKS PASSED")
