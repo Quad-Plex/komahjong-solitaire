@@ -1,4 +1,4 @@
-# US-34 — Crab layout (12th layout, fills the 3×4 picker)
+# US-35 — Crab layout (12th layout, fills the 3×4 picker)
 
 As a player, I want the "Crab" board shape so the layout picker is fully filled out
 as a clean 3×4 grid (12 cards, no empty slot) with one more recognizable shape.
@@ -163,7 +163,7 @@ checkShape("crab", { [0] = 77, [1] = 50, [2] = 15, [3] = 2 },
 And update the per-layout comment (the `87/36/16/4/1, Spider 65/53/25/1, ...`
 summary) to append `, Crab 77/50/15/2`.
 
-### 4. New harness `tests/us34_crab.lua` (registered in `tests/run.sh`)
+### 4. New harness `tests/us35_crab.lua` (registered in `tests/run.sh`)
 
 Mirror `tests/us29_taipei.lua`'s structure (it's the closest template — also a
 4-layer 144-tile non-Turtle board). Cover:
@@ -187,7 +187,7 @@ Mirror `tests/us29_taipei.lua`'s structure (it's the closest template — also a
   the grid is a complete 3×4 (4 rows × 3 cols, no empty slot — assert the 12th
   card shares row 3 with cards 10 and 11, i.e. `cards[12].y == cards[11].y`).
 
-Register the file in `tests/run.sh` by adding `us34_crab.lua` to the harness
+Register the file in `tests/run.sh` by adding `us35_crab.lua` to the harness
 loop.
 
 ### 5. Update existing harnesses that hardcode the 11-layout registry
@@ -257,7 +257,7 @@ Update the contract-3 sorted built-in list and the per-layout sentence:
   `{bridge, cloud, confounding, crab, overpass, pyramid, red-dragon, spider,
     taipei, tictactoe, turtle, ziggurat}` (12).
 - Add a one-line entry for Crab in the per-layout enumeration:
-  "US-34 adds Crab (`crab`, per-layer 77/50/15/2, grid x=1..14, y=0..7, the
+  "US-35 adds Crab (`crab`, per-layer 77/50/15/2, grid x=1..14, y=0..7, the
   classic Microsoft Mahjong Titans crab transcribed from KMahjongg's
   `crab.layout`)".
 
@@ -272,7 +272,7 @@ owns the 180-SVG set); the layout only changes tile *positions*, not faces.
 
 - `tests/run.sh` → all green (syntax, luacheck, the three module self-tests
   including the new Crab `checkShape`, and the headless harnesses including the
-  new `us34_crab.lua` and the updated us14..us29 / us21).
+  new `us35_crab.lua` and the updated us14..us29 / us21).
 - The Crab `checkShape` self-test proves 144 unique positions, per-layer
   77/50/15/2, and grid bounds — run directly via
   `lua mahjong.koplugin/mahjonglayouts.lua` to iterate fast on the spec.

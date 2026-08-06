@@ -331,11 +331,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `self.cropping_widget` to the scroll container so the UIManager confines
   repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..US-34, US-22a shipped)
+## Mahjong plugin — current state and key contracts (US-01..US-35, US-22a shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..US-34, US-22a
+per user story; `_completed` in the filename marks shipped stories — US-01..US-35, US-22a
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -436,7 +436,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    (per-layer 52/20/16/32/24, grid x=0..11, y=0..8). US-27/28/29 add Pyramid's Walls
    (`pyramid`, per-layer 41/34/27/20/13/6/3, grid x=0..11, y=1..7, the deepest board at 7
    layers), Confounding Cross (`confounding`, per-layer 47/42/27/18/9/1, grid x=0..10, y=0..8)
-   and Taipei (`taipei`, per-layer 63/46/19/10/3/2/1, grid x=0..10, y=0..6). US-34 adds Crab
+   and Taipei (`taipei`, per-layer 63/46/19/10/3/2/1, grid x=0..10, y=0..6). US-35 adds Crab
    (`crab`, per-layer 77/50/15/2, grid x=1..14, y=0..7, the classic Microsoft Mahjong Titans
    crab transcribed from KMahjongg's `crab.layout`). The sorted built-in registry is
    {bridge, cloud, confounding, crab, overpass, pyramid, red-dragon, spider, taipei,

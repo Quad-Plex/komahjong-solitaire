@@ -1,4 +1,4 @@
--- US-34 — Crab layout suite.
+-- US-35 — Crab layout suite.
 --
 -- Verifies the "Crab" board (144 positions, 77/50/15/2 across 4 layers,
 -- transcribed from KMahjongg's `crab.layout` — the classic Microsoft Mahjong
@@ -258,7 +258,7 @@ expect(Logic.tileCount(mj.board) == 144, "undo restores the pair on Crab")
 expect(mj.score == 0, "undo restores score to 0 (got " .. mj.score .. ")")
 
 if failures == 0 then
-    print("\nALL US-34 CRAB CHECKS PASSED")
+    print("\nALL US-35 CRAB CHECKS PASSED")
 else
     print("\n" .. failures .. " FAILURES")
     os.exit(1)
