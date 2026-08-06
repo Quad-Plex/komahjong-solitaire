@@ -11,8 +11,10 @@
 --   * firing the arm starts the solve and the solver removes one pair per step
 --     until the board is cleared, then shows the win dialog;
 --   * the solver scores and records history like a hand-played game;
---   * a board tap / a short Hint tap / Undo stop the solve (a pending step is
---     a no-op afterwards);
+--   * while the solver runs, ALL input is a silent no-op (US-33): a board tap,
+--     a short Hint tap, Undo, or Shuffle do NOT stop the solve — it keeps
+--     running to completion (the old "input interrupts the solve" behavior was
+--     removed so a close/reopen can't farm the partial score);
 --   * holding with the hints setting off arms nothing;
 --   * the flash refactor keeps flashMessage working across a cleared band.
 
@@ -108,7 +110,7 @@ expect(ctx.last_confirm ~= nil
     "a cleared board shows the win dialog")
 expect(mj2.flash_text.text == "", "the solve clears the band before the win dialog")
 
--- ---- A board tap cancels a running solve -----------------------------------------
+-- ---- A board tap is IGNORED while the solver runs (US-33) -------------------
 
 local mj3 = Mahjong:new()
 mj3.board = boardWith{
@@ -126,14 +128,15 @@ expect(mj3._auto_solve_active == true, "solve running after the first step")
 expect(Logic.tileCount(mj3.board) == 2, "first step removed one pair")
 local frees = Logic.freeTiles(mj3.board)
 mj3:handleTileTap(frees[1].x, frees[1].y, frees[1].layer)
-expect(mj3._auto_solve_active == false, "a board tap interrupts the solve")
-expect(mj3.flash_text.text == "", "interrupting clears the auto-solving message")
+expect(mj3._auto_solve_active == true, "a board tap does NOT interrupt the solve (US-33)")
+expect(Logic.tileCount(mj3.board) == 2, "the tap removed nothing")
+expect(mj3.flash_text.text == "Auto-solving…", "the solve message is unchanged")
 if scheduled[1] then
-    scheduled[1][2]() -- the pending step must be a no-op now
+    scheduled[1][2]() -- the pending step still fires
 end
-expect(Logic.tileCount(mj3.board) == 2, "a pending step after cancel removes nothing")
+expect(Logic.tileCount(mj3.board) == 0, "the solve continued and cleared the board")
 
--- ---- A short Hint tap also stops the solve ---------------------------------------
+-- ---- A short Hint tap is IGNORED while the solver runs (US-33) --------------
 
 local mj4 = Mahjong:new()
 mj4.board = boardWith{
@@ -149,9 +152,11 @@ scheduled = {}
 arm4()
 expect(mj4._auto_solve_active == true, "solve running")
 mj4:showHint()
-expect(mj4._auto_solve_active == false, "a short Hint tap stops the solve")
+expect(mj4._auto_solve_active == true, "a Hint tap does NOT stop the solve (US-33)")
+expect(Logic.tileCount(mj4.board) == 2, "the hint was not shown (no tile moved)")
+expect(mj4.hints_used == 0, "a blocked hint charges no penalty")
 
--- ---- Undo during a solve stops it and restores the last pair ----------------------
+-- ---- Undo is IGNORED while the solver runs (US-33) --------------------------
 
 local mj5 = Mahjong:new()
 mj5.board = boardWith{
@@ -168,9 +173,29 @@ arm5()
 expect(mj5._auto_solve_active == true, "solve running")
 expect(Logic.tileCount(mj5.board) == 2, "one pair solved")
 mj5:undo()
-expect(mj5._auto_solve_active == false, "Undo stops the solve")
-expect(Logic.tileCount(mj5.board) == 4, "Undo restored the solved pair")
-expect(#mj5.history == 0, "Undo consumed the auto-solve history entry")
+expect(mj5._auto_solve_active == true, "Undo does NOT stop the solve (US-33)")
+expect(Logic.tileCount(mj5.board) == 2, "Undo restored nothing (no-op)")
+expect(#mj5.history == 1, "the solver's history entry is intact")
+
+-- ---- Shuffle is IGNORED while the solver runs (US-33) -----------------------
+
+local mj_sh = Mahjong:new()
+mj_sh.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"c1"}, {8,2,0,"c1"},
+}
+mj_sh:buildUILayout()
+mj_sh.score = 0
+scheduled = {}
+mj_sh.hint_button.hold_callback()
+local arm_sh = scheduled[1][2]
+scheduled = {}
+arm_sh()
+local before_sh = Logic.tileCount(mj_sh.board)
+mj_sh:shuffleBoard()
+expect(mj_sh._auto_solve_active == true, "Shuffle does NOT stop the solve (US-33)")
+expect(Logic.tileCount(mj_sh.board) == before_sh, "Shuffle moved nothing (no-op)")
+expect(mj_sh.shuffles_used == 0, "a blocked shuffle charges no penalty")
 
 -- ---- hints off: holding arms nothing ----------------------------------------------
 

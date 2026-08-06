@@ -331,11 +331,11 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
   `self.cropping_widget` to the scroll container so the UIManager confines
   repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
 
-## Mahjong plugin — current state and key contracts (US-01..30, US-22a shipped)
+## Mahjong plugin — current state and key contracts (US-01..31, US-22a shipped; US-32, US-33 in flight)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..30, US-22a
+per user story; `_completed` in the filename marks shipped stories — US-01..31, US-22a
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -458,15 +458,16 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    crashes on `"mahjong/" .. nil` — the US-10 bug).
 6. **Overlays** (`select`/`hint`) are extra IconWidgets appended AFTER all tiles in the same
    OverlapGroup, never added to `tiles_by_layer`, so they paint on top and taps pass through.
-7. **Persistence:** one `LuaSettings` file at `DataStorage:getSettingsDir()/mahjong.lua`. Game
-   state = `"game"` key (versioned table: **`v=2`** with a `layout` field (US-14); flat
-   posKey→kind board + flattened 10-field undo history
-   `{ax,ay,al,bx,by,bl,ka,kb,score,prev_last}`), validated hard on load (count sum must be 144,
-   kinds valid, positions in the saved layout, history disjoint, layout id registered). A **v1**
-   save (no `layout` field) restores as Turtle. An unknown saved `layout` id is corrupt →
-   fresh. Settings = their own keys (`hints`, `score_method`, `layout`,
-   `timer_update`, `timer_interval`). A **won (empty) board is NOT saved** —
-   the key is cleared. Corrupt state silently starts fresh.
+ 7. **Persistence:** one `LuaSettings` file at `DataStorage:getSettingsDir()/mahjong.lua`. Game
+    state = `"game"` key (versioned table: **`v=2`** with a `layout` field (US-14) and an optional
+    `autosolved` taint flag (US-33, absent/non-boolean → false so older saves restore clean); flat
+    posKey→kind board + flattened 10-field undo history
+    `{ax,ay,al,bx,by,bl,ka,kb,score,prev_last}`), validated hard on load (count sum must be 144,
+    kinds valid, positions in the saved layout, history disjoint, layout id registered). A **v1**
+    save (no `layout` field) restores as Turtle. An unknown saved `layout` id is corrupt →
+    fresh. Settings = their own keys (`hints`, `score_method`, `layout`,
+    `timer_update`, `timer_interval`). A **won (empty) board is NOT saved** —
+    the key is cleared. Corrupt state silently starts fresh.
 8. **Timer:** elapsed seconds always accrue (`getElapsed()` diffs `os.time()`); the mode only
    controls when the mm:ss **repaints** — `timer_update="interval"` (default, poll every
    `timer_interval`s, default 5) vs `"move"` (repaint on interaction only). `startTimer` bumps a
@@ -504,20 +505,31 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
      that surfaces the normally-hidden `hold_release` via `onHoldReleaseSelectButton` →
      `hold_release_callback`), `armAutoSolve` schedules a `UIManager:scheduleIn(10, ...)` and
      `disarmAutoSolve` cancels it on early release. The solver drives the shared
-     `applyMatch(a, b)` helper (extracted from `handleTileTap`) once per `AUTO_SOLVE_STEP_SECONDS`;
+     `applyMatch(a, b)` helper (extracted from `handleTileTap`) once per `AUTO_SOLVE_STEP_SECONDS`
+     (0.3 s, US-33);
      `matchingFreePair` + `applyMatch` are reused for scoring/history/save so an auto-solved game
-     is indistinguishable from a played one. Any board tap / short Hint tap / Undo / New Game /
-     close stops it (token-bumped pending steps no-op). Flash has a persistent `setFlash` vs the
+     is indistinguishable from a played one. **US-33: once running, the solver is UNINTERRUPTIBLE
+     and there is no way to keep a partial score.** Every user input is a silent no-op while
+     `_auto_solve_active` (board taps, Hint, Undo, Shuffle, New Game, Pause, gear/stats, quit X,
+     and a second hold); the game is flagged `autosolved` in the saved state (`game_was_autosolved`
+     → `serializeGameState`'s `autosolved` field), so a crash/close mid-solve saves a tainted
+     board; and a reload of a tainted save RESUMES the solver on `UIManager:nextTick` (the
+     `startGame` restore branch skips the `handleNoMoves` check for it — the solver shuffles dead
+     boards itself). It only ever ends via the win dialog (no win recorded, `game_won` stays false)
+     or a provably-dead board (`stopAutoSolve` + dead-board dialog). Flash has a persistent
+     `setFlash` vs the
      auto-clearing `flashMessage`, and `clearFlash` bumps the token (never nils it — the old
      `nil + 1` crashed on a second flash after a cleared band).
  13. **Pause (US-17):** the bottom toolbar's fifth button (`mahjong/pause` icon, kept as
-     `self.pause_button`) calls `pauseGame()` — `stopAutoSolve()` + `stopTimer()` (freezes
+     `self.pause_button`) calls `pauseGame()` — `stopTimer()` (freezes
      `elapsed_base`) then drops `mahjongpause.lua`, a floating card in the settings/stats pattern
      but with NO tap-outside dismiss: its full-screen `TapClose` handler returns true and does
      nothing, so every stray tap is consumed and the board/toolbar/HUD are unreachable. Only the
      Resume button (or the framework closing the overlay) runs `onResume` → `startTimer()`;
      `PauseWidget:resume()` is `_resumed`-guarded and `onCloseWidget()` falls back to it, so the
-     clock restarts exactly once no matter the close path. `Mahjong:onCloseWidget()` closes a
+     clock restarts exactly once no matter the close path. **US-33: Pause is a no-op while the
+     auto-solver runs** (the solve must run to completion), so it never has to stop a solver
+     behind the overlay. `Mahjong:onCloseWidget()` closes a
      still-open overlay before the final idempotent `stopTimer()`/`saveGameState()` (closing
      while paused saves).
  14. **Layout picker (US-14):** `startGame()` restores a saved game directly (no picker);

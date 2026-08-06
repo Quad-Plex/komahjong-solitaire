@@ -9,8 +9,9 @@
 --   * the overlay is a full-screen transparent modal whose tap gesture consumes
 --     taps (it never closes on a stray tap, and a board tap can't get through);
 --   * Resume (the overlay's button) closes the overlay and restarts the clock;
---   * a running auto-solver is stopped by pause (it can't move tiles behind the
---     overlay);
+--   * Pause is IGNORED while the auto-solver runs (US-33): the solve is
+--     un-interruptible, so no overlay is pushed, the clock keeps running, and
+--     the solve still completes (recording no win);
 --   * pause-then-close saves the game and stopTimer runs once;
 --   * pausing a won board is a no-op.
 
@@ -116,7 +117,7 @@ expect(mj._pause_dlg == nil, "the main widget clears the pause reference")
 expect(mj._timer_running == true, "Resume restarts the clock")
 expect(mj:getElapsed() >= frozen, "the clock accrues again after Resume")
 
--- ---- Pausing stops a running auto-solver ---------------------------------------
+-- ---- Pause is IGNORED while a running auto-solver owns the board (US-33) ---------
 
 local mj_solve = Mahjong:new()
 mj_solve.board = boardWith{
@@ -125,6 +126,7 @@ mj_solve.board = boardWith{
 }
 mj_solve:buildUILayout()
 mj_solve.score = 0
+mj_solve:startTimer()
 scheduled = {}
 mj_solve.hint_button.hold_callback()
 local arm = scheduled[1][2]
@@ -132,11 +134,23 @@ scheduled = {}
 arm()
 expect(mj_solve._auto_solve_active == true, "auto-solver running before pause")
 mj_solve:pauseGame()
-expect(mj_solve._auto_solve_active == false,
-    "pausing stops the auto-solver so it can't move tiles behind the overlay")
-expect(mj_solve._timer_running == false, "pause also froze the clock")
-local dlg2 = ctx.window_stack[#ctx.window_stack].widget
-dlg2._resume_btn.callback()
+expect(mj_solve._auto_solve_active == true,
+    "Pause is ignored while the solver runs (US-33)")
+expect(mj_solve._pause_dlg == nil, "no pause overlay is pushed")
+expect(mj_solve._timer_running == true, "a blocked pause leaves the clock running")
+-- The solve still runs to completion (it is un-interruptible).
+local guard = 0
+while scheduled[1] and guard < 200 do
+    local e = table.remove(scheduled, 1)
+    e[2]()
+    guard = guard + 1
+end
+expect(Logic.isWin(mj_solve.board), "the solve still clears the board after a blocked pause")
+expect(ctx.last_confirm ~= nil
+        and ctx.last_confirm.text:find("You cleared the board", 1, true),
+    "the completed solve shows the win dialog")
+expect(mj_solve.game_was_autosolved == true and mj_solve.game_won == false,
+    "an auto-solved win records nothing")
 
 -- ---- Closing while paused still saves ------------------------------------------
 

@@ -640,12 +640,15 @@ end
 -- Serializes the current game for persistence. `history` is the UI's undo
 -- stack ({ a, b, ka, kb, score, prev_last } records), `last_match_kind` the
 -- chain-scoring kind, `elapsed` the elapsed seconds, `hints_used` /
--- `shuffles_used` the per-game help counters (US-18), and `layout` the layout
--- id the board was dealt on (US-14, defaults to "turtle"). Returns a fresh
--- table (no references into live state, so later mutations can't corrupt the
--- save).
+-- `shuffles_used` the per-game help counters (US-18), `layout` the layout
+-- id the board was dealt on (US-14, defaults to "turtle"), and `autosolved`
+-- the auto-solve taint flag (US-33): true once the solver has ever run on
+-- this game, so a reload can never resurrect the partial score as a hand-played
+-- win. Returns a fresh table (no references into live state, so later
+-- mutations can't corrupt the save).
 function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
-                                          elapsed, hints_used, shuffles_used, layout)
+                                          elapsed, hints_used, shuffles_used, layout,
+                                          autosolved)
     local out_board = {}
     for key, kind in pairs(board) do
         out_board[key] = kind
@@ -668,19 +671,22 @@ function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
         elapsed = elapsed or 0,
         hints = hints_used or 0,
         shuffles = shuffles_used or 0,
+        autosolved = autosolved == true,
     }
 end
 
 -- Validates and restores a serialized game state. Returns
 -- { board, history, score, last_match_kind, elapsed, hints_used, shuffles_used,
--- layout } with the history un-flattened back to the UI's record shape, or nil
--- if the state is corrupt/invalid (the caller then silently starts a new
--- game).
+-- layout, autosolved } with the history un-flattened back to the UI's record
+-- shape, or nil if the state is corrupt/invalid (the caller then silently
+-- starts a new game).
 --
 -- Versioning (US-14): v1 saves have no `layout` field and restore as Turtle;
 -- v2 saves carry `layout` and every board/history position is validated
 -- against THAT layout's position set. An unknown saved layout id is corrupt
--- (the caller deals fresh).
+-- (the caller deals fresh). US-33: v2 saves may carry an optional `autosolved`
+-- taint flag (missing / non-boolean -> false, so older saves restore clean).
+--
 function MahjongLogic.deserializeGameState(data)
     if type(data) ~= "table" then return nil end
     if data.v ~= 1 and data.v ~= 2 then return nil end
@@ -774,6 +780,12 @@ function MahjongLogic.deserializeGameState(data)
         return nil
     end
 
+    -- US-33: the auto-solve taint flag. A tainted game (the solver ever ran)
+    -- can never record a win, and its reload RESUMES the solve. Absent on
+    -- older saves -> false; lenient on type (a corrupt non-boolean value
+    -- simply means "not tainted").
+    local autosolved = data.autosolved == true
+
     -- Copy the board so the restored game never aliases the stored table.
     local out_board = {}
     for key, kind in pairs(board) do out_board[key] = kind end
@@ -787,6 +799,7 @@ function MahjongLogic.deserializeGameState(data)
         hints_used = hints_used,
         shuffles_used = shuffles_used,
         layout = layout_id,
+        autosolved = autosolved,
     }
 end
 
@@ -1520,6 +1533,22 @@ function MahjongLogic.runSelfTests()
     local p_restored2 = MahjongLogic.deserializeGameState(p_serialized2)
     check(p_restored2 ~= nil and p_restored2.hints_used == 3 and p_restored2.shuffles_used == 2,
         "restored state round-trips the hint/shuffle counters")
+
+    -- US-33: the auto-solve taint flag round-trips (absent -> false).
+    check(p_restored.autosolved == false,
+        "a save without the taint flag restores as not-tainted")
+    local p_serialized3 = MahjongLogic.serializeGameState(p_board, p_hist, 10, p_ka, 123, 0, 0, "turtle", true)
+    check(p_serialized3.autosolved == true,
+        "serialized state carries the auto-solve taint flag")
+    local p_restored3 = MahjongLogic.deserializeGameState(p_serialized3)
+    check(p_restored3 ~= nil and p_restored3.autosolved == true,
+        "restored state round-trips the taint flag")
+    local p_bad_flag = p_serialized3
+    p_bad_flag.autosolved = "yes"
+    local p_restored_bad = MahjongLogic.deserializeGameState(p_bad_flag)
+    check(p_restored_bad ~= nil and p_restored_bad.autosolved == false,
+        "a non-boolean taint flag is treated as not-tainted (lenient)")
+    p_bad_flag.autosolved = true
 
     -- Rejection paths ------------------------------------------------------
     check(MahjongLogic.deserializeGameState(nil) == nil, "deserialize rejects nil")

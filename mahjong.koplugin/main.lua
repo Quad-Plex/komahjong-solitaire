@@ -66,9 +66,12 @@ local FLASH_TIMEOUT = 2
 -- US-19: holding the Hint button for AUTO_SOLVE_HOLD_SECONDS starts an
 -- automated solver that plays matching pairs until the board is cleared;
 -- AUTO_SOLVE_STEP_SECONDS paces how fast the pairs are removed so each move
--- is visible on the e-ink refresh.
+-- is visible on the e-ink refresh. US-33: while the solver runs, ALL input is
+-- locked (silent no-ops), the game is flagged as auto-solved in its save, and
+-- a reload of that save RESUMES the solver — there is no way to keep a
+-- partial score.
 local AUTO_SOLVE_HOLD_SECONDS = 10
-local AUTO_SOLVE_STEP_SECONDS = 0.4
+local AUTO_SOLVE_STEP_SECONDS = 0.3
 
 -- Settings keys (persisted via LuaSettings in the KOReader settings dir).
 -- score_method: "chain" (default, +5 for consecutive same-group matches) or
@@ -363,16 +366,24 @@ function Mahjong:startGame()
         self.pairs_matched = #restored.history
         self.selected = nil
         self._last_hint = nil -- the hint cycle starts fresh for this session
+        -- US-33: a tainted save (the solver ran before a close/crash) must stay
+        -- tainted across reloads — and, below, its solve is resumed.
+        self.game_was_autosolved = restored.autosolved == true
         self._timer_running = false
         self:buildUILayout()
         self:updateStatus()
         self:updateTimerDisplay()
         self:startTimer()
         UIManager:show(self)
-        -- US-32: a restored dead board must be recognized at launch (saved a
-        -- dead game, closed, re-opened — the player should not face a silent
-        -- dead board).
-        if not MahjongLogic.hasMoves(self.board) then
+        -- US-33: a tainted save resumes the solver — there is no avoiding it
+        -- once triggered. The solver shuffles dead boards itself, so the
+        -- hasMoves check below is skipped for it.
+        if self.game_was_autosolved then
+            UIManager:nextTick(function() self:startAutoSolve() end)
+        elseif not MahjongLogic.hasMoves(self.board) then
+            -- US-32: a restored dead board must be recognized at launch (saved a
+            -- dead game, closed, re-opened — the player should not face a silent
+            -- dead board).
             self:handleNoMoves()
         end
     else
@@ -389,6 +400,10 @@ end
 -- the New Game button, and the win dialog's "Play again" — choosing a layout
 -- IS the confirmation, so the old New Game ConfirmBox is gone.
 function Mahjong:showLayoutPicker()
+    -- US-33: the New Game button is dead while the auto-solver runs (dropping
+    -- to the picker would abandon a tainted solve and farm its partial score).
+    -- Win/dead-board dialogs only reach this after the solve is over.
+    if self._auto_solve_active then return end
     self:stopAutoSolve()
     self:stopTimer()
     self._picker_dlg = LayoutSelect:new{
@@ -486,7 +501,8 @@ function Mahjong:saveGameState()
         local data = MahjongLogic.serializeGameState(
             self.board, self.history, self.score,
             self.last_match_kind, self:getElapsed(),
-            self.hints_used, self.shuffles_used, self.layout)
+            self.hints_used, self.shuffles_used, self.layout,
+            self.game_was_autosolved)
         self.settings:saveSetting("game", data)
     end
     self.settings:flush()
@@ -585,6 +601,9 @@ end
 -- Settings dialog (US-10) ---------------------------------------------------
 
 function Mahjong:openSettings()
+    -- US-33: the settings gear is dead while the auto-solver runs (the solver
+    -- would keep moving tiles behind the floating panel otherwise).
+    if self._auto_solve_active then return end
     -- Freeze the clock and stop the polling loop while the dialog is up: the
     -- settings dialog floats over the game now, and a periodic full-screen
     -- refresh (US-11 "interval" mode) would flash every tick behind the panel.
@@ -613,6 +632,9 @@ end
 -- Stats screen (US-13) -------------------------------------------------------
 
 function Mahjong:openStats()
+    -- US-33: the stats card is dead while the auto-solver runs (same reason as
+    -- openSettings: the solver must not keep moving tiles behind the panel).
+    if self._auto_solve_active then return end
     -- Freeze the clock and stop the polling loop while the card is up (the
     -- same reason openSettings does): a periodic full-screen refresh (US-11
     -- "interval" mode) would flash every tick behind the panel. Any close
@@ -631,11 +653,12 @@ end
 -- Pause (US-17) --------------------------------------------------------------
 
 function Mahjong:pauseGame()
+    -- US-33: Pause is dead while the auto-solver runs — the solve must run to
+    -- completion (interrupting it is how a partial score used to be saved).
+    if self._auto_solve_active then return end
     -- A won game has no play left to pause (defensive: the win dialog already
     -- covers that screen, so the HUD pause button is unreachable anyway).
     if MahjongLogic.isWin(self.board) then return end
-    -- US-19: a running solver must not keep moving tiles behind the overlay.
-    self:stopAutoSolve()
     -- Freeze the clock (freezes elapsed_base) and stop the polling loop; the
     -- overlay below consumes every tap, so no tile can be selected or moved
     -- while paused. Resume restarts via the overlay's onResume hook.
@@ -861,6 +884,10 @@ function Mahjong:createStatusBar()
         right_icon             = "mahjong/close",
         right_icon_size_ratio  = 0.9,
         right_icon_tap_callback = function()
+            -- US-33: the quit X is dead while the auto-solver runs — closing
+            -- mid-solve used to save a partial score that could be finished
+            -- by hand on the next launch.
+            if self._auto_solve_active then return end
             UIManager:show(ConfirmBox:new{
                 text        = _("Exit Mahjong Solitaire?"),
                 ok_text     = _("Exit"),
@@ -891,10 +918,11 @@ end
 --   * tapping a different, non-matching free tile -> switch the selection.
 
 function Mahjong:handleTileTap(x, y, layer)
-    -- US-19: a board tap while the auto-solver is running interrupts it. The
-    -- tap itself is consumed so it cannot fight the solver for a tile.
+    -- US-33: a board tap while the auto-solver is running is consumed and
+    -- ignored — the solver owns the board until it finishes. (US-19's old
+    -- "interrupt the solve" behavior is gone: an interrupt let a close/
+    -- reopen farm the partial score.)
     if self._auto_solve_active then
-        self:stopAutoSolve()
         return
     end
     local kind = MahjongLogic.tileAt(self.board, x, y, layer)
@@ -1103,11 +1131,9 @@ end
 -- US-08: Undo, hint, and shuffle ---------------------------------------------
 
 function Mahjong:undo()
-    -- US-19: undoing mid-solve stops the solver first so the next scheduled
-    -- step cannot immediately replay a tile.
-    if self._auto_solve_active then
-        self:stopAutoSolve()
-    end
+    -- US-33: Undo is dead while the auto-solver runs (the solve must run to
+    -- completion; an undo mid-solve could un-solve a tile and keep its score).
+    if self._auto_solve_active then return end
     local move = table.remove(self.history)
     if not move then return end
 
@@ -1129,11 +1155,9 @@ end
 -- always highlighting the same first one (the hint stays on each pair for the
 -- usual 2 s, then the next press moves to the pair AFTER it, wrapping around).
 function Mahjong:showHint()
-    -- US-19: a short tap while the auto-solver runs stops it (the solver also
-    -- highlights pairs as it plays, so a hint would be redundant).
-    if self._auto_solve_active then
-        self:stopAutoSolve()
-    end
+    -- US-33: the Hint button is dead while the auto-solver runs (a hint would
+    -- be redundant — the solver highlights pairs as it plays).
+    if self._auto_solve_active then return end
     if not self:getSetting("hints", SETTINGS_DEFAULTS.hints) then return end
     local board_view = self.board_view
     -- US-20: a hint session runs from the first hint after a pair was cleared
@@ -1202,6 +1226,9 @@ end
 -- re-charge. (The auto-solver's mid-solve shuffles call MahjongLogic directly
 -- and never charge — only the player pays.)
 function Mahjong:shuffleBoard(force, attempts, charge)
+    -- US-33: the Shuffle button is dead while the auto-solver runs (the solver
+    -- shuffles via MahjongLogic.shuffleBoard directly when it needs to).
+    if self._auto_solve_active then return end
     attempts = attempts or 10
     if charge == nil then charge = true end
     local do_shuffle = function()
@@ -1247,9 +1274,15 @@ end
 -- the hold callback ARMS a 10 s timer and the release hook DISARMS it if the
 -- finger lifts early. The solver reuses the exact tap-path scoring/history/
 -- save code (applyMatch), so an auto-solved game is indistinguishable from a
--- hand-played one. A board tap, a short Hint tap, Undo, or New Game stops it.
+-- hand-played one. US-33: once running, the solver is UNINTERRUPTIBLE — every
+-- input path no-ops, the game is flagged auto-solved in its save, and a
+-- reload of that save resumes the solve. It only ever ends via the win dialog
+-- (no win recorded) or a provably-dead board.
 
 function Mahjong:armAutoSolve()
+    -- US-33: a second hold during a running solve is ignored (it would only
+    -- clobber the "Auto-solving…" flash with a stale keep-holding message).
+    if self._auto_solve_active then return end
     if not self:getSetting("hints", SETTINGS_DEFAULTS.hints) then return end
     if MahjongLogic.isWin(self.board) then return end
     local token = self._auto_solve_token + 1
@@ -1266,10 +1299,10 @@ end
 -- release that ends the successful hold — by then the solve is already running
 -- (startAutoSolve bumped the token), so only a pending arm is cancelled.
 function Mahjong:disarmAutoSolve()
+    -- US-33: releases during a running solve are a no-op.
+    if self._auto_solve_active then return end
     self._auto_solve_token = self._auto_solve_token + 1
-    if not self._auto_solve_active then
-        self:clearFlash()
-    end
+    self:clearFlash()
 end
 
 function Mahjong:startAutoSolve()
