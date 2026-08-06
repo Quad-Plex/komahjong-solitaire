@@ -47,4 +47,4 @@ the new `mahjonglayouts.lua` self-test stage in `tests/run.sh`.
 
 **Acceptance:** a future layout story touches only `mahjonglayouts.lua` (spec +
 shape self-test) and a `tests/usNN_*.lua` harness — `mahjonglogic.lua` is never
-edited to add a board.
+edited to add a board. (Completed.)

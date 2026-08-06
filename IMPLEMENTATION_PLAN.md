@@ -120,7 +120,10 @@ kindle_majong/
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
     ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
-    ├── mahjonglogic.lua          # pure logic: deck, layout, free-tiles, match, win, shuffle
+    ├── mahjonglogic.lua          # pure logic: deck, free-tiles, match, win, shuffle, scoring,
+    │                             #   persistence; re-exports the layout API (US-22a)
+    ├── mahjonglayouts.lua        # pure layout module (US-22a): board specs + registry +
+    │                             #   geometry; a new board (US-23..29) is one change here
     ├── mahjongboard.lua          # offset-layer 3D board widget (IconWidget/OverlapGroup + hit-test)
     ├── icons/*.svg               # tile + overlay icons
     └── README.md                 # install/usage (write at the end)
@@ -129,7 +132,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-22**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-16, US-17..US-22, US-22a**.
 
 | Story | File | Status |
 |---|---|---|
@@ -155,7 +158,7 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-20 — Hint penalty per session + Pause in the bottom toolbar | [US-20_hint-session-and-pause-button_completed.md](implementation-plan/US-20_hint-session-and-pause-button_completed.md) | ✅ completed |
 | US-21 — Expand the layout picker grid to hold the full board set | [US-21_layout-picker-expansion_completed.md](implementation-plan/US-21_layout-picker-expansion_completed.md) | ✅ completed |
 | US-22 — Ziggurat layout | [US-22_ziggurat-layout_completed.md](implementation-plan/US-22_ziggurat-layout_completed.md) | ✅ completed |
-| US-22a — Extract board definitions into `mahjonglayouts.lua` | [US-22a_layouts-module.md](implementation-plan/US-22a_layouts-module.md) | ⏳ planned |
+| US-22a — Extract board definitions into `mahjonglayouts.lua` | [US-22a_layouts-module_completed.md](implementation-plan/US-22a_layouts-module_completed.md) | ✅ completed |
 | US-23 — Cloud layout | [US-23_cloud-layout.md](implementation-plan/US-23_cloud-layout.md) | ⏳ planned |
 | US-24 — Tic-Tac-Toe layout | [US-24_tictactoe-layout.md](implementation-plan/US-24_tictactoe-layout.md) | ⏳ planned |
 | US-25 — Red Dragon layout | [US-25_red-dragon-layout.md](implementation-plan/US-25_red-dragon-layout.md) | ⏳ planned |

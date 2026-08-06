@@ -30,8 +30,9 @@ else
     echo "    luacheck not installed — skipping"
 fi
 
-echo "==> 3/4 logic self-tests (mahjonglogic.lua, mahjongstats.lua)"
+echo "==> 3/4 logic self-tests (mahjonglogic.lua, mahjonglayouts.lua, mahjongstats.lua)"
 lua "$PLUGIN/mahjonglogic.lua"
+lua "$PLUGIN/mahjonglayouts.lua"
 lua "$PLUGIN/mahjongstats.lua"
 
 echo "==> 4/4 headless harnesses"

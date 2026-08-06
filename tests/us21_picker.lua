@@ -146,7 +146,7 @@ expect(picker2._card_rects[5].x > picker2._card_rects[4].x,
     "5th card sits in row 1, column 1 (x=" .. picker2._card_rects[5].x .. ")")
 
 -- Deregister the toy layout (restore {bridge, spider, turtle}).
-Logic.layouts["toy"] = nil
+Logic.deregisterLayout("toy")
 
 -- ---- Pick a layout from the grid -----------------------------------------------
 

@@ -9,6 +9,33 @@
 
 local MahjongLogic = {}
 
+-- Layout definitions, the registry, and the geometry helpers (US-22a) live in
+-- mahjonglayouts.lua (pure Lua, no ui/ requires) so each future board
+-- (US-23..US-29) is a single-file addition there. Re-export the full API so
+-- every existing caller (main.lua, mahjongboard.lua, mahjonglayoutselect.lua,
+-- the harnesses) is unchanged. `MahjongLogic.MAX_LAYER` stays a constant here
+-- for legacy callers (== maxLayer("turtle")).
+--
+-- mahjonglayouts.lua sits in this file's own directory. KOReader adds the
+-- plugin dir to package.path on-device, so a plain require works there; when
+-- this file is run standalone (`lua mahjonglogic.lua --selftest`) that path is
+-- missing, so prepend the directory this file lives in.
+local this_dir = debug.getinfo(1, "S").source:gsub("^@", ""):match("^(.*[/\\])[^/\\]+$")
+if this_dir then
+    package.path = this_dir .. "?.lua;" .. package.path
+end
+local Layouts = require("mahjonglayouts")
+MahjongLogic.layouts          = Layouts.layouts
+MahjongLogic.posKey           = Layouts.posKey
+MahjongLogic.registerLayout   = Layouts.registerLayout
+MahjongLogic.deregisterLayout = Layouts.deregisterLayout
+MahjongLogic.layoutIds        = Layouts.layoutIds
+MahjongLogic.layoutName       = Layouts.layoutName
+MahjongLogic.buildLayout      = Layouts.buildLayout
+MahjongLogic.maxLayer         = Layouts.maxLayer
+MahjongLogic.gridBounds       = Layouts.gridBounds
+MahjongLogic.isLayoutPosition = Layouts.isLayoutPosition
+
 -- Tile kinds --------------------------------------------------------------
 
 local BAMBOO = {}
@@ -119,301 +146,6 @@ function MahjongLogic.deckCounts(deck)
         counts[category] = counts[category] + 1
     end
     return counts
-end
-
--- Layout registry (US-14) --------------------------------------------------
---
--- The Turtle layout is the canonical GNOME Mahjongg map, with the stepped
--- pyramid and the head/tail protrusions. Coordinates are tile top-left
--- corners; `y` may be fractional (x=0/y=3.5 head, x=13..14/y=3.5 tail,
--- x=6.5/y=3.5 cap) so the silhouette's half-tile overhang is kept:
---   L0: body rows (12+8+10+12+12+10+8+12 = 84) + head (x=0, y=3.5) + tail
---       (x=13..14, y=3.5) = 87
---   L1: block x=4..9,  y=1..6   (6x6  = 36)
---   L2: block x=5..8,  y=2..5   (4x4  = 16)
---   L3: block x=6..7,  y=3..4   (2x2  =  4)
---   L4: single tile x=6.5, y=3.5 (       1)
--- 87 + 36 + 16 + 4 + 1 = 144. Grid extents: x=0..14, y=0..7.
---
--- US-14 generalizes the layout-dependent paths through a registry: every
--- layout is registered as { id=, name=, spec= } and the layout functions take
--- a layout id (defaulting to "turtle" so existing callers and self-tests stay
--- byte-identical). Adding a layout (US-15/16) is a one-line registerLayout call.
-
-local TURTLE_SPEC = {
-    -- Layer 0 body rows, bottom row first.
-    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 0 },
-    { layer = 0, kind = "row",   x_min = 3,  x_max = 10, y = 1 },
-    { layer = 0, kind = "row",   x_min = 2,  x_max = 11, y = 2 },
-    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 3 },
-    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 4 },
-    { layer = 0, kind = "row",   x_min = 2,  x_max = 11, y = 5 },
-    { layer = 0, kind = "row",   x_min = 3,  x_max = 10, y = 6 },
-    { layer = 0, kind = "row",   x_min = 1,  x_max = 12, y = 7 },
-    -- Head and tail protrusions (half a tile below the y=3 body row).
-    { layer = 0, kind = "tile",  x = 0,  y = 3.5 },
-    { layer = 0, kind = "row",   x_min = 13, x_max = 14, y = 3.5 },
-    -- Upper pyramid blocks.
-    { layer = 1, kind = "block", x_min = 4, x_max = 9,  y_min = 1, y_max = 6 },
-    { layer = 2, kind = "block", x_min = 5, x_max = 8,  y_min = 2, y_max = 5 },
-    { layer = 3, kind = "block", x_min = 6, x_max = 7,  y_min = 3, y_max = 4 },
-    { layer = 4, kind = "tile",  x = 6.5, y = 3.5 },
-}
-
--- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
--- the entries (the cached layout tables reference the spec).
-MahjongLogic.layouts = {}
-
--- Per-id caches (forward-declared so registerLayout can invalidate them).
-local _layout_cache = {}      -- id -> positions array
-local _bounds_cache = {}      -- id -> { x_min, x_max, y_min, y_max }
-local _layout_key_cache = {}  -- id -> { [posKey] = true }
-local _max_layer_cache = {}   -- id -> number
-
--- Builds the flat positions array from a layout spec. Caller-cached per id via
--- buildLayout(id); this helper never memoizes (it is only run once per id).
-local function buildLayoutFromSpec(spec)
-    local layout = {}
-    local function add(x, y, layer)
-        layout[#layout + 1] = { x = x, y = y, layer = layer }
-    end
-    for _, s in ipairs(spec) do
-        if s.kind == "row" then
-            for x = s.x_min, s.x_max do
-                add(x, s.y, s.layer)
-            end
-        elseif s.kind == "block" then
-            for y = s.y_min, s.y_max do
-                for x = s.x_min, s.x_max do
-                    add(x, y, s.layer)
-                end
-            end
-        elseif s.kind == "set" then
-            -- Explicit point list: { {x=, y=}, ... } at a fixed layer. Used by
-            -- layouts (e.g. Spider) whose per-layer shape is too irregular for
-            -- rows/blocks to express compactly. (US-15)
-            for _, pt in ipairs(s.points) do
-                add(pt.x, pt.y, s.layer)
-            end
-        else -- single tile
-            add(s.x, s.y, s.layer)
-        end
-    end
-    return layout
-end
-
--- Registers a layout. `entry` is { id=string, name=string, spec=table } (name
--- defaults to the id). Re-registering an id replaces it and drops its caches
--- so a hot-reload picks up a new spec. US-15/16 call this for Spider/Bridge.
-function MahjongLogic.registerLayout(entry)
-    if type(entry) ~= "table" or type(entry.id) ~= "string" or type(entry.spec) ~= "table" then
-        error("registerLayout: needs { id=string, name=string, spec=table }")
-    end
-    local copy = {
-        id = entry.id,
-        name = entry.name or entry.id,
-        spec = entry.spec,
-    }
-    MahjongLogic.layouts[copy.id] = copy
-    _layout_cache[copy.id] = nil
-    _bounds_cache[copy.id] = nil
-    _layout_key_cache[copy.id] = nil
-    _max_layer_cache[copy.id] = nil
-end
-
--- Sorted list of registered layout ids (the picker iterates this).
-function MahjongLogic.layoutIds()
-    local ids = {}
-    for id in pairs(MahjongLogic.layouts) do
-        ids[#ids + 1] = id
-    end
-    table.sort(ids)
-    return ids
-end
-
--- Display name of a layout id (falls back to the id for an unknown layout).
-function MahjongLogic.layoutName(id)
-    local l = MahjongLogic.layouts[id]
-    return (l and l.name) or id
-end
-
--- Spider layout (US-15): the classic Spider board, transcribed from GNOME
--- Mahjongg's `spider` map (4 levels, 144 tiles: 65/53/25/1). The shape is a
--- wide diamond with nested hollow rings stepping up to a single peak tile.
--- Coordinates are on the same half-grid as Turtle (x = 0.5..14.5, y = 0..7);
--- the per-layer point sets use `kind = "set"` because the silhouette is too
--- irregular for rows/blocks to express compactly.
-local SPIDER_SPEC = {
-    { layer = 0, kind = "set", points = {
-        {x = 3, y = 0}, {x = 4, y = 0}, {x = 6.5, y = 0}, {x = 8.5, y = 0}, {x = 11, y = 0}, {x = 12, y = 0},
-        {x = 4, y = 1}, {x = 7, y = 1}, {x = 8, y = 1}, {x = 11, y = 1},
-        {x = 1, y = 1.5}, {x = 5, y = 1.5}, {x = 10, y = 1.5}, {x = 14, y = 1.5},
-        {x = 2, y = 2}, {x = 6, y = 2}, {x = 7, y = 2}, {x = 8, y = 2}, {x = 9, y = 2}, {x = 13, y = 2},
-        {x = 3, y = 2.5}, {x = 4, y = 2.5}, {x = 11, y = 2.5}, {x = 12, y = 2.5},
-        {x = 5, y = 3}, {x = 6, y = 3}, {x = 7, y = 3}, {x = 8, y = 3}, {x = 9, y = 3}, {x = 10, y = 3},
-        {x = 4.5, y = 4}, {x = 5.5, y = 4}, {x = 6.5, y = 4}, {x = 7.5, y = 4},
-        {x = 8.5, y = 4}, {x = 9.5, y = 4}, {x = 10.5, y = 4},
-        {x = 0.5, y = 4.5}, {x = 1.5, y = 4.5}, {x = 2.5, y = 4.5}, {x = 3.5, y = 4.5},
-        {x = 11.5, y = 4.5}, {x = 12.5, y = 4.5}, {x = 13.5, y = 4.5}, {x = 14.5, y = 4.5},
-        {x = 5, y = 5}, {x = 6, y = 5}, {x = 7, y = 5}, {x = 8, y = 5}, {x = 9, y = 5}, {x = 10, y = 5},
-        {x = 4, y = 6}, {x = 6, y = 6}, {x = 7, y = 6}, {x = 8, y = 6}, {x = 9, y = 6}, {x = 11, y = 6},
-        {x = 3, y = 6.5}, {x = 12, y = 6.5},
-        {x = 1, y = 7}, {x = 2, y = 7}, {x = 7, y = 7}, {x = 8, y = 7}, {x = 13, y = 7}, {x = 14, y = 7},
-    } },
-    { layer = 1, kind = "set", points = {
-        {x = 3, y = 0}, {x = 4, y = 0}, {x = 6.5, y = 0}, {x = 8.5, y = 0}, {x = 11, y = 0}, {x = 12, y = 0},
-        {x = 4, y = 1}, {x = 11, y = 1},
-        {x = 1, y = 1.5}, {x = 5, y = 1.5}, {x = 10, y = 1.5}, {x = 14, y = 1.5},
-        {x = 2, y = 2}, {x = 7, y = 2}, {x = 8, y = 2}, {x = 13, y = 2},
-        {x = 3, y = 2.5}, {x = 4, y = 2.5}, {x = 11, y = 2.5}, {x = 12, y = 2.5},
-        {x = 6, y = 3}, {x = 7, y = 3}, {x = 8, y = 3}, {x = 9, y = 3},
-        {x = 5.5, y = 4}, {x = 6.5, y = 4}, {x = 7.5, y = 4}, {x = 8.5, y = 4}, {x = 9.5, y = 4},
-        {x = 0.5, y = 4.5}, {x = 1.5, y = 4.5}, {x = 2.5, y = 4.5}, {x = 3.5, y = 4.5},
-        {x = 11.5, y = 4.5}, {x = 12.5, y = 4.5}, {x = 13.5, y = 4.5}, {x = 14.5, y = 4.5},
-        {x = 6, y = 5}, {x = 7, y = 5}, {x = 8, y = 5}, {x = 9, y = 5},
-        {x = 4, y = 6}, {x = 7, y = 6}, {x = 8, y = 6}, {x = 11, y = 6},
-        {x = 3, y = 6.5}, {x = 12, y = 6.5},
-        {x = 1, y = 7}, {x = 2, y = 7}, {x = 7, y = 7}, {x = 8, y = 7}, {x = 13, y = 7}, {x = 14, y = 7},
-    } },
-    { layer = 2, kind = "set", points = {
-        {x = 4, y = 0}, {x = 11, y = 0},
-        {x = 1, y = 1.5}, {x = 5, y = 1.5}, {x = 10, y = 1.5}, {x = 14, y = 1.5},
-        {x = 3, y = 2.5}, {x = 12, y = 2.5},
-        {x = 7, y = 3}, {x = 8, y = 3},
-        {x = 6.5, y = 4}, {x = 7.5, y = 4}, {x = 8.5, y = 4},
-        {x = 0.5, y = 4.5}, {x = 2.5, y = 4.5}, {x = 12.5, y = 4.5}, {x = 14.5, y = 4.5},
-        {x = 7, y = 5}, {x = 8, y = 5},
-        {x = 7, y = 6}, {x = 8, y = 6},
-        {x = 3, y = 6.5}, {x = 12, y = 6.5},
-        {x = 1, y = 7}, {x = 14, y = 7},
-    } },
-    { layer = 3, kind = "set", points = {
-        {x = 7.5, y = 4.5},
-    } },
-}
-
--- Turtle is registered in US-14; US-15 adds Spider; US-16 adds Bridge.
-MahjongLogic.registerLayout{ id = "turtle", name = "Turtle", spec = TURTLE_SPEC }
-MahjongLogic.registerLayout{ id = "spider", name = "Spider", spec = SPIDER_SPEC }
-
--- Bridge layout (US-16): the classic "Four Bridges" board from GNOME
--- Mahjongg's `bridges` map — two towers linked by a deck, 144 tiles across
--- 4 layers (88/36/16/4). The shape is regular enough for rows/blocks (unlike
--- Spider's irregular silhouette, which needs `set`).
---   L0: bridge deck (88) — two wide towers with a connecting deck
---   L1: four 3x3 towers (36)
---   L2: four 2x2 towers (16)
---   L3: four peak tiles (4) at (3.5,1.5), (8.5,1.5), (3.5,6.5), (8.5,6.5)
--- Grid extents: x=0..12, y=0..8.
-local BRIDGE_SPEC = {
-    -- Layer 0: the bridge deck and outer towers.
-    { layer = 0, kind = "row",   x_min = 1,   x_max = 11, y = 0 },
-    { layer = 0, kind = "row",   x_min = 2,   x_max = 5,  y = 1 },
-    { layer = 0, kind = "row",   x_min = 7,   x_max = 10,  y = 1 },
-    { layer = 0, kind = "row",   x_min = 2,   x_max = 10, y = 2 },
-    { layer = 0, kind = "row",   x_min = 0,   x_max = 12, y = 3 },
-    { layer = 0, kind = "row",   x_min = 1.5, x_max = 3.5, y = 4 },
-    { layer = 0, kind = "row",   x_min = 8.5, x_max = 10.5, y = 4 },
-    { layer = 0, kind = "row",   x_min = 0,   x_max = 12, y = 5 },
-    { layer = 0, kind = "row",   x_min = 2,   x_max = 10, y = 6 },
-    { layer = 0, kind = "row",   x_min = 2,   x_max = 5,  y = 7 },
-    { layer = 0, kind = "row",   x_min = 7,   x_max = 10,  y = 7 },
-    { layer = 0, kind = "row",   x_min = 1,   x_max = 11, y = 8 },
-    -- Layer 1: four 3x3 towers.
-    { layer = 1, kind = "block", x_min = 2.5, x_max = 4.5, y_min = 0.5, y_max = 2.5 },
-    { layer = 1, kind = "block", x_min = 7.5, x_max = 9.5, y_min = 0.5, y_max = 2.5 },
-    { layer = 1, kind = "block", x_min = 2.5, x_max = 4.5, y_min = 5.5, y_max = 7.5 },
-    { layer = 1, kind = "block", x_min = 7.5, x_max = 9.5, y_min = 5.5, y_max = 7.5 },
-    -- Layer 2: four 2x2 towers.
-    { layer = 2, kind = "block", x_min = 3, x_max = 4, y_min = 1, y_max = 2 },
-    { layer = 2, kind = "block", x_min = 8, x_max = 9, y_min = 1, y_max = 2 },
-    { layer = 2, kind = "block", x_min = 3, x_max = 4, y_min = 6, y_max = 7 },
-    { layer = 2, kind = "block", x_min = 8, x_max = 9, y_min = 6, y_max = 7 },
-    -- Layer 3: four peak tiles.
-    { layer = 3, kind = "tile",  x = 3.5, y = 1.5 },
-    { layer = 3, kind = "tile",  x = 8.5, y = 1.5 },
-    { layer = 3, kind = "tile",  x = 3.5, y = 6.5 },
-    { layer = 3, kind = "tile",  x = 8.5, y = 6.5 },
-}
-MahjongLogic.registerLayout{ id = "bridge", name = "Bridge", spec = BRIDGE_SPEC }
-
--- Ziggurat layout (US-22): "The Ziggurat" from GNOME Mahjongg's `ziggurat`
--- map — a stepped pyramid with two tall outer walls and a center staircase,
--- 144 tiles across 6 layers (64/20/18/18/14/10). The map's `<column>` runs
--- are transcribed as blocks with x_min == x_max. The half-grid positions on
--- layers 0/1/2 (x=2.5/3.5/6.5/7.5/11.5/14, y=0.5/1/6/6.5) feed the existing
--- layout-agnostic bevel logic unchanged.
---   L0: base (64) — walls at x=0/x=14 (y=0..7), caps at x=2.5/x=11.5,
---       corner blocks x=1..3 / x=11..13 at y=3..4, center mid-columns
---       x=6.5..7.5 (y=1..2 and y=5..6), and the y=0/y=7 center rows.
---   L1: 20 — end tiles, 3x2 wall blocks, center columns at y=1/y=6.
---   L2: 18 — inner 3x2 blocks x=2..4 / x=10..12 plus peak-ish tiles.
---   L3: 18 — block x=3..11, y=3..4
---   L4: 14 — block x=4..10, y=3..4
---   L5: 10 — block x=5..9,  y=3..4
--- Grid extents: x=0..14, y=0..7.
-local ZIGGURAT_SPEC = {
-    -- Layer 0: the base — outer walls, side columns, and center rows.
-    { layer = 0, kind = "block", x_min = 0,   x_max = 0,   y_min = 0, y_max = 7 },
-    { layer = 0, kind = "block", x_min = 1,   x_max = 3,   y_min = 3, y_max = 4 },
-    { layer = 0, kind = "block", x_min = 2.5, x_max = 2.5, y_min = 0, y_max = 2 },
-    { layer = 0, kind = "block", x_min = 2.5, x_max = 2.5, y_min = 5, y_max = 7 },
-    { layer = 0, kind = "row",   x_min = 3.5, x_max = 10.5, y = 0 },
-    { layer = 0, kind = "row",   x_min = 3.5, x_max = 10.5, y = 7 },
-    { layer = 0, kind = "block", x_min = 6.5, x_max = 7.5, y_min = 1, y_max = 2 },
-    { layer = 0, kind = "block", x_min = 6.5, x_max = 7.5, y_min = 5, y_max = 6 },
-    { layer = 0, kind = "block", x_min = 11.5, x_max = 11.5, y_min = 0, y_max = 2 },
-    { layer = 0, kind = "block", x_min = 11.5, x_max = 11.5, y_min = 5, y_max = 7 },
-    { layer = 0, kind = "block", x_min = 11,  x_max = 13,  y_min = 3, y_max = 4 },
-    { layer = 0, kind = "block", x_min = 14,  x_max = 14,  y_min = 0, y_max = 7 },
-    -- Layer 1.
-    { layer = 1, kind = "tile",  x = 3,    y = 0.5 },
-    { layer = 1, kind = "tile",  x = 11,   y = 0.5 },
-    { layer = 1, kind = "row",   x_min = 6.5, x_max = 7.5, y = 1 },
-    { layer = 1, kind = "block", x_min = 1, x_max = 3, y_min = 3, y_max = 4 },
-    { layer = 1, kind = "block", x_min = 11, x_max = 13, y_min = 3, y_max = 4 },
-    { layer = 1, kind = "row",   x_min = 6.5, x_max = 7.5, y = 6 },
-    { layer = 1, kind = "tile",  x = 3,    y = 6.5 },
-    { layer = 1, kind = "tile",  x = 11,   y = 6.5 },
-    -- Layer 2.
-    { layer = 2, kind = "tile",  x = 3,    y = 0.5 },
-    { layer = 2, kind = "tile",  x = 11,   y = 0.5 },
-    { layer = 2, kind = "tile",  x = 7,    y = 1 },
-    { layer = 2, kind = "block", x_min = 2, x_max = 4, y_min = 3, y_max = 4 },
-    { layer = 2, kind = "block", x_min = 10, x_max = 12, y_min = 3, y_max = 4 },
-    { layer = 2, kind = "tile",  x = 7,    y = 6 },
-    { layer = 2, kind = "tile",  x = 3,    y = 6.5 },
-    { layer = 2, kind = "tile",  x = 11,   y = 6.5 },
-    -- Layers 3-5: the stacked center staircase.
-    { layer = 3, kind = "block", x_min = 3, x_max = 11, y_min = 3, y_max = 4 },
-    { layer = 4, kind = "block", x_min = 4, x_max = 10, y_min = 3, y_max = 4 },
-    { layer = 5, kind = "block", x_min = 5, x_max = 9,  y_min = 3, y_max = 4 },
-}
-MahjongLogic.registerLayout{ id = "ziggurat", name = "Ziggurat", spec = ZIGGURAT_SPEC }
-
--- Returns the 144 tile positions of a layout as an array of
--- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
--- paint lower layers first). The layout is static, so it is built once and
--- cached per id: rebuilds (new game, board repaints) iterate the same table
--- instead of allocating fresh position tables every call. Callers must NOT
--- mutate the returned array.
-function MahjongLogic.buildLayout(id)
-    if id == nil then id = "turtle" end
-    if not _layout_cache[id] then
-        local entry = MahjongLogic.layouts[id]
-        if not entry then
-            error("buildLayout: unknown layout id " .. tostring(id))
-        end
-        _layout_cache[id] = buildLayoutFromSpec(entry.spec)
-    end
-    return _layout_cache[id]
-end
-
--- Canonical map key for a board position. A board is keyed by this string
--- (x,y,layer -> kind) so lookups/removals are O(1) and persistence (US-10)
--- is a plain table.
-function MahjongLogic.posKey(x, y, layer)
-    return x .. "," .. y .. "," .. layer
 end
 
 -- Deterministic RNG ------------------------------------------------------
@@ -975,65 +707,14 @@ function MahjongLogic.deserializeGameState(data)
     }
 end
 
--- Flat projection grid -----------------------------------------------------
---
--- The UI renders the 3D board as a flat grid: each (x, y) cell shows the
--- topmost tile at that position. These helpers give the grid extents and the
--- topmost tile lookup the renderer needs.
+-- Legacy layout constant ---------------------------------------------------
 
 -- Highest layer used by the Turtle layout. Kept as a constant for backward
 -- compat with pre-US-14 callers (board widget, tests); per-layout code uses
--- maxLayer(id) instead.
+-- maxLayer(id) instead. The layout functions themselves (maxLayer/gridBounds/
+-- isLayoutPosition/buildLayout/posKey/registerLayout/...) were extracted to
+-- mahjonglayouts.lua (US-22a) and are re-exported at the top of this file.
 MahjongLogic.MAX_LAYER = 4
-
--- Highest layer used by a layout (US-14). Cached per id.
-function MahjongLogic.maxLayer(id)
-    if id == nil then id = "turtle" end
-    if not _max_layer_cache[id] then
-        local m = 0
-        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
-            if p.layer > m then m = p.layer end
-        end
-        _max_layer_cache[id] = m
-    end
-    return _max_layer_cache[id]
-end
-
--- Bounds of a layout's projection grid as { x_min, x_max, y_min, y_max }.
--- Static per id, so cached like buildLayout(id) (callers must not mutate).
-function MahjongLogic.gridBounds(id)
-    if id == nil then id = "turtle" end
-    if not _bounds_cache[id] then
-        local bounds = {
-            x_min = math.huge,
-            x_max = -math.huge,
-            y_min = math.huge,
-            y_max = -math.huge,
-        }
-        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
-            bounds.x_min = math.min(bounds.x_min, p.x)
-            bounds.x_max = math.max(bounds.x_max, p.x)
-            bounds.y_min = math.min(bounds.y_min, p.y)
-            bounds.y_max = math.max(bounds.y_max, p.y)
-        end
-        _bounds_cache[id] = bounds
-    end
-    return _bounds_cache[id]
-end
-
--- True if (x, y, layer) is one of the saved layout's positions. Used to
--- validate deserialized state (US-10): a position that is not part of the
--- layout was not produced by a real game. `id` defaults to "turtle".
-function MahjongLogic.isLayoutPosition(x, y, layer, id)
-    if id == nil then id = "turtle" end
-    if not _layout_key_cache[id] then
-        _layout_key_cache[id] = {}
-        for _, p in ipairs(MahjongLogic.buildLayout(id)) do
-            _layout_key_cache[id][MahjongLogic.posKey(p.x, p.y, p.layer)] = true
-        end
-    end
-    return _layout_key_cache[id][MahjongLogic.posKey(x, y, layer)] == true
-end
 
 -- Self-tests --------------------------------------------------------------
 
@@ -1069,76 +750,15 @@ function MahjongLogic.runSelfTests()
     check(not MahjongLogic.matches("flower1", "b1"), "flower never matches a suited tile")
     check(not MahjongLogic.matches("east", "south"), "east does not match south")
 
-    -- Turtle layout: exactly 144 unique positions, per-layer counts matching
-    -- the classic Turtle (87/36/16/4/1), grid within x<=14, y<=7.
-    local layout = MahjongLogic.buildLayout()
-    check(#layout == 144, "layout has 144 positions (got " .. #layout .. ")")
-    local layer_counts = {}
-    local seen = {}
-    local max_x, max_y = 0, 0
-    for _, p in ipairs(layout) do
-        layer_counts[p.layer] = (layer_counts[p.layer] or 0) + 1
-        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
-        check(not seen[key], "no duplicate position " .. key)
-        seen[key] = true
-        max_x = math.max(max_x, p.x)
-        max_y = math.max(max_y, p.y)
-    end
-    check(layer_counts[0] == 87, "layer 0 has 87 tiles (got " .. tostring(layer_counts[0]) .. ")")
-    check(layer_counts[1] == 36, "layer 1 has 36 tiles (got " .. tostring(layer_counts[1]) .. ")")
-    check(layer_counts[2] == 16, "layer 2 has 16 tiles (got " .. tostring(layer_counts[2]) .. ")")
-    check(layer_counts[3] == 4, "layer 3 has 4 tiles (got " .. tostring(layer_counts[3]) .. ")")
-    check(layer_counts[4] == 1, "layer 4 has 1 tile (got " .. tostring(layer_counts[4]) .. ")")
-    check(max_x == 14 and max_y == 7, "grid bounds are x<=14, y<=7 (got " .. max_x .. "x" .. max_y .. ")")
-    for _, s in ipairs(TURTLE_SPEC) do
-        if s.kind == "row" then
-            for x = s.x_min, s.x_max do
-                check(seen[MahjongLogic.posKey(x, s.y, s.layer)] ~= nil,
-                    "row tile " .. x .. "," .. s.y .. ",L" .. s.layer .. " is present")
-            end
-        elseif s.kind == "block" then
-            for y = s.y_min, s.y_max do
-                for x = s.x_min, s.x_max do
-                    check(seen[MahjongLogic.posKey(x, y, s.layer)] ~= nil,
-                        "block tile " .. x .. "," .. y .. ",L" .. s.layer .. " is present")
-                end
-            end
-        else
-            check(seen[MahjongLogic.posKey(s.x, s.y, s.layer)] ~= nil,
-                "tile " .. s.x .. "," .. s.y .. ",L" .. s.layer .. " is present")
-        end
-    end
-
-    -- Layout registry (US-14/US-15/US-16/US-22) --------------------------------
-    -- The registry now enumerates {"bridge", "spider", "turtle", "ziggurat"}
-    -- (US-15 adds Spider, US-16 Bridge, US-22 Ziggurat); the layout-dependent
-    -- functions accept an id and default to "turtle" so the byte-identical
-    -- Turtle results fall out of the parameterized paths.
-    local ids = MahjongLogic.layoutIds()
-    check(#ids == 4 and ids[1] == "bridge" and ids[2] == "spider" and ids[3] == "turtle"
-        and ids[4] == "ziggurat",
-        "layoutIds returns exactly {bridge, spider, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
-    check(MahjongLogic.layoutName("turtle") == "Turtle", "layoutName returns the registered name")
-    check(MahjongLogic.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
-    check(MahjongLogic.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
-    check(MahjongLogic.layoutName("nope") == "nope",
-        "layoutName falls back to the id for an unknown layout")
-    check(MahjongLogic.buildLayout("turtle") == MahjongLogic.buildLayout(),
-        "buildLayout(id) and buildLayout() share one memoized Turtle table")
-    check(MahjongLogic.buildLayout("turtle") == MahjongLogic.buildLayout("turtle"),
-        "buildLayout(id) is memoized per id")
-    check(MahjongLogic.gridBounds("turtle") == MahjongLogic.gridBounds(),
-        "gridBounds(id) and gridBounds() share one memoized Turtle bounds")
-    check(MahjongLogic.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
-    check(MahjongLogic.isLayoutPosition(6.5, 3.5, 4, "turtle"),
-        "isLayoutPosition accepts a Turtle position with an explicit id")
-    check(not MahjongLogic.isLayoutPosition(99, 99, 0, "turtle"),
-        "isLayoutPosition rejects an out-of-layout position with an explicit id")
+    -- Layout shape + registry self-tests moved to mahjonglayouts.lua (US-22a);
+    -- run them here so `lua mahjonglogic.lua` still validates the whole chain
+    -- (deck/removal logic plus the per-layout shapes and the registry).
+    Layouts.runSelfTests()
 
     -- A throwaway layout can be registered at test time and drives the
-    -- parameterized paths end-to-end (deal → free tiles → bounds →
-    -- position check), mirroring what tests/us14_layouts.lua does with the
-    -- board widget. Use a small 4-position pyramid so the test is cheap.
+    -- parameterized GAMEPLAY paths end-to-end (deal → free tiles), mirroring
+    -- what tests/us14_layouts.lua does with the board widget. Use a small
+    -- 8-position pyramid so the test is cheap.
     local toy_spec = {
         { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 0 },
         { layer = 0, kind = "row",   x_min = 0, x_max = 1, y = 1 },
@@ -1180,34 +800,13 @@ function MahjongLogic.runSelfTests()
     -- Deregister the toy layout so the rest of the self-tests see only Turtle
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
-    MahjongLogic.layouts["toy"] = nil
-    _layout_cache["toy"] = nil
-    _bounds_cache["toy"] = nil
-    _layout_key_cache["toy"] = nil
-    _max_layer_cache["toy"] = nil
+    MahjongLogic.deregisterLayout("toy")
     check(#MahjongLogic.layoutIds() == 4, "deregistering toy restores the {bridge, spider, turtle, ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------
-    -- The classic Spider board: 144 positions, 65/53/25/1 across 4 layers.
-    local spider = MahjongLogic.buildLayout("spider")
-    check(#spider == 144, "Spider layout has 144 positions (got " .. #spider .. ")")
-    local spider_layers = {}
-    local spider_seen = {}
-    for _, p in ipairs(spider) do
-        spider_layers[p.layer] = (spider_layers[p.layer] or 0) + 1
-        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
-        check(not spider_seen[key], "no duplicate Spider position " .. key)
-        spider_seen[key] = true
-    end
-    check(spider_layers[0] == 65, "Spider layer 0 has 65 tiles (got " .. tostring(spider_layers[0]) .. ")")
-    check(spider_layers[1] == 53, "Spider layer 1 has 53 tiles (got " .. tostring(spider_layers[1]) .. ")")
-    check(spider_layers[2] == 25, "Spider layer 2 has 25 tiles (got " .. tostring(spider_layers[2]) .. ")")
-    check(spider_layers[3] == 1, "Spider layer 3 has 1 tile (got " .. tostring(spider_layers[3]) .. ")")
-    check(MahjongLogic.maxLayer("spider") == 3, "maxLayer(spider) == 3")
-    local spider_bounds = MahjongLogic.gridBounds("spider")
-    check(spider_bounds.x_min == 0.5 and spider_bounds.x_max == 14.5
-        and spider_bounds.y_min == 0 and spider_bounds.y_max == 7,
-        "Spider grid bounds are x=0.5..14.5, y=0..7")
+    -- Shape checks (144 positions, per-layer counts, grid bounds) live in
+    -- mahjonglayouts.lua; here we exercise the gameplay paths on a Spider
+    -- deal (free tiles / hasMoves / persistence round-trip).
     -- Spider deal + free tiles + hasMoves.
     local sg = MahjongLogic.newGame("spider", 42)
     check(MahjongLogic.tileCount(sg) == 144, "newGame('spider', 42) deals 144 tiles")
@@ -1232,26 +831,9 @@ function MahjongLogic.runSelfTests()
         "restored Spider board has 142 tiles after one removal")
 
     -- Bridge layout (US-16) -----------------------------------------------
-    -- The classic Four Bridges board: 144 positions, 88/36/16/4 across 4 layers.
-    local bridge = MahjongLogic.buildLayout("bridge")
-    check(#bridge == 144, "Bridge layout has 144 positions (got " .. #bridge .. ")")
-    local bridge_layers = {}
-    local bridge_seen = {}
-    for _, p in ipairs(bridge) do
-        bridge_layers[p.layer] = (bridge_layers[p.layer] or 0) + 1
-        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
-        check(not bridge_seen[key], "no duplicate Bridge position " .. key)
-        bridge_seen[key] = true
-    end
-    check(bridge_layers[0] == 88, "Bridge layer 0 has 88 tiles (got " .. tostring(bridge_layers[0]) .. ")")
-    check(bridge_layers[1] == 36, "Bridge layer 1 has 36 tiles (got " .. tostring(bridge_layers[1]) .. ")")
-    check(bridge_layers[2] == 16, "Bridge layer 2 has 16 tiles (got " .. tostring(bridge_layers[2]) .. ")")
-    check(bridge_layers[3] == 4, "Bridge layer 3 has 4 tiles (got " .. tostring(bridge_layers[3]) .. ")")
-    check(MahjongLogic.maxLayer("bridge") == 3, "maxLayer(bridge) == 3")
-    local bridge_bounds = MahjongLogic.gridBounds("bridge")
-    check(bridge_bounds.x_min == 0 and bridge_bounds.x_max == 12
-        and bridge_bounds.y_min == 0 and bridge_bounds.y_max == 8,
-        "Bridge grid bounds are x=0..12, y=0..8")
+    -- Shape checks (144 positions, per-layer counts, grid bounds) live in
+    -- mahjonglayouts.lua; here we exercise the gameplay paths on a Bridge
+    -- deal (free tiles / hasMoves / persistence round-trip).
     -- Bridge deal + free tiles + hasMoves.
     local bg = MahjongLogic.newGame("bridge", 42)
     check(MahjongLogic.tileCount(bg) == 144, "newGame('bridge', 42) deals 144 tiles")
@@ -1276,29 +858,9 @@ function MahjongLogic.runSelfTests()
         "restored Bridge board has 142 tiles after one removal")
 
     -- Ziggurat layout (US-22) ---------------------------------------------
-    -- "The Ziggurat" from GNOME Mahjongg: 144 positions, 64/20/18/18/14/10
-    -- across 6 layers.
-    local ziggurat = MahjongLogic.buildLayout("ziggurat")
-    check(#ziggurat == 144, "Ziggurat layout has 144 positions (got " .. #ziggurat .. ")")
-    local ziggurat_layers = {}
-    local ziggurat_seen = {}
-    for _, p in ipairs(ziggurat) do
-        ziggurat_layers[p.layer] = (ziggurat_layers[p.layer] or 0) + 1
-        local key = MahjongLogic.posKey(p.x, p.y, p.layer)
-        check(not ziggurat_seen[key], "no duplicate Ziggurat position " .. key)
-        ziggurat_seen[key] = true
-    end
-    check(ziggurat_layers[0] == 64, "Ziggurat layer 0 has 64 tiles (got " .. tostring(ziggurat_layers[0]) .. ")")
-    check(ziggurat_layers[1] == 20, "Ziggurat layer 1 has 20 tiles (got " .. tostring(ziggurat_layers[1]) .. ")")
-    check(ziggurat_layers[2] == 18, "Ziggurat layer 2 has 18 tiles (got " .. tostring(ziggurat_layers[2]) .. ")")
-    check(ziggurat_layers[3] == 18, "Ziggurat layer 3 has 18 tiles (got " .. tostring(ziggurat_layers[3]) .. ")")
-    check(ziggurat_layers[4] == 14, "Ziggurat layer 4 has 14 tiles (got " .. tostring(ziggurat_layers[4]) .. ")")
-    check(ziggurat_layers[5] == 10, "Ziggurat layer 5 has 10 tiles (got " .. tostring(ziggurat_layers[5]) .. ")")
-    check(MahjongLogic.maxLayer("ziggurat") == 5, "maxLayer(ziggurat) == 5")
-    local ziggurat_bounds = MahjongLogic.gridBounds("ziggurat")
-    check(ziggurat_bounds.x_min == 0 and ziggurat_bounds.x_max == 14
-        and ziggurat_bounds.y_min == 0 and ziggurat_bounds.y_max == 7,
-        "Ziggurat grid bounds are x=0..14, y=0..7")
+    -- Shape checks (144 positions, per-layer counts, grid bounds) live in
+    -- mahjonglayouts.lua; here we exercise the gameplay paths on a Ziggurat
+    -- deal (free tiles / hasMoves / persistence round-trip).
     -- Ziggurat deal + free tiles + hasMoves.
     local zg = MahjongLogic.newGame("ziggurat", 42)
     check(MahjongLogic.tileCount(zg) == 144, "newGame('ziggurat', 42) deals 144 tiles")

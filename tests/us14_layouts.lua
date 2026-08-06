@@ -354,7 +354,7 @@ expect(not restored_via_picker,
 
 -- ---- Deregister the toy layout (restore the {bridge, spider, turtle, ziggurat} registry) ----------
 
-Logic.layouts["toy"] = nil
+Logic.deregisterLayout("toy")
 expect(#Logic.layoutIds() == 4 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "spider"
         and Logic.layoutIds()[3] == "turtle" and Logic.layoutIds()[4] == "ziggurat",
     "deregistering the toy layout restores the {bridge, spider, turtle, ziggurat} registry")

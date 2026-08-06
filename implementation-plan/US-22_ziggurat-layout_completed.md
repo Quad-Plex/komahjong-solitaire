@@ -17,3 +17,9 @@ per-layer counts match the spec, deal/free-tiles/hasMoves work, save/restore wit
 layout id, the picker lists the Ziggurat card.
 
 **Acceptance:** Manual — pick Ziggurat, play a full game, save/restore mid-game. (Completed.)
+
+**Follow-up (US-22a):** the Ziggurat spec (and the Turtle/Spider/Bridge specs, the
+registry, the per-id caches, and the geometry helpers) were later extracted out of
+`mahjonglogic.lua` into the dedicated pure module `mahjong.koplugin/mahjonglayouts.lua`.
+`mahjonglogic.lua` now requires that module and re-exports its API unchanged; future board
+stories (US-23..US-29) add their spec + `registerLayout` call in `mahjonglayouts.lua` only.
