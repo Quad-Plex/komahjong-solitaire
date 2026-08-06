@@ -73,6 +73,14 @@ local FLASH_TIMEOUT = 2
 local AUTO_SOLVE_HOLD_SECONDS = 10
 local AUTO_SOLVE_STEP_SECONDS = 0.3
 
+-- US-34: the hint no longer times out (it used to vanish after 2 s). On show
+-- it does a brief boldness pulse — HINT_PULSE_TICKS steps swap the thin "hint"
+-- and bold "hint_bold" corner-bracket overlays every HINT_PULSE_STEP_SECONDS,
+-- starting and ending on the bold variant — then the highlight stays at bold
+-- until the player acts (taps a tile, matches a pair, shuffles, etc.).
+local HINT_PULSE_STEP_SECONDS = 0.5
+local HINT_PULSE_TICKS = 4
+
 -- Settings keys (persisted via LuaSettings in the KOReader settings dir).
 -- score_method: "chain" (default, +5 for consecutive same-group matches) or
 -- "basic" (flat 10 per pair). layout: the last-chosen layout id (US-14);
@@ -241,7 +249,10 @@ local Mahjong = FrameContainer:extend{
     _auto_solve_token = 0, -- monotonic token invalidating pending auto-solve arms/steps
     _auto_solve_active = false, -- true while the long-press solver is running (US-19)
     _last_hint = nil, -- the last hinted pair { a, b }, so repeated Hint presses cycle (US-08);
-                      -- also gates the once-per-session hint penalty (US-20)
+                      -- also gates the once-per-session hint penalty (US-20); the highlight now
+                      -- persists (no 2 s timeout) until the player acts (US-34)
+    _hint_pulse_token = 0, -- monotonic token for the hint boldness pulse (US-34): a stale tick
+                           -- (after clearHint/undo/close/new-game) is a no-op
     hint_button = nil, -- the toolbar Hint ButtonWidget (exposes hold callbacks, US-19)
     pause_button = nil, -- the toolbar Pause ButtonWidget (US-17/US-20)
     hints_used = 0, -- per-game hints actually shown (US-18; persisted in the game state)
@@ -562,6 +573,15 @@ function Mahjong:startTimer()
     local run_id = self._timer_run_id
     self._timer_started_at = os.time()
     self._timer_running = true
+    -- US-34: resume the hint's boldness pulse too (only when a hint is active).
+    -- The pulse is an animation loop just like the polling loop below, so it
+    -- must not run while the board is covered by an overlay: every stopTimer
+    -- site (pause/settings/stats/picker/dialogs/close) stops it and every
+    -- startTimer site (resume/new-game/restore) restarts it — mirroring the
+    -- polling loop's lifecycle so a pulse can never repaint behind a panel.
+    if self._last_hint and self.board_view then
+        self:startHintPulse(self._last_hint)
+    end
     if self:timerMode() ~= "interval" then
         -- "move" mode: no polling loop; interactions refresh the display.
         return
@@ -583,6 +603,10 @@ function Mahjong:stopTimer()
     end
     self._timer_running = false
     self._timer_run_id = self._timer_run_id + 1
+    -- US-34: stop the hint's boldness pulse (see startTimer). Bumping the token
+    -- invalidates any pending pulse tick so it can't repaint behind a floating
+    -- overlay or a closed widget.
+    self._hint_pulse_token = self._hint_pulse_token + 1
 end
 
 function Mahjong:resetTimer()
@@ -925,6 +949,10 @@ function Mahjong:handleTileTap(x, y, layer)
     if self._auto_solve_active then
         return
     end
+    -- US-34: the hint is persistent, so any tile tap dismisses it (the player
+    -- is now acting; a tap on empty/blocked space clears it too — re-hinting
+    -- is one press away).
+    self:clearHint()
     local kind = MahjongLogic.tileAt(self.board, x, y, layer)
     if not kind then return end
     if not MahjongLogic.isFree(self.board, x, y, layer) then
@@ -965,7 +993,9 @@ function Mahjong:applyMatch(a, b)
     -- US-20: clearing a pair ends the current hint session — the next hint
     -- press starts a new one and pays HINT_PENALTY once again. (Auto-solve
     -- steps call applyMatch too, so a solved board also resets the session.)
-    self._last_hint = nil
+    -- US-34: clearHint also drops the persistent hint highlight/pulse (a hint
+    -- is guidance, and the player just acted).
+    self:clearHint()
     self.board_view:removePair(a, b)
     local prev_last = self.last_match_kind
     local points
@@ -1138,6 +1168,9 @@ function Mahjong:undo()
     if not move then return end
 
     self:clearSelection()
+    -- US-34: the board changed under the hint, so drop it (clearHint is a
+    -- no-op when no hint is up).
+    self:clearHint()
     MahjongLogic.undoPair(self.board, move.a, move.b, move.ka, move.kb)
     self.board_view:addPair({ x = move.a.x, y = move.a.y, layer = move.a.layer, kind = move.ka },
                             { x = move.b.x, y = move.b.y, layer = move.b.layer, kind = move.kb })
@@ -1151,9 +1184,56 @@ function Mahjong:undo()
     self:saveGameState()
 end
 
+-- US-34: clears the active hint highlight (and stops its pulse). Called when
+-- the player acts (tile tap, pair cleared, undo), when the auto-solver takes
+-- over, and on new-game/restore (the board rebuild drops the overlays anyway).
+-- A no-op when no hint is up. The token bump makes any pending pulse tick a
+-- no-op, so a stale animation can never repaint after a clear.
+function Mahjong:clearHint()
+    self._hint_pulse_token = self._hint_pulse_token + 1
+    if self._last_hint and self.board_view then
+        local h = self._last_hint
+        self.board_view:clearOverlay(h.a.x, h.a.y, h.a.layer)
+        self.board_view:clearOverlay(h.b.x, h.b.y, h.b.layer)
+        UIManager:setDirty(self, "ui")
+    end
+    self._last_hint = nil
+end
+
+-- US-34: brief boldness pulse for a persistent hint. Draws the bold overlay
+-- immediately (so the hint reads from the very first paint), then toggles it
+-- between the thin "hint" and bold "hint_bold" icons every
+-- HINT_PULSE_STEP_SECONDS for HINT_PULSE_TICKS steps, ending on bold. The hint
+-- then stays highlighted at bold until the player acts (clearHint). Guarded by
+-- a monotonic token plus _last_hint, so a restart (new hint press, resume) or
+-- a clear can never leave a stale tick repainting.
+function Mahjong:startHintPulse(pair)
+    self._hint_pulse_token = self._hint_pulse_token + 1
+    local token = self._hint_pulse_token
+    local board_view = self.board_view
+    if not board_view then return end
+    board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint_bold")
+    board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint_bold")
+    local step = 0
+    local tick
+    tick = function()
+        step = step + 1
+        if self._hint_pulse_token ~= token then return end
+        if not self._last_hint or not self.board_view then return end
+        local icon = (step % 2 == 1) and "hint" or "hint_bold"
+        self.board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, icon)
+        self.board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, icon)
+        if step < HINT_PULSE_TICKS then
+            UIManager:scheduleIn(HINT_PULSE_STEP_SECONDS, tick)
+        end
+    end
+    UIManager:scheduleIn(HINT_PULSE_STEP_SECONDS, tick)
+end
+
 -- Repeated Hint presses cycle through the available matching pairs instead of
--- always highlighting the same first one (the hint stays on each pair for the
--- usual 2 s, then the next press moves to the pair AFTER it, wrapping around).
+-- always highlighting the same first one (the highlight stays on each pair —
+-- it no longer times out (US-34) — so the next press moves to the pair AFTER
+-- it, wrapping around).
 function Mahjong:showHint()
     -- US-33: the Hint button is dead while the auto-solver runs (a hint would
     -- be redundant — the solver highlights pairs as it plays).
@@ -1208,15 +1288,11 @@ function Mahjong:showHint()
     end
     self:updateStatus()
     self:saveGameState()
-    board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint")
-    board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint")
-    -- Clear hints after 2 seconds.
-    UIManager:scheduleIn(2, function()
-        if board_view == self.board_view then
-            board_view:clearOverlay(pair.a.x, pair.a.y, pair.a.layer)
-            board_view:clearOverlay(pair.b.x, pair.b.y, pair.b.layer)
-        end
-    end)
+    -- US-34: the hint no longer times out. startHintPulse draws the bold
+    -- overlay and runs the brief normal/bold flicker that draws the eye; the
+    -- highlight then stays until the player acts (any tile tap, a cleared
+    -- pair, undo, or the auto-solver starting all call clearHint).
+    self:startHintPulse(pair)
 end
 
 -- Reshuffles the tiles remaining on the board in place. `charge` is nil/true on
@@ -1234,6 +1310,10 @@ function Mahjong:shuffleBoard(force, attempts, charge)
     local do_shuffle = function()
         MahjongLogic.shuffleBoard(self.board)
         self:clearSelection()
+        -- US-34: a shuffle reorders the board under the hint, so drop it
+        -- (clearHint is a no-op when no hint is up; the board rebuild below
+        -- would otherwise leave a stale _last_hint repainting at old coords).
+        self:clearHint()
         if charge then
             self.shuffles_used = (self.shuffles_used or 0) + 1
             self.score = MahjongLogic.applyPenalty(self.score, MahjongLogic.SHUFFLE_PENALTY)
@@ -1317,6 +1397,9 @@ function Mahjong:startAutoSolve()
     -- would scramble a long shared history under a later undo.
     self.history = {}
     self:clearSelection()
+    -- US-34: drop any lingering hint (overlays + pulse) before the solver
+    -- takes over the board.
+    self:clearHint()
     self:setFlash(_("Auto-solving…"))
     self:autoSolveStep()
 end

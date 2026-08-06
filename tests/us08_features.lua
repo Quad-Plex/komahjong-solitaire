@@ -3,6 +3,8 @@
 -- Checks:
 --   * Undo restores the exact previous state (logic board, rendered board, score);
 --   * Hint highlights a matching free pair (overlays created);
+--   * Hint is persistent (US-34): no 2 s auto-clear, a brief boldness pulse
+--     settles at the bold overlay, and any tile tap / match dismisses it;
 --   * Shuffle preserves the multiset of remaining tiles;
 --   * No-moves offer a shuffle prompt;
 --   * Immediate auto-repeat of shuffle if it produces another dead board.
@@ -77,8 +79,8 @@ mj_hint.board = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"} }
 mj_hint:buildUILayout()
 mj_hint:showHint()
 expect(mapCount(mj_hint.board_view.overlays) == 2, "hint draws two overlays")
--- We can't easily test the scheduled clear headlessly without mocking scheduleIn more deeply,
--- but we verified the setOverlay call.
+-- The hint now persists (US-34): it schedules no 2 s auto-clear, so a hint is
+-- never torn down behind the player's back.
 
 -- ---- Hint cycling (US-08 follow-up) ----------------------------------------
 --
@@ -135,6 +137,80 @@ expect(mapCount(mj_stale.board_view.overlays) == 0,
 mj_stale:showHint()
 expect(hintedPair(mj_stale) ~= "" and hintedPair(mj_stale) ~= stale_h1,
     "a hint after the board changed starts the cycle over cleanly")
+
+-- ---- Hint persistence + boldness pulse (US-34) ------------------------------
+--
+-- The hint no longer times out: it stays highlighted (settled at the bold
+-- variant) until the player acts. On show it runs a bounded 0.5 s pulse
+-- between the thin and bold overlays, then holds at bold.
+
+-- The hint schedules no 2 s auto-clear.
+ctx.scheduled = {}
+local mj_persist = Mahjong:new()
+mj_persist.board = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"} }
+mj_persist:buildUILayout()
+mj_persist:showHint()
+expect(mapCount(mj_persist.board_view.overlays) == 2, "persistent hint draws two overlays")
+local has_old_clear = false
+for _, t in ipairs(ctx.scheduled) do
+    if t.seconds == 2 then has_old_clear = true end
+end
+expect(not has_old_clear, "a hint schedules no 2-second auto-clear")
+expect(mj_persist._last_hint ~= nil, "the hint state stays set after showHint")
+
+-- The bounded pulse settles at the bold variant and leaves nothing pending.
+ctx.scheduled = {}
+local mj_bold = Mahjong:new()
+mj_bold.board = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"c1"} }
+mj_bold:buildUILayout()
+mj_bold:showHint()
+-- Drain the bounded pulse (each runScheduled call is snapshot-semantics, so it
+-- runs one tick; the pulse self-terminates after HINT_PULSE_TICKS=4 steps).
+for _ = 1, 10 do
+    if #ctx.scheduled == 0 then break end
+    ctx.runScheduled()
+end
+local bold = 0
+for _, ov in pairs(mj_bold.board_view.overlays) do
+    if ov.icon == "mahjong/hint_bold" then bold = bold + 1 end
+end
+expect(mapCount(mj_bold.board_view.overlays) == 2 and bold == 2,
+    "the hint pulse settles with both overlays at the bold variant")
+local pending_pulse = 0
+for _, t in ipairs(ctx.scheduled) do
+    if t.seconds == 0.5 then pending_pulse = pending_pulse + 1 end
+end
+expect(pending_pulse == 0, "the bounded pulse leaves no pending ticks")
+expect(mapCount(mj_bold.board_view.overlays) == 2,
+    "the hint highlight persists after the pulse settles (no auto-clear)")
+
+-- Any tile tap dismisses the persistent hint (the player is now acting).
+local mj_tap = Mahjong:new()
+mj_tap.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"c1"}, {8,2,0,"c2"},
+}
+mj_tap:buildUILayout()
+mj_tap:showHint() -- hints the b1/b1 pair
+expect(mapCount(mj_tap.board_view.overlays) == 2, "hint up before the tap")
+mj_tap:handleTileTap(6, 2, 0) -- tap an unrelated tile
+expect(mj_tap._last_hint == nil, "tapping a tile clears the hint state")
+expect(mapCount(mj_tap.board_view.overlays) == 1,
+    "tapping a tile drops the hint overlays (only the selection remains)")
+
+-- Matching a pair (even a DIFFERENT one) leaves no hint behind.
+local mj_diff = Mahjong:new()
+mj_diff.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"c1"}, {8,2,0,"c1"},
+}
+mj_diff:buildUILayout()
+mj_diff:showHint() -- hints the b1/b1 pair
+mj_diff:handleTileTap(6, 2, 0) -- select the c1 tile
+mj_diff:handleTileTap(8, 2, 0) -- match c1/c1 (not the hinted pair)
+expect(mapCount(mj_diff.board_view.overlays) == 0,
+    "matching a pair leaves no hint overlay behind")
+expect(mj_diff._last_hint == nil, "the hint session ends when a pair clears")
 
 -- ---- Shuffle (US-08) -------------------------------------------------------
 

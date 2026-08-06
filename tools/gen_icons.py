@@ -318,16 +318,23 @@ def generate():
     written["select.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
                              f'viewBox="0 0 100 140"><rect x="1" y="1" width="98" height="138" rx="4" '
                              f'fill="none" stroke="#263238" stroke-width="5"/></svg>')
+    # The hint's bolder variant (US-34): the same corner brackets with a
+    # thicker stroke. main.lua's brief hint pulse alternates the overlay between
+    # "hint" and "hint_bold", then settles on "hint_bold" for the (now
+    # non-timing-out) hint highlight. stroke-width 9 stays inside the 100x140
+    # viewBox (the outer corner strokes span at most x 1.5..98.5 / y 1.5..138.5).
+    hint_brackets = ('<path d="M6 18 L6 6 L18 6" fill="none" stroke="#263238" stroke-width="{sw}" '
+                     'stroke-linecap="round" stroke-linejoin="round"/>'
+                     '<path d="M82 6 L94 6 L94 18" fill="none" stroke="#263238" stroke-width="{sw}" '
+                     'stroke-linecap="round" stroke-linejoin="round"/>'
+                     '<path d="M94 122 L94 134 L82 134" fill="none" stroke="#263238" stroke-width="{sw}" '
+                     'stroke-linecap="round" stroke-linejoin="round"/>'
+                     '<path d="M18 134 L6 134 L6 122" fill="none" stroke="#263238" stroke-width="{sw}" '
+                     'stroke-linecap="round" stroke-linejoin="round"/>')
     written["hint.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
-                           f'viewBox="0 0 100 140">'
-                           f'<path d="M6 18 L6 6 L18 6" fill="none" stroke="#263238" stroke-width="6" '
-                           f'stroke-linecap="round" stroke-linejoin="round"/>'
-                           f'<path d="M82 6 L94 6 L94 18" fill="none" stroke="#263238" stroke-width="6" '
-                           f'stroke-linecap="round" stroke-linejoin="round"/>'
-                           f'<path d="M94 122 L94 134 L82 134" fill="none" stroke="#263238" stroke-width="6" '
-                           f'stroke-linecap="round" stroke-linejoin="round"/>'
-                           f'<path d="M18 134 L6 134 L6 122" fill="none" stroke="#263238" stroke-width="6" '
-                           f'stroke-linecap="round" stroke-linejoin="round"/></svg>')
+                           f'viewBox="0 0 100 140">{hint_brackets.format(sw=6)}</svg>')
+    written["hint_bold.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
+                                f'viewBox="0 0 100 140">{hint_brackets.format(sw=9)}</svg>')
     written["empty.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
                             'viewBox="0 0 100 140"/>')
     # Toolbar icons (hint = lightbulb, shuffle = crossing arrows), imported from
