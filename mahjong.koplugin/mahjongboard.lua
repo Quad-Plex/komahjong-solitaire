@@ -354,7 +354,7 @@ end
 
 -- Restores a single tile to the rendered board. Returns true if it was
 -- missing. Repaints the board.
-function Board:addTile(x, y, layer, kind)
+function Board:addTile(x, y, layer, kind, defer_sync)
     local key = MahjongLogic.posKey(x, y, layer)
     if self.tile_widgets[key] then return false end
 
@@ -377,15 +377,18 @@ function Board:addTile(x, y, layer, kind)
     -- Update same-layer neighbors whose bevels might now be occluded.
     self:refreshWestNorthNeighbours(x, y, layer)
 
-    self:syncOverlapGroup()
+    if not defer_sync then self:syncOverlapGroup() end
     return true
 end
 
 -- Restores a pair of tiles (a and b are { x, y, layer, kind } tables).
 -- Returns true if both tiles were added.
 function Board:addPair(a, b)
-    local ra = self:addTile(a.x, a.y, a.layer, a.kind)
-    local rb = self:addTile(b.x, b.y, b.layer, b.kind)
+    local ra = self:addTile(a.x, a.y, a.layer, a.kind, true)
+    local rb = self:addTile(b.x, b.y, b.layer, b.kind, true)
+    if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
+    if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
+    self:syncOverlapGroup()
     return ra and rb
 end
 

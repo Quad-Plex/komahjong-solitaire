@@ -26,8 +26,8 @@ board renders as an outward-bevel 3D stack of 144 tiles.
 
 Features:
 
-- **11 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
-  Dragon, Overpass, Pyramid's Walls, Confounding Cross, and Taipei — each a
+- **12 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
+  Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, and Crab — each a
   byte-identical transcription of the GNOME Mahjongg maps. Choosing a layout
   from the full-screen **layout picker** is how you start a New Game; picker
   cards show a thumbnail schematic, a per-layout win-count trophy badge, and a

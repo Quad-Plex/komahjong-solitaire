@@ -51,9 +51,14 @@ KINDLE_PLUGIN_DEST="$KINDLE_PLUGINS_DIR/mahjong.koplugin"
 DRIVE_LABEL='D:'
 
 UNMOUNT_AFTER=false
-if [[ "${1:-}" == "--unmount" ]]; then
-    UNMOUNT_AFTER=true
-fi
+case "${1:-}" in
+    "") ;;
+    --unmount) UNMOUNT_AFTER=true ;;
+    *)
+        echo "Usage: $0 [--unmount]" >&2
+        exit 2
+        ;;
+esac
 
 echo "==> Mahjong plugin install/update"
 echo "    source : $PLUGIN_SRC"
@@ -95,6 +100,13 @@ try_ssh() {
     local remote_plugins="$remote_koreader/plugins"
     local remote_dest="$remote_plugins/mahjong.koplugin"
 
+    restart_remote() {
+        echo "==> Restarting KOReader after an incomplete install"
+        "${SSH_CMD[@]}" \
+            "cd $remote_koreader && (./koreader.sh >/var/tmp/koreader.log 2>&1 &); true" \
+            >/dev/null 2>&1 || true
+    }
+
     if ! "${SSH_CMD[@]}" "test -d '$remote_plugins'" 2>/dev/null; then
         echo "ERROR: remote KOReader plugins dir not found at $remote_plugins." >&2
         echo "       Is this a jailbroken Kindle with KOReader installed?" >&2
@@ -112,12 +124,21 @@ try_ssh() {
         >/dev/null 2>&1 || true
 
     echo "==> Syncing plugin to $remote_dest"
-    "${SSH_CMD[@]}" "mkdir -p '$remote_dest'"
-    local ssh_e
-    ssh_e="sshpass -e ssh ${SSH_OPTS[*]}"
+    if ! "${SSH_CMD[@]}" "mkdir -p '$remote_dest'"; then
+        echo "ERROR: could not create the remote plugin directory." >&2
+        restart_remote
+        return 1
+    fi
+    local ssh_e="sshpass -e ssh"
+    local ssh_opt escaped_opt
+    for ssh_opt in "${SSH_OPTS[@]}"; do
+        printf -v escaped_opt '%q' "$ssh_opt"
+        ssh_e+=" $escaped_opt"
+    done
     if ! rsync -rt --delete -e "$ssh_e" \
             "$PLUGIN_SRC/" "$SSH_USER@$SSH_HOST:$remote_dest/"; then
         echo "ERROR: rsync over SSH failed." >&2
+        restart_remote
         return 1
     fi
 
@@ -126,6 +147,7 @@ try_ssh() {
     if rsync -rcn --delete -e "$ssh_e" \
             "$PLUGIN_SRC/" "$SSH_USER@$SSH_HOST:$remote_dest/" 2>/dev/null | head -1 | grep -q .; then
         echo "ERROR: copied files differ from source!" >&2
+        restart_remote
         return 1
     fi
     echo "==> OK: plugin files identical on device"

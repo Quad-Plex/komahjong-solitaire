@@ -92,10 +92,11 @@ local LayoutSelect = InputContainer:extend{
 -- leaning up-left inside the card.
 local function layoutThumbnail(id, w, h)
     local grid = MahjongLogic.gridBounds(id)
+    local positions = MahjongLogic.buildLayout(id)
     local min_px, max_px = math.huge, -math.huge
     local min_py, max_py = math.huge, -math.huge
     local mass_cx, mass_cy, n = 0, 0, 0
-    for _, p in ipairs(MahjongLogic.buildLayout(id)) do
+    for _, p in ipairs(positions) do
         local ux = (p.x - grid.x_min) - p.layer * BEVEL_FRAC
         local uy = (p.y - grid.y_min) - p.layer * BEVEL_FRAC
         min_px = math.min(min_px, ux)
@@ -146,7 +147,7 @@ local function layoutThumbnail(id, w, h)
     local opts = {
         dimen = Geometry:new{ w = w, h = h },
     }
-    for _, p in ipairs(MahjongLogic.buildLayout(id)) do
+    for _, p in ipairs(positions) do
         local px = math.floor(origin_x + (p.x - grid.x_min) * tw - p.layer * bw)
         local py = math.floor(origin_y + (p.y - grid.y_min) * th - p.layer * bh)
         local tile = FrameContainer:new{
@@ -383,7 +384,8 @@ function LayoutSelect:init()
     local ids = MahjongLogic.layoutIds()
     local rows = math.max(3, math.ceil(#ids / cols))
     local title_row_h = math.max(title_h, close_size)
-    local grid_top = title_row_h + Screen:scaleBySize(16)
+    local top_pad = Screen:scaleBySize(5)
+    local grid_top = top_pad + title_row_h + Screen:scaleBySize(16)
     local grid_w = self.full_width - 2 * edge_pad - (cols - 1) * gap
     local card_w = math.floor(grid_w / cols)
     local grid_h = self.full_height - grid_top - edge_pad - (rows - 1) * gap
@@ -523,7 +525,7 @@ function LayoutSelect:init()
         dimen = Geometry:new{ w = grid_content_w, h = math.min(grid_avail_h, grid_total_h) },
     }
     local content = VerticalGroup:new{
-        VerticalSpan:new{ width = Screen:scaleBySize(5) },
+        VerticalSpan:new{ width = top_pad },
         title_row,
         VerticalSpan:new{ width = Screen:scaleBySize(16) },
         grid_scroller,

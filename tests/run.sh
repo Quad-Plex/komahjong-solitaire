@@ -4,7 +4,7 @@
 # Usage:  tests/run.sh   (run from anywhere)
 #
 # Stages, in order:
-#   1. luac -p  syntax check every plugin .lua file
+#   1. luac -p  syntax check every plugin and test .lua file
 #   2. luacheck lint the plugin (skipped with a note if luacheck is missing)
 #   3. mahjonglogic.lua embedded self-tests (pure Lua, no mocks)
 #   4. tests/us*.lua headless harnesses (real plugin + shared KOReader stubs)
@@ -19,6 +19,9 @@ PLUGIN="../mahjong.koplugin"
 
 echo "==> 1/4 syntax check (luac -p)"
 for f in "$PLUGIN"/*.lua; do
+    luac -p "$f"
+done
+for f in *.lua; do
     luac -p "$f"
 done
 echo "    OK"
@@ -36,7 +39,8 @@ lua "$PLUGIN/mahjonglayouts.lua"
 lua "$PLUGIN/mahjongstats.lua"
 
 echo "==> 4/4 headless harnesses"
-for t in us01_shell.lua us03_icons.lua us06_board.lua us06_paint.lua board_updates.lua us07_gameplay.lua us08_features.lua us09_score.lua us10_persistence.lua us11_timer.lua hud_bar.lua us12_stats.lua us13_stats.lua us14_layouts.lua us15_spider.lua us16_bridge.lua us17_pause.lua us18_penalties.lua us19_autosolve.lua us21_picker.lua us22_ziggurat.lua us23_cloud.lua us24_tictactoe.lua us25_red_dragon.lua us26_overpass.lua us27_pyramid.lua us28_confounding.lua us29_taipei.lua us30_picker_wins.lua us31_layout_score.lua us32_deadlock.lua us33_autosolve_lock.lua us35_crab.lua us36_help.lua us37_localization.lua; do
+for t in *.lua; do
+    [[ "$t" == "mock.lua" ]] && continue
     echo "-- tests/$t"
     lua "$t"
 done

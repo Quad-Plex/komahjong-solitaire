@@ -417,7 +417,7 @@ function Mahjong:startGame()
         -- hasMoves check below is skipped for it.
         if self.game_was_autosolved then
             UIManager:nextTick(function() self:startAutoSolve() end)
-        elseif not MahjongLogic.hasMoves(self.board) then
+        elseif not MahjongLogic.hasMoves(self.board, self.layout) then
             -- US-32: a restored dead board must be recognized at launch (saved a
             -- dead game, closed, re-opened — the player should not face a silent
             -- dead board).
@@ -696,7 +696,10 @@ function Mahjong:openSettings()
             -- The timer mode/interval may have changed (US-11): restart the
             -- polling loop. stopTimer freezes elapsed_base, startTimer resumes.
             self:stopTimer()
-            self:startTimer()
+            -- A language change rebuilds an open picker. Keep polling stopped
+            -- until the picker is picked or closed; it is opaque and has no
+            -- active game surface to update.
+            if not self._picker_dlg then self:startTimer() end
             self:updateTimerDisplay()
         end,
         onCancel = function()
@@ -1174,7 +1177,7 @@ end
 function Mahjong:checkGameState()
     if MahjongLogic.isWin(self.board) then
         self:showWinDialog()
-    elseif not MahjongLogic.hasMoves(self.board) then
+    elseif not MahjongLogic.hasMoves(self.board, self.layout) then
         self:handleNoMoves()
     end
 end
@@ -1456,7 +1459,7 @@ function Mahjong:shuffleBestDeadBoard(attempts, charge)
         self:updateStatus()
         self:updateTimerDisplay()
         self:saveGameState()
-        if not MahjongLogic.hasMoves(self.board) then
+        if not MahjongLogic.hasMoves(self.board, self.layout) then
             if attempts > 0 then
                 self:shuffleBestDeadBoard(attempts - 1, false)
             elseif MahjongLogic.tileCount(self.board) > 0 then
@@ -1513,7 +1516,7 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
         -- If still no moves (rare but possible), auto-repeat a bounded number
         -- of times. When the retries run out and the board is still stuck, the
         -- board is empirically dead — show the permanent deadlock dialog.
-        if not MahjongLogic.hasMoves(self.board) then
+        if not MahjongLogic.hasMoves(self.board, self.layout) then
             if attempts > 0 then
                 self:shuffleBoard(true, attempts - 1, false)
             elseif MahjongLogic.tileCount(self.board) > 0 then
@@ -1612,7 +1615,7 @@ function Mahjong:autoSolveStep()
         self:showWinDialog()
         return
     end
-    local pair = MahjongLogic.matchingFreePair(self.board)
+    local pair = MahjongLogic.matchingFreePair(self.board, self.layout)
     if not pair then
         -- Dead board mid-solve: shuffle and carry on (mirrors the manual
         -- no-moves prompt). History is cleared first so the shuffle can't
@@ -1623,7 +1626,7 @@ function Mahjong:autoSolveStep()
         local attempts = 10
         repeat
             MahjongLogic.shuffleBoard(self.board)
-            pair = MahjongLogic.matchingFreePair(self.board)
+            pair = MahjongLogic.matchingFreePair(self.board, self.layout)
             attempts = attempts - 1
         until pair or attempts == 0
         self.board_view:updateBoard()
@@ -1720,11 +1723,10 @@ end
 function Mahjong:updateStatus()
     if not self.status_bar then return end
     local pairs = math.floor(MahjongLogic.tileCount(self.board) / 2)
-    local free = MahjongLogic.countFreePairs(self.board)
+    local free = MahjongLogic.countFreePairs(self.board, self.layout)
     self.status_bar:setStats(pairs, free, self.score)
     -- status_bar is a subwidget, so setDirty on it alone would not repaint;
     -- flag the window-level widget as well (same pattern as the chess example).
-    UIManager:setDirty(self.status_bar, "ui")
     UIManager:setDirty(self, "ui")
 end
 

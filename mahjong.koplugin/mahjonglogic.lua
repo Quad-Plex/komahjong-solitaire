@@ -524,7 +524,7 @@ end
 
 -- True when the board is empty (every tile matched and removed).
 function MahjongLogic.isWin(board)
-    return MahjongLogic.tileCount(board) == 0
+    return next(board) == nil
 end
 
 -- All distinct matching free pairs, as an array of { a = { x, y, layer, kind },
@@ -551,7 +551,15 @@ end
 -- check, the auto-solver (US-19) and the logic self-tests; the hint uses
 -- matchingFreePairs to cycle through options.
 function MahjongLogic.matchingFreePair(board, id)
-    return MahjongLogic.matchingFreePairs(board, id)[1]
+    local free = MahjongLogic.freeTiles(board, id)
+    for i = 1, #free - 1 do
+        for j = i + 1, #free do
+            if MahjongLogic.matches(free[i].kind, free[j].kind) then
+                return { a = free[i], b = free[j] }
+            end
+        end
+    end
+    return nil
 end
 
 -- The number of distinct matching free pairs currently available — i.e. how
@@ -612,9 +620,11 @@ function MahjongLogic.isPermanentlyDead(board)
 
     -- A: parity by match group
     local group_counts = {}
+    local tile_count = 0
     for _, kind in pairs(board) do
         local g = MahjongLogic.matchGroup(kind)
         group_counts[g] = (group_counts[g] or 0) + 1
+        tile_count = tile_count + 1
     end
     for _, n in pairs(group_counts) do
         if n % 2 == 1 then return true end
@@ -637,7 +647,7 @@ function MahjongLogic.isPermanentlyDead(board)
     -- An empty board has zero free tiles but is WON, not dead; every real
     -- board holds at least one free tile (a stack's top), so the <= 1 rule
     -- only fires on genuinely single-free-tile (single-column) boards.
-    if free_count <= 1 and MahjongLogic.tileCount(board) > 0 then return true end
+    if free_count <= 1 and tile_count > 0 then return true end
 
     return false
 end
