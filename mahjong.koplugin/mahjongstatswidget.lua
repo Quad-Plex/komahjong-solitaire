@@ -1,4 +1,4 @@
--- Stats screen (US-13) — floating window.
+-- Stats screen (US-13) — floating window, two columns.
 --
 -- A modal centered panel in the exact mahjongsettings.lua pattern: a
 -- transparent full-screen InputContainer whose single child is a
@@ -7,10 +7,17 @@
 -- the title row does too. Every close runs the owner's onClose hook (which
 -- resumes the polling loop that openStats paused, exactly like openSettings).
 --
+-- The card shows TWO side-by-side columns of the lifetime stats from the
+-- owner's `stats` record (mahjongstats.lua):
+--   * a "Global" column with the all-layouts record (games played, wins, win
+--     rate, best score/time, average time, streaks), and
+--   * a "<layout>" column (named after the currently played layout) mirroring
+--     the same rows from the per-layout maps — games started on that layout,
+--     wins, win rate, best score/time, average time and streaks.
 -- Rows are right-aligned labels with the values in a uniform column (the same
--- layout trick the settings dialog uses), listing the lifetime stats from the
--- owner's `stats` record (mahjongstats.lua). A bottom Reset button zeroes the
--- record — but only after a ConfirmBox. All strings are wrapped in _().
+-- layout trick the settings dialog uses). A bottom Reset button zeroes the
+-- whole record (both columns) — but only after a ConfirmBox. All strings are
+-- wrapped in _().
 --
 -- Note: US-12 already took the file name `mahjongstats.lua` for the pure
 -- stats module, so this dialog lives in `mahjongstatswidget.lua`.
@@ -42,8 +49,10 @@ local StatsWidget = InputContainer:extend{
     full_height = Screen:getHeight(),
     parent = nil,      -- the Mahjong instance (reads `stats`, saves after reset)
     onClose = nil,     -- hook so the owner can resume the paused timer loop
-    _values = nil,     -- { played=, won=, win_rate=, best_score=, best_time=,
-                       --   avg_time=, current_streak=, longest_streak= } value widgets
+    _values = nil,     -- value widgets: global rows under their bare keys
+                       --   (played/won/win_rate/best_score/best_time/avg_time/
+                       --   current_streak/longest_streak), the <layout> column
+                       --   under the same keys prefixed "map_" (map_played, ...)
     _panel_geom = nil, -- absolute screen rect of the floating panel (tap-outside test)
 }
 
@@ -55,7 +64,17 @@ function StatsWidget:statsRecord()
     return MahjongStats.defaults()
 end
 
--- Formats the display strings for every row from a stats record.
+-- The layout the <layout> column describes: the currently played layout
+-- (falls back to turtle, so the card renders even if the owner has no board).
+function StatsWidget:layoutId()
+    local p = self.parent
+    if p and type(p.layout) == "string" and p.layout ~= "" then
+        return p.layout
+    end
+    return "turtle"
+end
+
+-- Formats the display strings for every row of the global column.
 local function valueStrings(stats)
     local played = stats.games_played or 0
     local won = stats.games_won or 0
@@ -76,11 +95,42 @@ local function valueStrings(stats)
     }
 end
 
+-- Formats the display strings for the <layout> column from the per-layout
+-- maps. Missing values render exactly like the global column ("—" for times
+-- and the win rate, 0 for counts).
+local function layoutValueStrings(stats, layout_id)
+    local played = (stats.layout_played and stats.layout_played[layout_id]) or 0
+    local won = (stats.layout_wins and stats.layout_wins[layout_id]) or 0
+    local win_rate = played > 0
+            and string.format("%d%%", math.floor(won * 100 / played)) or "—"
+    local best_time = stats.layout_best_times and stats.layout_best_times[layout_id]
+            and MahjongLogic.formatElapsed(stats.layout_best_times[layout_id]) or "—"
+    local avg_time = won > 0
+            and MahjongLogic.formatElapsed(math.floor(
+                (stats.layout_total_times and stats.layout_total_times[layout_id] or 0) / won)) or "—"
+    return {
+        played = tostring(played),
+        won = tostring(won),
+        win_rate = win_rate,
+        best_score = tostring(stats.layout_highscores and stats.layout_highscores[layout_id] or 0),
+        best_time = best_time,
+        avg_time = avg_time,
+        current_streak = tostring(stats.layout_current_streaks and stats.layout_current_streaks[layout_id] or 0),
+        longest_streak = tostring(stats.layout_longest_streaks and stats.layout_longest_streaks[layout_id] or 0),
+    }
+end
+
 -- Re-renders every value widget from the current record (used after Reset).
 function StatsWidget:updateValues()
-    local vs = valueStrings(self:statsRecord())
+    local stats = self:statsRecord()
+    local vs = valueStrings(stats)
+    local map_vs = layoutValueStrings(stats, self:layoutId())
     for key, widget in pairs(self._values or {}) do
-        widget:setText(vs[key] or "")
+        local text = vs[key]
+        if text == nil and key:sub(1, 4) == "map_" then
+            text = map_vs[key:sub(5)]
+        end
+        widget:setText(text or "")
         if widget.resetLayout then widget:resetLayout() end
     end
 end
@@ -90,9 +140,12 @@ function StatsWidget:init()
     self.covers_fullscreen = true
 
     local stats = self:statsRecord()
+    local layout_id = self:layoutId()
     local vs = valueStrings(stats)
+    local map_vs = layoutValueStrings(stats, layout_id)
 
     local label_gap = Screen:scaleBySize(12) -- label -> value gap
+    local col_gap = Screen:scaleBySize(24)   -- Global column -> layout column gap
     local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(16))
     local label_color = Blitbuffer.COLOR_DARK_GRAY
     local value_face = Font:getFace("cfont", Screen:scaleBySize(18))
@@ -116,39 +169,71 @@ function StatsWidget:init()
     }
 
     -- Right-align the labels to the widest one so the value column starts at
-    -- the same x on every row (the settings dialog's layout trick).
+    -- the same x on every row (the settings dialog's layout trick). Both
+    -- columns share the same labels, so one width serves both.
     local max_label_w = 0
     for _, r in ipairs(row_specs) do
         local w = measureText(r.label, label_face, false)
         if w > max_label_w then max_label_w = w end
     end
-    -- The value column width (so the panel is wide enough for the widest value).
+    -- The value column width across both columns' values, so the panel is
+    -- wide enough for the widest value either column shows.
     local max_value_w = 0
     for _, r in ipairs(row_specs) do
         local w = measureText(vs[r.key], value_face, true)
         if w > max_value_w then max_value_w = w end
+        local mw = measureText(map_vs[r.key], value_face, true)
+        if mw > max_value_w then max_value_w = mw end
     end
+    local column_w = max_label_w + label_gap + max_value_w
+    local content_w = column_w * 2 + col_gap
 
     self._values = {}
-    local rows = {}
-    for _, r in ipairs(row_specs) do
-        local value_widget = TextWidget:new{
-            text = vs[r.key],
+
+    -- Builds one column: a centered header ("Global" or the layout name) over
+    -- the column width, then the labelled value rows. Value widgets are stored
+    -- in _values under `prefix .. key` so updateValues() can re-render them.
+    local function buildColumn(header_text, source_vs, prefix)
+        local header = TextWidget:new{
+            text = header_text,
             padding = 0,
             bold = true,
-            face = value_face,
+            face = Font:getFace("tfont", Screen:scaleBySize(18)),
         }
-        self._values[r.key] = value_widget
-        rows[#rows + 1] = HorizontalGroup:new{
-            HorizontalSpan:new{ width = max_label_w - measureText(r.label, label_face, false) },
-            TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
-            HorizontalSpan:new{ width = label_gap },
-            value_widget,
+        local header_w = header:getSize().w
+        local header_space = math.max(0, math.floor((column_w - header_w) / 2))
+        local vchildren = {
+            HorizontalGroup:new{
+                HorizontalSpan:new{ width = header_space },
+                header,
+                HorizontalSpan:new{ width = math.max(0, column_w - header_w - header_space) },
+            },
         }
+        for _, r in ipairs(row_specs) do
+            vchildren[#vchildren + 1] = VerticalSpan:new{ width = Screen:scaleBySize(14) }
+            local value_widget = TextWidget:new{
+                text = source_vs[r.key],
+                padding = 0,
+                bold = true,
+                face = value_face,
+            }
+            self._values[prefix .. r.key] = value_widget
+            vchildren[#vchildren + 1] = HorizontalGroup:new{
+                HorizontalSpan:new{ width = max_label_w - measureText(r.label, label_face, false) },
+                TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
+                HorizontalSpan:new{ width = label_gap },
+                value_widget,
+            }
+        end
+        return VerticalGroup:new(vchildren)
     end
 
-    -- Reset button (bottom): clears the record back to defaults, after a
-    -- ConfirmBox so an accidental tap cannot wipe the lifetime stats.
+    local global_col = buildColumn(_("Global"), vs, "")
+    local map_col = buildColumn(MahjongLogic.layoutName(layout_id), map_vs, "map_")
+
+    -- Reset button (bottom): clears the whole record (global + per-layout
+    -- maps) back to defaults, after a ConfirmBox so an accidental tap cannot
+    -- wipe the lifetime stats.
     local reset_w = Screen:scaleBySize(160)
     local reset_btn = ButtonWidget:new{
         text = _("Reset"),
@@ -165,7 +250,6 @@ function StatsWidget:init()
     self._reset_btn = reset_btn
 
     local gap = Screen:scaleBySize(14)
-    local content_w = max_label_w + label_gap + max_value_w
     local panel_content_w = math.max(content_w, reset_w)
     local pad_side = math.max(0, math.floor((panel_content_w - reset_w) / 2))
     local reset_row = HorizontalGroup:new{
@@ -207,26 +291,24 @@ function StatsWidget:init()
     -- Floating panel: a white rounded card centered over the game. The outer
     -- widget stays transparent, so the board shows through around the card.
     local top_pad = Screen:scaleBySize(40)
-    local vchildren = {
-        title_row,
-        VerticalSpan:new{ width = gap },
-    }
-    for i, row in ipairs(rows) do
-        vchildren[#vchildren + 1] = row
-        if i < #rows then
-            vchildren[#vchildren + 1] = VerticalSpan:new{ width = gap }
-        end
-    end
-    vchildren[#vchildren + 1] = VerticalSpan:new{ width = gap * 2 }
-    vchildren[#vchildren + 1] = reset_row
-    vchildren[#vchildren + 1] = VerticalSpan:new{ width = top_pad }
     local panel = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
         bordersize = Screen:scaleBySize(1),
         radius = Screen:scaleBySize(10),
         padding = Screen:scaleBySize(24),
-        VerticalGroup:new(vchildren),
+        VerticalGroup:new{
+            title_row,
+            VerticalSpan:new{ width = gap },
+            HorizontalGroup:new{
+                global_col,
+                HorizontalSpan:new{ width = col_gap },
+                map_col,
+            },
+            VerticalSpan:new{ width = gap * 2 },
+            reset_row,
+            VerticalSpan:new{ width = top_pad },
+        },
     }
 
     -- Where the panel sits on screen (CenterContainer centers it in the
@@ -288,7 +370,8 @@ function StatsWidget:onTapClose(_, ges)
     return true
 end
 
--- Zeroes the lifetime record back to defaults — after a ConfirmBox.
+-- Zeroes the whole lifetime record (global + per-layout maps) back to
+-- defaults — after a ConfirmBox.
 function StatsWidget:resetStats()
     UIManager:show(ConfirmBox:new{
         text = _("Reset all statistics? This cannot be undone."),

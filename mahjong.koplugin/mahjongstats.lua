@@ -23,6 +23,18 @@
 --                    formatted mm:ss; auto-solve wins never count, matching
 --                    layout_wins). For a layout with no win yet it stays nil,
 --                    so a never-won layout shows no time chip.
+--   layout_played    map layout_id -> games started on that layout (the US-13
+--                    stats screen's <layout> column reads it; bumped by
+--                    startGame() alongside games_played)
+--   layout_current_streaks / layout_longest_streaks
+--                    map layout_id -> consecutive wins on that layout / that
+--                    layout's all-time peak (the <layout> column's streak
+--                    rows). A per-layout streak only changes when a game on
+--                    THAT layout starts (resets on abandon) or wins
+--                    (increments); games on other layouts leave it untouched.
+--   layout_total_times map layout_id -> cumulative winning seconds on that
+--                    layout (feeds the <layout> column's average-time row,
+--                    mirroring the global total_time)
 --
 -- UI code only reaches in through defaults() / load() / startGame() /
 -- recordWin() / recordLayoutWin(), so the record stays a plain serializable
@@ -46,6 +58,10 @@ function MahjongStats.defaults()
         layout_wins = {},
         layout_highscores = {},
         layout_best_times = {},
+        layout_played = {},
+        layout_current_streaks = {},
+        layout_longest_streaks = {},
+        layout_total_times = {},
     }
 end
 
@@ -100,6 +116,42 @@ function MahjongStats.load(saved)
             end
         end
     end
+    -- layout_played / layout_current_streaks / layout_longest_streaks /
+    -- layout_total_times are per-layout counters, sanitized like the maps
+    -- above (non-negative integers; garbage keys become absent). Old records
+    -- saved before these maps existed default to {}.
+    stats.layout_played = {}
+    if type(saved.layout_played) == "table" then
+        for id, n in pairs(saved.layout_played) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 and n % 1 == 0 then
+                stats.layout_played[id] = n
+            end
+        end
+    end
+    stats.layout_current_streaks = {}
+    if type(saved.layout_current_streaks) == "table" then
+        for id, n in pairs(saved.layout_current_streaks) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 and n % 1 == 0 then
+                stats.layout_current_streaks[id] = n
+            end
+        end
+    end
+    stats.layout_longest_streaks = {}
+    if type(saved.layout_longest_streaks) == "table" then
+        for id, n in pairs(saved.layout_longest_streaks) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 and n % 1 == 0 then
+                stats.layout_longest_streaks[id] = n
+            end
+        end
+    end
+    stats.layout_total_times = {}
+    if type(saved.layout_total_times) == "table" then
+        for id, n in pairs(saved.layout_total_times) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 then
+                stats.layout_total_times[id] = n
+            end
+        end
+    end
     return stats
 end
 
@@ -107,11 +159,27 @@ end
 -- games_played and, when the PREVIOUS game was abandoned (i.e. not won),
 -- resets the current winning streak to 0. `previous_won` is the caller's
 -- game_won flag for the game that just ended (nil on the very first game,
--- which is treated as not won).
-function MahjongStats.startGame(stats, previous_won)
+-- which is treated as not won). The optional `layout_id` also bumps that
+-- layout's games-started counter and resets that layout's current streak on
+-- an abandoned game — the stats screen's <layout> column mirror of the global
+-- counters. A nil/empty layout_id keeps the old global-only behavior, so
+-- legacy two-argument callers stay byte-identical.
+function MahjongStats.startGame(stats, previous_won, layout_id)
     stats.games_played = stats.games_played + 1
     if not previous_won then
         stats.current_streak = 0
+    end
+    if type(layout_id) == "string" and layout_id ~= "" then
+        if type(stats.layout_played) ~= "table" then
+            stats.layout_played = {}
+        end
+        stats.layout_played[layout_id] = (stats.layout_played[layout_id] or 0) + 1
+        if not previous_won then
+            if type(stats.layout_current_streaks) ~= "table" then
+                stats.layout_current_streaks = {}
+            end
+            stats.layout_current_streaks[layout_id] = 0
+        end
     end
     return stats
 end
@@ -147,20 +215,46 @@ end
 
 -- Records a human-played win on a specific layout (the layout picker's trophy
 -- badge). Shares recordWin's gating: the caller must NOT reach here for
--- auto-solve wins. Missing layout_wins maps degrade to zero wins. The optional
--- `score` also records the layout's best winning score (the picker's score
--- chip) and the optional `elapsed` (seconds) remembers the layout's fastest
--- winning time (the picker's mm:ss time chip) — auto-solve wins never set
--- either, matching the win counter. Passing nil/omitting any keeps the win
--- counter behavior so existing two-argument callers stay valid. Returns
--- (new_layout_score, new_layout_time) — whether THIS win set a new per-layout
--- best for each, so the win summary can mark the just-set records.
+-- auto-solve wins. Missing layout_wins maps degrade to zero wins. Also bumps
+-- the layout's current/longest streak and accumulates the layout's total win
+-- time (the stats screen's <layout> column rows). The optional `score` also
+-- records the layout's best winning score (the picker's score chip) and the
+-- optional `elapsed` (seconds) remembers the layout's fastest winning time
+-- (the picker's mm:ss time chip) — auto-solve wins never set either, matching
+-- the win counter. Passing nil/omitting any keeps the win counter behavior so
+-- existing two-argument callers stay valid. Returns (new_layout_score,
+-- new_layout_time) — whether THIS win set a new per-layout best for each, so
+-- the win summary can mark the just-set records.
 function MahjongStats.recordLayoutWin(stats, layout_id, score, elapsed)
     if type(layout_id) ~= "string" or layout_id == "" then return false, false end
     if type(stats.layout_wins) ~= "table" then
         stats.layout_wins = {}
     end
     stats.layout_wins[layout_id] = (stats.layout_wins[layout_id] or 0) + 1
+    -- Per-layout streaks mirror the global ones: a win here bumps this
+    -- layout's current streak and its all-time peak (games on OTHER layouts
+    -- never touch it). The layout_current_streaks map is only reset by
+    -- startGame() on an abandoned game of THIS layout.
+    if type(stats.layout_current_streaks) ~= "table" then
+        stats.layout_current_streaks = {}
+    end
+    local cur = (stats.layout_current_streaks[layout_id] or 0) + 1
+    stats.layout_current_streaks[layout_id] = cur
+    if type(stats.layout_longest_streaks) ~= "table" then
+        stats.layout_longest_streaks = {}
+    end
+    if cur > (stats.layout_longest_streaks[layout_id] or 0) then
+        stats.layout_longest_streaks[layout_id] = cur
+    end
+    -- Cumulative winning seconds on this layout feed the <layout> column's
+    -- average-time-per-win row (mirroring the global total_time).
+    if type(elapsed) == "number" and elapsed >= 0 then
+        if type(stats.layout_total_times) ~= "table" then
+            stats.layout_total_times = {}
+        end
+        stats.layout_total_times[layout_id] =
+            (stats.layout_total_times[layout_id] or 0) + elapsed
+    end
     local new_layout_score, new_layout_time = false, false
     if type(score) == "number" and score >= 0 then
         if type(stats.layout_highscores) ~= "table" then
@@ -206,6 +300,11 @@ function MahjongStats.runSelfTests()
         "defaults() has an empty layout_highscores map")
     check(next(s.layout_best_times) == nil,
         "defaults() has an empty layout_best_times map")
+    check(next(s.layout_played) == nil
+        and next(s.layout_current_streaks) == nil
+        and next(s.layout_longest_streaks) == nil
+        and next(s.layout_total_times) == nil,
+        "defaults() has empty per-layout counter maps")
 
     -- startGame bumps games_played; it only breaks the streak when the
     -- previous game was abandoned (not won).
@@ -403,6 +502,84 @@ function MahjongStats.runSelfTests()
     MahjongStats.recordLayoutWin(old_bt, "turtle", 100, 77)
     check(old_bt.layout_best_times.turtle == 77,
         "a pre-feature record gains a best time after its first timed win")
+
+    -- Per-layout played/streaks/total_times (US-13 <layout> column):
+    -- startGame() bumps a valid layout's started counter and resets its streak
+    -- on an abandoned game; other layouts are untouched; a nil/empty layout
+    -- id keeps the global-only behavior.
+    local pl = MahjongStats.defaults()
+    MahjongStats.startGame(pl, false, "turtle")
+    MahjongStats.startGame(pl, true, "turtle")
+    MahjongStats.startGame(pl, true, "spider")
+    check(pl.layout_played.turtle == 2 and pl.layout_played.spider == 1,
+        "startGame(id) bumps the per-layout started counters")
+    check(pl.layout_current_streaks.turtle == 0,
+        "an abandoned first turtle game resets the turtle streak")
+    MahjongStats.startGame(pl, nil, "")
+    MahjongStats.startGame(pl, nil, nil)
+    check(pl.layout_played.turtle == 2 and pl.layout_played.spider == 1,
+        "startGame ignores nil/empty layout ids")
+    MahjongStats.startGame(pl, false)
+    check(pl.layout_played.turtle == 2 and pl.layout_played.spider == 1,
+        "a two-argument startGame keeps the global-only behavior")
+
+    -- recordLayoutWin bumps the per-layout current/longest streak and
+    -- accumulates the per-layout total time (feeding avg-time-per-win).
+    local pst = MahjongStats.defaults()
+    MahjongStats.startGame(pst, false, "turtle")
+    MahjongStats.recordLayoutWin(pst, "turtle", 100, 300)
+    MahjongStats.recordLayoutWin(pst, "turtle", 50, 120)
+    MahjongStats.recordLayoutWin(pst, "spider")
+    check(pst.layout_current_streaks.turtle == 2
+        and pst.layout_longest_streaks.turtle == 2,
+        "two turtle wins push the layout current/longest streak to 2")
+    check(pst.layout_current_streaks.spider == 1
+        and pst.layout_longest_streaks.spider == 1,
+        "an unscored spider win still bumps its streak")
+    check(pst.layout_total_times.turtle == 420,
+        "recordLayoutWin accumulates the turtle win time (420)")
+    check(pst.layout_total_times.spider == nil,
+        "an unscored win records no total time")
+    MahjongStats.recordLayoutWin(pst, "", 10, 60)
+    MahjongStats.recordLayoutWin(pst, nil, 10, 60)
+    check(pst.layout_total_times.turtle == 420 and pst.layout_current_streaks.turtle == 2,
+        "recordLayoutWin ignores nil/empty layout ids for streak/time")
+    local pst2 = MahjongStats.defaults()
+    pst2.layout_current_streaks = nil
+    pst2.layout_longest_streaks = nil
+    pst2.layout_total_times = nil
+    MahjongStats.recordLayoutWin(pst2, "turtle", 50, 42)
+    check(pst2.layout_current_streaks ~= nil and pst2.layout_current_streaks.turtle == 1
+        and pst2.layout_longest_streaks ~= nil and pst2.layout_longest_streaks.turtle == 1
+        and pst2.layout_total_times ~= nil and pst2.layout_total_times.turtle == 42,
+        "recordLayoutWin recreates missing per-layout streak/time maps")
+
+    -- load() sanitizes the four new per-layout maps like the existing ones;
+    -- pre-feature records default to empty maps and never mutate `saved`.
+    local pl_san = MahjongStats.load{
+        layout_played = { turtle = 3, spider = "x", [5] = 2 },
+        layout_current_streaks = { turtle = 2, spider = -1 },
+        layout_longest_streaks = { turtle = 4, spider = "y" },
+        layout_total_times = { turtle = 600, spider = -1, [5] = 99 },
+    }
+    check(pl_san.layout_played.turtle == 3 and pl_san.layout_played.spider == nil
+        and pl_san.layout_played[5] == nil,
+        "load() keeps valid layout_played entries and drops garbage")
+    check(pl_san.layout_current_streaks.turtle == 2 and pl_san.layout_current_streaks.spider == nil,
+        "load() drops negative layout streaks")
+    check(pl_san.layout_longest_streaks.turtle == 4 and pl_san.layout_longest_streaks.spider == nil,
+        "load() drops non-number layout streaks")
+    check(pl_san.layout_total_times.turtle == 600 and pl_san.layout_total_times.spider == nil
+        and pl_san.layout_total_times[5] == nil,
+        "load() keeps valid layout_total_times entries and drops garbage")
+    local old_pl = MahjongStats.load{ games_played = 5, layout_wins = { turtle = 1 } }
+    check(next(old_pl.layout_played) == nil and next(old_pl.layout_current_streaks) == nil
+        and next(old_pl.layout_longest_streaks) == nil and next(old_pl.layout_total_times) == nil,
+        "load() defaults the four new maps for pre-feature records")
+    MahjongStats.startGame(old_pl, false, "turtle")
+    MahjongStats.recordLayoutWin(old_pl, "turtle", 77, 55)
+    check(old_pl.layout_played.turtle == 1 and old_pl.layout_total_times.turtle == 55,
+        "a pre-feature record gains per-layout counters after its first game/win")
 
     io.write("All self-tests passed.\n")
     return true

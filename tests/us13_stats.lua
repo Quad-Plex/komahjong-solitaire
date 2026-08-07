@@ -1,6 +1,9 @@
 -- US-13 stats-screen suite: the dedicated Stats button on the HUD opens a
--- floating card listing the lifetime stats; Reset zeroes them after a confirm;
--- tap-outside / the close X close the card and resume the paused timer.
+-- floating card showing the lifetime stats in two columns — a "Global" column
+-- (the all-layouts record) and a "<layout>" column (the currently played
+-- layout's per-layout record). Reset zeroes both columns (only after a
+-- confirm); tap-outside / the close X close the card and resume the paused
+-- timer.
 --
 -- Checks:
 --   * The HudBar exposes the new `left_icons` API (one button per entry) while
@@ -9,10 +12,11 @@
 --     the Stats button opens the stats card;
 --   * openStats pauses the timer loop (like openSettings) and any close
 --     resumes it;
---   * The card lists every persisted lifetime stat (games/wins/rate/bests/
---     average time/streaks);
---   * Reset zeroes the record only after a ConfirmBox, persists it, and
---     re-renders the card;
+--   * The card shows two columns: a Global column (games/wins/rate/bests/
+--     average time/streaks) and a <layout> column mirroring the same rows from
+--     the per-layout maps;
+--   * Reset clears the whole record (global + per-layout maps) only after a
+--     ConfirmBox, persists it, and re-renders both columns;
 --   * The card is a floating transparent-window pattern with an onShow
 --     panel-region refresh (like the settings dialog).
 
@@ -126,6 +130,15 @@ mj.stats.best_time = 95
 mj.stats.total_time = 480
 mj.stats.current_streak = 2
 mj.stats.longest_streak = 3
+-- Per-layout data for the <layout> (Turtle) column. Deliberately distinct from
+-- the global numbers so the two columns read independently.
+mj.stats.layout_played = { turtle = 6 }
+mj.stats.layout_wins = { turtle = 3 }
+mj.stats.layout_highscores = { turtle = 300 }
+mj.stats.layout_best_times = { turtle = 200 }
+mj.stats.layout_total_times = { turtle = 240 }
+mj.stats.layout_current_streaks = { turtle = 2 }
+mj.stats.layout_longest_streaks = { turtle = 3 }
 mj:saveStats()
 
 -- Close the card and reopen it so it snapshots the new record.
@@ -133,6 +146,18 @@ dlg:onTapClose(nil, { pos = { notIntersectWith = function() return true end } })
 expect(mj._timer_running == true, "tap-outside close resumes the timer loop")
 mj.status_bar._left_buttons[2].callback()
 dlg = ctx.window_stack[#ctx.window_stack].widget
+
+-- ---- Two columns: Global (left) and <layout name> (right) ----------------------
+
+-- dlg[1] = center container, [1] = panel (Frame), [1] of that = the content
+-- VerticalGroup; its child at [3] is the HorizontalGroup holding the two
+-- columns ({global_col, span, map_col}).
+local global_col = dlg[1][1][1][3][1]
+local map_col = dlg[1][1][1][3][3]
+expect(global_col ~= nil and map_col ~= nil and dlg[1][1][1][3][2] ~= nil,
+    "the panel holds a two-column HorizontalGroup (col, gap, col)")
+expect(global_col[1][2].text == "Global", "the left column is headed 'Global'")
+expect(map_col[1][2].text == "Turtle", "the right column is headed by the layout name")
 
 expect(dlg._values.played.text == "10", "card shows Games played")
 expect(dlg._values.won.text == "4", "card shows Games won")
@@ -142,6 +167,16 @@ expect(dlg._values.best_time.text == "01:35", "card shows Best time (95 s)")
 expect(dlg._values.avg_time.text == "02:00", "card shows Average time per win (480/4)")
 expect(dlg._values.current_streak.text == "2", "card shows Current streak")
 expect(dlg._values.longest_streak.text == "3", "card shows Longest streak")
+
+-- The Turtle column mirrors the same rows from the per-layout maps.
+expect(dlg._values.map_played.text == "6", "map column shows Games played on the layout")
+expect(dlg._values.map_won.text == "3", "map column shows Games won on the layout")
+expect(dlg._values.map_win_rate.text == "50%", "map column shows the win rate (3/6)")
+expect(dlg._values.map_best_score.text == "300", "map column shows Best score on the layout")
+expect(dlg._values.map_best_time.text == "03:20", "map column shows Best time (200 s)")
+expect(dlg._values.map_avg_time.text == "01:20", "map column shows Average time per win (240/3)")
+expect(dlg._values.map_current_streak.text == "2", "map column shows Current streak on the layout")
+expect(dlg._values.map_longest_streak.text == "3", "map column shows Longest streak on the layout")
 
 -- ---- Floating-card structure + onShow refresh ----------------------------------
 
@@ -187,6 +222,12 @@ expect(mj.stats.games_played == 0 and mj.stats.games_won == 0
         and mj.stats.total_time == 0 and mj.stats.current_streak == 0
         and mj.stats.longest_streak == 0,
     "confirming Reset zeroes the record back to defaults")
+expect(next(mj.stats.layout_played) == nil and next(mj.stats.layout_wins) == nil
+        and next(mj.stats.layout_highscores) == nil and next(mj.stats.layout_best_times) == nil
+        and next(mj.stats.layout_total_times) == nil
+        and next(mj.stats.layout_current_streaks) == nil
+        and next(mj.stats.layout_longest_streaks) == nil,
+    "confirming Reset wipes the per-layout maps too")
 expect(store.stats ~= nil and store.stats.games_played == 0
         and store.stats.games_won == 0,
     "Reset persists the zeroed record")
@@ -196,6 +237,12 @@ expect(dlg._values.played.text == "0" and dlg._values.won.text == "0"
 expect(dlg._values.best_time.text == "—" and dlg._values.avg_time.text == "—"
         and dlg._values.win_rate.text == "—",
     "no best/average/rate yet: the card shows dashes")
+expect(dlg._values.map_played.text == "0" and dlg._values.map_won.text == "0"
+        and dlg._values.map_best_score.text == "0",
+    "the map column re-renders its zeroed counts")
+expect(dlg._values.map_best_time.text == "—" and dlg._values.map_avg_time.text == "—"
+        and dlg._values.map_win_rate.text == "—",
+    "the map column shows dashes where nothing is recorded")
 
 -- ---- Tap-outside and the close X both close the card ---------------------------
 

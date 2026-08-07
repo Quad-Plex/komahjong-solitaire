@@ -333,7 +333,7 @@ end
 -- cleared for the new game afterwards, along with the auto-solve flag.
 function Mahjong:noteNewGame()
     if self.stats then
-        MahjongStats.startGame(self.stats, self.game_won)
+        MahjongStats.startGame(self.stats, self.game_won, self.layout)
         self:saveStats()
     end
     self.game_won = false
