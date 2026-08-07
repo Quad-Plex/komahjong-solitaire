@@ -753,8 +753,10 @@ def avatar_sigils():
 
 
 def season_body(n):
-    # Spring = Water, Summer = Fire, Autumn = Air, Winter = Earth.
-    elements = ("water", "fire", "air", "earth")
+    # Spring = Water, Summer = Earth, Autumn = Fire, Winter = Air.
+    # The source sheet's water/air panel labels are reversed relative to the
+    # visible sigils, so use the keys that produce the requested visual order.
+    elements = ("air", "earth", "fire", "water")
     return avatar_sigils()[elements[n - 1]] + index_pips(n)
 
 
