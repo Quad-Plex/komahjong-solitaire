@@ -77,6 +77,7 @@ Design goals (locked in by the 2.5D redesign + the v2 traditional-art pass):
 import argparse
 import math
 import os
+import xml.etree.ElementTree as ET
 
 # mahjong.koplugin/icons, resolved relative to this script (tools/).
 ICONS_DIR = os.path.normpath(os.path.join(
@@ -682,122 +683,79 @@ def flower_body(n):
 
 
 # ---------------------------------------------------------------------------
-# SEASONS (1..4) — a non-overlapping "sky/weather" family so the seasons
-# can't be confused with the botanical FLOWERS set next door. The four
-# silhouettes are all plainly non-plant and plainly distinct from each other:
-#   1 = Spring  → a cloud with three raindrops (spring showers)
-#   2 = Summer  → a sun with rays  (kept)
-#   3 = Autumn  → one large five-lobed maple leaf  (autumn foliage; distinct
-#                 from a sun/star/cloud by its solid serrated silhouette +
-#                 stem), replacing the old crescent moon
-#   4 = Winter  → a snowflake  (kept)
-# The matched index pips at the bottom stay, so the match rule reads from art.
-def spring_motif():
-    """Spring showers: a puffy cloud with three falling droplets beneath."""
-    p = []
-    # Cloud body: one flat base, a few bumps along the top. A single filled
-    # black blob built from overlapping circles + a base rect.
-    base_y = 54
-    p.append(rect(24, base_y, 52, 14, 2, INK_BLACK))
-    for bx, by, r in [(34, 50, 13), (50, 44, 16), (66, 50, 13),
-                      (44, 56, 8), (60, 56, 8)]:
-        p.append(circle(bx, by, r, INK_BLACK))
-    # A faint INK_DARK "underside" stripe for the flat base (the rain band).
-    p.append(rect(24, base_y + 10, 52, 4, 1, INK_DARK))
-    # Three raindrops as small filled teardrops below the cloud.
-    for dx in (36, 50, 64):
-        p.append(fill_path(
-            f"M{fnum(dx)} {fnum(74)} "
-            f"Q{fnum(dx - 4)} {fnum(86)} {fnum(dx)} {fnum(92)} "
-            f"Q{fnum(dx + 4)} {fnum(86)} {fnum(dx)} {fnum(74)} Z", INK_BLACK))
-    return "".join(p)
-
-
-def summer_motif():
-    p = []
-    cx, cy = 50, 56
-    # 16 rays around the sun.
-    for i in range(16):
-        a = math.radians(i * 22.5)
-        p.append(path(
-            f"M{fnum(cx + math.cos(a)*22)} {fnum(cy + math.sin(a)*22)} "
-            f"L{fnum(cx + math.cos(a)*42)} {fnum(cy + math.sin(a)*42)}", INK_BLACK, 4))
-    # Sun disc: outline + INK_DARK inner.
-    p.append(circle(cx, cy, 20, INK_BLACK))
-    p.append(circle(cx, cy, 14, INK_DARK))
-    p.append(circle(cx, cy, 6, FACE_COLOR))
-    return "".join(p)
-
-
-def autumn_motif():
-    """Autumn: a large, unmistakable maple leaf with a serrated silhouette."""
-    p = []
-    # A Canadian-maple-style outline: tall central lobe, two stepped side
-    # lobes, deep notches, and a pointed base. The small extra points on each
-    # lobe keep the silhouette recognizably maple-like at tile size.
-    p.append(fill_path(
-        "M50 4 "
-        "L55 25 L64 18 L62 34 "       # upper-right lobe and notch
-        "L72 27 L69 43 "               # middle-right lobe and notch
-        "L91 36 L77 55 "               # broad right lobe
-        "L91 62 L70 69 "               # lower-right notch and point
-        "L76 86 L56 77 "               # lower-right serration
-        "L50 94 "                       # pointed base
-        "L44 77 L24 86 "               # lower-left serration
-        "L30 69 L9 62 "                # lower-left point and notch
-        "L23 55 L9 36 "                # broad left lobe
-        "L31 43 L28 27 "               # middle-left lobe and notch
-        "L38 34 L36 18 "               # upper-left lobe and notch
-        "L45 25 Z", INK_BLACK))
-    # Central stem, visible below the pointed leaf base.
-    p.append(fill_path("M46 88 L47 101 L50 106 L53 101 L54 88 Z", INK_BLACK))
-    # White negative-space veins reinforce the leaf structure at thumbnail
-    # size; dark-gray veins disappear on an e-ink preview against this black
-    # silhouette.
-    base_x, base_y = 50, 88
-    for tx, ty in [(50, 10), (64, 25), (84, 42), (68, 64),
-                   (36, 25), (16, 42), (32, 64)]:
-        p.append(path(f"M{fnum(base_x)} {fnum(base_y)} "
-                      f"L{fnum(tx)} {fnum(ty)}", FACE_COLOR, 2.2))
-    return "".join(p)
-
-
-def winter_motif():
-    p = []
-    cx, cy = 50, 54
-    # Six arms.
-    for i in range(6):
-        a = math.radians(i * 60)
-        ex = cx + math.cos(a) * 44
-        ey = cy + math.sin(a) * 44
-        p.append(path(f"M{fnum(cx)} {fnum(cy)} L{fnum(ex)} {fnum(ey)}", INK_BLACK, 5))
-        # Two side-branches near the tip.
-        for off in (20, 32):
-            bx = cx + math.cos(a) * off
-            by = cy + math.sin(a) * off
-            perp = a + math.pi / 2
-            p.append(path(
-                f"M{fnum(bx)} {fnum(by)} "
-                f"L{fnum(bx + math.cos(perp)*10 + math.cos(a)*6)} "
-                f"{fnum(by + math.sin(perp)*10 + math.sin(a)*6)}", INK_BLACK, 3))
-            p.append(path(
-                f"M{fnum(bx)} {fnum(by)} "
-                f"L{fnum(bx - math.cos(perp)*10 + math.cos(a)*6)} "
-                f"{fnum(by - math.sin(perp)*10 + math.sin(a)*6)}", INK_BLACK, 3))
-    p.append(circle(cx, cy, 5, INK_BLACK))
-    return "".join(p)
-
-
-_SEASON_ART = {
-    1: spring_motif,
-    2: summer_motif,
-    3: autumn_motif,
-    4: winter_motif,
+# SEASONS (1..4) — Avatar's four elemental sigils, extracted from the source
+# SVG in the project root. The source is a four-panel sheet: top-left Fire,
+# top-right Water, bottom-left Earth, bottom-right Air. Keeping extraction here
+# makes the generated icons use the actual source paths rather than a redraw.
+AVATAR_SOURCE = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..",
+    "1670152831Avatar the last airbender all the four elements.svg"))
+AVATAR_PANEL = 3733.0
+AVATAR_MARGIN = 10.0
+AVATAR_STROKE = 90.0
+# The source panels are not optically centered: their sigils sit down and to
+# the right, especially the broad Air and Earth marks. These small corrections
+# center the rendered ink within the 100x140 face after normalization.
+AVATAR_OFFSETS = {
+    "fire": (-7.0, -10.5),
+    "water": (-6.25, -10.25),
+    "earth": (-7.0, -10.0),
+    "air": (-7.0, -9.25),
 }
+AVATAR_PANELS = {
+    "fire": (4900.0, 9583.0),
+    "water": (11700.0, 9583.0),
+    "earth": (4900.0, 16383.0),
+    "air": (11700.0, 16383.0),
+}
+_AVATAR_SIGILS = None
+
+
+def avatar_sigils():
+    """Extract the black sigil paths and normalize them to tile coordinates."""
+    global _AVATAR_SIGILS
+    if _AVATAR_SIGILS is not None:
+        return _AVATAR_SIGILS
+    if not os.path.exists(AVATAR_SOURCE):
+        raise RuntimeError("Avatar source SVG is missing: " + AVATAR_SOURCE)
+    root = ET.parse(AVATAR_SOURCE).getroot()
+    ns = "{http://www.w3.org/2000/svg}"
+    paths = [e.attrib["d"] for e in root.iter(ns + "path")
+             if e.attrib.get("class") == "fil3" and e.attrib.get("d")]
+    # The source has two Fire paths, three Water paths, two Earth paths, and
+    # one Air path, in panel order.
+    groups = {
+        "fire": paths[0:2], "water": paths[2:5],
+        "earth": paths[5:7], "air": paths[7:8],
+    }
+    # Leave a clear face-border margin. The source artwork was composed on
+    # colored panels and some sigils reach the panel edge; mapping the whole
+    # panel to the whole face lets those paths spill into the bevel band.
+    scale = (100.0 - 2 * AVATAR_MARGIN) / AVATAR_PANEL
+    result = {}
+    for name, source_paths in groups.items():
+        ox, oy = AVATAR_PANELS[name]
+        dx, dy = AVATAR_OFFSETS[name]
+        transform = "translate({:.5f},{:.5f}) scale({:.5f})".format(
+            AVATAR_MARGIN - ox * scale + dx,
+            AVATAR_MARGIN - oy * scale + dy,
+            scale)
+        result[name] = "".join(
+            '<path d="{}" fill="{}" stroke="{}" stroke-width="{}" '
+            'stroke-linejoin="round" stroke-linecap="round"/>'.format(
+                d, INK_BLACK, INK_BLACK, AVATAR_STROKE)
+            for d in source_paths
+        )
+        result[name] = '<g transform="{}">{}</g>'.format(
+            transform, result[name])
+    _AVATAR_SIGILS = result
+    return result
 
 
 def season_body(n):
-    return _SEASON_ART[n]() + index_pips(n)
+    # Spring = Water, Summer = Fire, Autumn = Air, Winter = Earth.
+    elements = ("water", "fire", "air", "earth")
+    return avatar_sigils()[elements[n - 1]] + index_pips(n)
 
 
 # Bevel variants per kind, in the order the board expects (see
