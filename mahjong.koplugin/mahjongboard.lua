@@ -222,7 +222,7 @@ end
 -- Refreshes the board from the current game state (US-07+ hooks here).
 function Board:updateBoard()
     self:rebuildTiles()
-    UIManager:setDirty("all", "ui")
+    self:requestRefresh()
 end
 
 -- Incremental removal -------------------------------------------------------
@@ -291,12 +291,23 @@ function Board:refreshWestNorthNeighbours(x, y, layer)
     end
 end
 
+local function refreshRectsForTile(x, y, layer)
+    local rects = { { x = x, y = y, layer = layer } }
+    for dy = -0.5, 0.5, 0.5 do
+        rects[#rects + 1] = { x = x - 1, y = y + dy, layer = layer }
+    end
+    for dx = -0.5, 0.5, 0.5 do
+        rects[#rects + 1] = { x = x + dx, y = y - 1, layer = layer }
+    end
+    return rects
+end
+
 -- Removes a single rendered tile. Returns true if it was present. Any overlay
 -- sitting on the tile is dropped too. Repaints the board.
 function Board:removeTile(x, y, layer)
     if not self:dropTileWidget(x, y, layer) then return false end
     self:refreshWestNorthNeighbours(x, y, layer)
-    self:syncOverlapGroup()
+    self:syncOverlapGroup(refreshRectsForTile(x, y, layer))
     return true
 end
 
@@ -331,7 +342,39 @@ end
 
 -- Synchronizes the OverlapGroup children with tiles_by_layer and overlays,
 -- maintaining correct z-order (layers 0-4 then overlays). Repaints.
-function Board:syncOverlapGroup()
+-- Board is nested inside the full-screen game window, so "all" is still
+-- needed to flag the parent for repaint. The region keeps the e-ink refresh
+-- limited to the tiles affected by this mutation.
+function Board:requestRefresh(rects)
+    local region
+    if rects and #rects > 0 then
+        local min_x, min_y = math.huge, math.huge
+        local max_x, max_y = -math.huge, -math.huge
+        for _, r in ipairs(rects) do
+            local x, y = self:tilePos(r.x, r.y, r.layer)
+            min_x = math.min(min_x, x)
+            min_y = math.min(min_y, y)
+            max_x = math.max(max_x, x + self.tile_w)
+            max_y = math.max(max_y, y + self.tile_h)
+        end
+        region = Geom:new{
+            x = (self.refresh_origin_x or 0) + min_x,
+            y = (self.refresh_origin_y or 0) + min_y,
+            w = max_x - min_x,
+            h = max_y - min_y,
+        }
+    else
+        region = Geom:new{
+            x = self.refresh_origin_x or 0,
+            y = self.refresh_origin_y or 0,
+            w = self.width,
+            h = self.height,
+        }
+    end
+    UIManager:setDirty("all", "ui", region)
+end
+
+function Board:syncOverlapGroup(refresh_rects)
     if not self.overlap then return end
     -- Clear current children array (do NOT free them, they are in maps)
     for i = #self.overlap, 1, -1 do
@@ -351,7 +394,7 @@ function Board:syncOverlapGroup()
     for _, ov in pairs(self.overlays) do
         self.overlap[#self.overlap + 1] = ov
     end
-    UIManager:setDirty("all", "ui")
+    self:requestRefresh(refresh_rects)
 end
 
 -- Incremental addition ------------------------------------------------------
@@ -381,7 +424,9 @@ function Board:addTile(x, y, layer, kind, defer_sync)
     -- Update same-layer neighbors whose bevels might now be occluded.
     self:refreshWestNorthNeighbours(x, y, layer)
 
-    if not defer_sync then self:syncOverlapGroup() end
+    if not defer_sync then
+        self:syncOverlapGroup(refreshRectsForTile(x, y, layer))
+    end
     return true
 end
 
@@ -392,7 +437,11 @@ function Board:addPair(a, b)
     local rb = self:addTile(b.x, b.y, b.layer, b.kind, true)
     if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
     if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
-    self:syncOverlapGroup()
+    local rects = refreshRectsForTile(a.x, a.y, a.layer)
+    for _, r in ipairs(refreshRectsForTile(b.x, b.y, b.layer)) do
+        rects[#rects + 1] = r
+    end
+    self:syncOverlapGroup(rects)
     return ra and rb
 end
 
@@ -411,7 +460,11 @@ function Board:removePair(a, b)
     local rb = self:dropTileWidget(b.x, b.y, b.layer)
     if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
     if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
-    self:syncOverlapGroup()
+    local rects = refreshRectsForTile(a.x, a.y, a.layer)
+    for _, r in ipairs(refreshRectsForTile(b.x, b.y, b.layer)) do
+        rects[#rects + 1] = r
+    end
+    self:syncOverlapGroup(rects)
     return ra and rb
 end
 
@@ -439,7 +492,7 @@ function Board:setOverlay(x, y, layer, icon)
     }
     self.overlays[key] = ov
     self.overlap[#self.overlap + 1] = ov
-    UIManager:setDirty("all", "ui")
+    self:requestRefresh({ { x = x, y = y, layer = layer } })
     return true
 end
 
@@ -457,13 +510,16 @@ function Board:clearOverlay(x, y, layer)
         end
     end
     ov:free()
-    UIManager:setDirty("all", "ui")
+    self:requestRefresh({ { x = x, y = y, layer = layer } })
     return true
 end
 
 -- Removes every overlay (new game, shuffle, full rebuild). Repaints.
 function Board:clearAllOverlays()
+    local rects = {}
     for key, ov in pairs(self.overlays or {}) do
+        local x, y, layer = key:match("^([^,]+),([^,]+),([^,]+)$")
+        rects[#rects + 1] = { x = tonumber(x), y = tonumber(y), layer = tonumber(layer) }
         for i = #(self.overlap or {}), 1, -1 do
             if self.overlap[i] == ov then
                 table.remove(self.overlap, i)
@@ -473,7 +529,7 @@ function Board:clearAllOverlays()
         ov:free()
         self.overlays[key] = nil
     end
-    UIManager:setDirty("all", "ui")
+    self:requestRefresh(#rects > 0 and rects or nil)
 end
 
 -- Topmost tile whose rect contains the widget-local point, or nil.

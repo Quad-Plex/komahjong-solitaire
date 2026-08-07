@@ -713,7 +713,7 @@ function Mahjong:updateTimerDisplay()
     if not self.timer_text then return end
     self.timer_text:setText(MahjongLogic.formatElapsed(self:getElapsed()))
     if self.timer_text.resetLayout then self.timer_text:resetLayout() end
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty(self, "ui", self.timer_text.dimen)
 end
 
 -- Settings dialog (US-10) ---------------------------------------------------
@@ -871,6 +871,8 @@ function Mahjong:buildUILayout()
         layout_id = self.layout,
         width = self.full_width,
         height = board_h,
+        refresh_origin_x = 0,
+        refresh_origin_y = status_h,
         onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
     }
 
@@ -1226,13 +1228,13 @@ function Mahjong:showDeadBoardDialog()
     local has_undo = self.history and #self.history > 0
     local opts = {
         text = t("game.no_moves_dead"),
-        ok_text = t("toolbar.play_again"),
-        ok_callback = function()
-            self:startGameWithLayout(self.layout)
-        end,
-        cancel_text = t("toolbar.select_layout"),
-        cancel_callback = function()
-            self:showLayoutPicker()
+         ok_text = t("toolbar.play_again"),
+         ok_callback = function()
+             self:startGameWithLayout(self.layout)
+         end,
+         cancel_text = t("toolbar.select_layout"),
+         cancel_callback = function()
+             self:showLayoutPicker()
         end,
     }
     if has_undo then
@@ -1248,9 +1250,8 @@ function Mahjong:showDeadBoardDialog()
         } }
         opts.other_buttons_first = true
     end
-    -- Tap-outside only dismisses (the Close button still exits the game); a
-    -- stray tap next to the dialog must never close the app (see
-    -- dismissDialogOnTapOutside).
+    -- Tap-outside only dismisses; a stray tap next to the dialog must never
+    -- close the app (see dismissDialogOnTapOutside).
     UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new(opts)))
 end
 
@@ -1406,7 +1407,6 @@ function Mahjong:clearHint()
         local h = self._last_hint
         self.board_view:clearOverlay(h.a.x, h.a.y, h.a.layer)
         self.board_view:clearOverlay(h.b.x, h.b.y, h.b.layer)
-        UIManager:setDirty(self, "ui")
     end
     self._last_hint = nil
 end
@@ -1747,7 +1747,7 @@ function Mahjong:flashMessage(text, pulse)
     local seq = self._flash_seq
     if pulse and self.flash_text then
         self.flash_text.bold = true
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
         local elapsed = 0
         local tick
         tick = function()
@@ -1755,7 +1755,7 @@ function Mahjong:flashMessage(text, pulse)
             elapsed = elapsed + COMBO_PULSE_STEP_SECONDS
             if elapsed >= FLASH_TIMEOUT then return end
             self.flash_text.bold = not self.flash_text.bold
-            UIManager:setDirty(self, "ui")
+            UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
             UIManager:scheduleIn(COMBO_PULSE_STEP_SECONDS, tick)
         end
         UIManager:scheduleIn(COMBO_PULSE_STEP_SECONDS, tick)
@@ -1782,7 +1782,7 @@ function Mahjong:setFlash(text)
             -- `visible` field is ignored by KOReader widgets).
             self.flash_band_icon.hide = false
         end
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
     end
 end
 
@@ -1798,7 +1798,7 @@ function Mahjong:clearFlash()
         if self.flash_band_icon then
             self.flash_band_icon.hide = true
         end
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
     end
 end
 
@@ -1817,9 +1817,19 @@ function Mahjong:updateStatus()
     if self.shuffle_counter_badge then
         self.shuffle_counter_badge:setText(tostring(self.shuffles_used or 0))
     end
-    -- status_bar is a subwidget, so setDirty on it alone would not repaint;
-    -- flag the window-level widget as well (same pattern as the chess example).
-    UIManager:setDirty(self, "ui")
+    -- status_bar is a subwidget, so flag the window-level widget, but keep the
+    -- refresh regional. A regionless request here refreshes the entire game
+    -- window after every pair removal.
+    if self.status_bar.dimen then
+        UIManager:setDirty(self, "ui", self.status_bar.dimen)
+    else
+        UIManager:setDirty(self, "ui")
+    end
+    for _, badge in ipairs({ self.hint_counter_badge, self.shuffle_counter_badge }) do
+        if badge and badge.dimen then
+            UIManager:setDirty(self, "ui", badge.dimen)
+        end
+    end
 end
 
 function Mahjong:onCloseWidget()

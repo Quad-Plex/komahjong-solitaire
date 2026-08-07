@@ -119,8 +119,8 @@ function M.newContext()
             end
             if w and w.onCloseWidget then w:onCloseWidget() end
         end,
-        setDirty = function(_, widget, refreshtype)
-            ctx.dirty_calls[#ctx.dirty_calls + 1] = { widget = widget, refreshtype = refreshtype }
+        setDirty = function(_, widget, refreshtype, region)
+            ctx.dirty_calls[#ctx.dirty_calls + 1] = { widget = widget, refreshtype = refreshtype, region = region }
         end,
         scheduleIn = function(_, seconds, fn)
             ctx.scheduled[#ctx.scheduled + 1] = { seconds = seconds, fn = fn }
