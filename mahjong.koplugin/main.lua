@@ -64,6 +64,12 @@ local ICON_DIR = "mahjong"
 -- blocked") stays visible in the band between the board and the toolbar.
 local FLASH_TIMEOUT = 2
 
+-- A dead board gets several cheap candidate shuffles instead of accepting the
+-- first random result.  Candidates are evaluated one per UI tick so the
+-- e-ink UI remains responsive while the best arrangement is selected.
+local DEAD_BOARD_SHUFFLE_CANDIDATES = 15
+local DEAD_BOARD_SHUFFLE_STEP_SECONDS = 0
+
 -- US-19: holding the Hint button for AUTO_SOLVE_HOLD_SECONDS starts an
 -- automated solver that plays matching pairs until the board is cleared;
 -- AUTO_SOLVE_STEP_SECONDS paces how fast the pairs are removed so each move
@@ -249,6 +255,8 @@ local Mahjong = FrameContainer:extend{
     flash_text = nil,  -- the band's TextWidget (feedback messages appear here)
     _auto_solve_token = 0, -- monotonic token invalidating pending auto-solve arms/steps
     _auto_solve_active = false, -- true while the long-press solver is running (US-19)
+    _shuffle_active = false, -- true while a dead-board candidate search is running
+    _shuffle_token = 0,
     _last_hint = nil, -- the last hinted pair { a, b }, so repeated Hint presses cycle (US-08);
                       -- also gates the once-per-session hint penalty (US-20); the highlight now
                       -- persists (no 2 s timeout) until the player acts (US-34)
@@ -1054,7 +1062,7 @@ function Mahjong:handleNoMoves()
         UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
             text = _("No moves left! Shuffle the board?"),
             ok_text = _("Shuffle"),
-            ok_callback = function() self:shuffleBoard(true) end,
+            ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
             cancel_text = _("Close"),
             cancel_callback = function()
                 UIManager:close(self, "full")
@@ -1308,12 +1316,76 @@ end
 -- re-shuffles that guarantee a playable board pass false, so they never
 -- re-charge. (The auto-solver's mid-solve shuffles call MahjongLogic directly
 -- and never charge — only the player pays.)
-function Mahjong:shuffleBoard(force, attempts, charge)
+function Mahjong:shuffleBestDeadBoard(attempts, charge)
+    if self._shuffle_active then return end
+    self._shuffle_active = true
+    self._shuffle_token = self._shuffle_token + 1
+    local token = self._shuffle_token
+    local best_board, best_moves = nil, -1
+    local candidate = 0
+
+    local copy_board = function(source)
+        local copy = {}
+        for key, kind in pairs(source) do copy[key] = kind end
+        return copy
+    end
+
+    local finish
+    finish = function()
+        if self._shuffle_token ~= token or not self._shuffle_active then return end
+        self._shuffle_active = false
+        if best_board then
+            for key, kind in pairs(best_board) do self.board[key] = kind end
+        end
+        self:clearSelection()
+        self:clearHint()
+        if charge then
+            self.shuffles_used = (self.shuffles_used or 0) + 1
+            self.score = MahjongLogic.applyPenalty(self.score, MahjongLogic.SHUFFLE_PENALTY)
+        end
+        self.board_view:updateBoard()
+        self:updateStatus()
+        self:updateTimerDisplay()
+        self:saveGameState()
+        if not MahjongLogic.hasMoves(self.board) then
+            if attempts > 0 then
+                self:shuffleBestDeadBoard(attempts - 1, false)
+            elseif MahjongLogic.tileCount(self.board) > 0 then
+                self:showDeadBoardDialog()
+            end
+        end
+    end
+
+    local evaluate
+    evaluate = function()
+        if self._shuffle_token ~= token or not self._shuffle_active then return end
+        candidate = candidate + 1
+        local shuffled = copy_board(self.board)
+        MahjongLogic.shuffleBoard(shuffled)
+        local moves = MahjongLogic.countFreePairs(shuffled, self.layout)
+        if moves > best_moves then
+            best_moves = moves
+            best_board = shuffled
+        end
+        if candidate >= DEAD_BOARD_SHUFFLE_CANDIDATES then
+            finish()
+        else
+            UIManager:scheduleIn(DEAD_BOARD_SHUFFLE_STEP_SECONDS, evaluate)
+        end
+    end
+    UIManager:scheduleIn(DEAD_BOARD_SHUFFLE_STEP_SECONDS, evaluate)
+end
+
+function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
     -- US-33: the Shuffle button is dead while the auto-solver runs (the solver
     -- shuffles via MahjongLogic.shuffleBoard directly when it needs to).
-    if self._auto_solve_active then return end
+    if self._auto_solve_active or self._shuffle_active then return end
     attempts = attempts or 10
     if charge == nil then charge = true end
+    if force and optimize_dead_board then
+        self:shuffleBestDeadBoard(attempts, charge)
+        return
+    end
     local do_shuffle = function()
         MahjongLogic.shuffleBoard(self.board)
         self:clearSelection()
@@ -1531,6 +1603,10 @@ function Mahjong:updateStatus()
 end
 
 function Mahjong:onCloseWidget()
+    -- Invalidate any pending dead-board candidate callbacks before releasing
+    -- the board; scheduled UI work must never mutate a closed game.
+    self._shuffle_token = self._shuffle_token + 1
+    self._shuffle_active = false
     -- US-19: cancel a pending long-press arm / running solve (bumps the token
     -- so no stale step can fire into a closed widget).
     self:stopAutoSolve()

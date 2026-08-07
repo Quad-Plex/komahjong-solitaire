@@ -486,7 +486,10 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    Penalties are NOT in the pair history, so `undo()` subtracts only the pair's points (floored)
    and never refunds a penalty. Per-game `hints_used` / `shuffles_used` counters are persisted in
    the game state (`serializeGameState`/`deserializeGameState` fields `hints`/`shuffles`,
-   absent = 0) and shown in the win summary when non-zero.
+   absent = 0) and shown in the win summary when non-zero. A no-moves shuffle
+   evaluates 15 copied-board candidates asynchronously, selects the one with
+   the most matching free pairs, then charges the user penalty once; bounded
+   retries repeat the search without re-charging.
 10. **Dirtying:** a nested subwidget's `setDirty` alone never repaints (US-07's "zero effect"
     bug) — the window-level widget must be dirtied (`UIManager:setDirty(self, "ui")`), or use
     the `"all"` sentinel from inside the board.

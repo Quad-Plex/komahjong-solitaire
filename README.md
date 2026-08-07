@@ -44,7 +44,8 @@ Features:
 - **Undo / Hint / Shuffle:** undo restores the pair, score, and chain state; a
   hint highlights a matching free pair (long-press the Hint button to
   **auto-solve** the whole board, US-19/33); shuffle is confirm-gated and
-  dead boards offer it with bounded auto-repeat.
+  dead boards evaluate 15 background shuffles and keep the arrangement with
+  the most available matching free pairs, with bounded auto-repeat if needed.
 - **Failure recognition (US-32):** a provably-dead board (e.g. the last two
   copies of a kind stacked in one column) triggers a loss dialog with
   New Game / Close / Undo instead of an endless shuffle loop; a retries-exhausted

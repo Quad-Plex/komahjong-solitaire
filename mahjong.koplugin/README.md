@@ -16,7 +16,7 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 - **Adaptive Sizing:** Automatically fits the board to your device's screen resolution.
 - **Core Gameplay:** Tap matching free tiles to remove them. Flowers match any flower, and seasons match any season.
 - **Scoring:** 10 points per pair, +5 chain bonus for consecutive same-group matches; hint and shuffle cost score penalties.
-- **Undo / Hint / Shuffle:** Undo restores a pair (and its score), a hint highlights a matching free pair, and dead boards offer a confirm-gated reshuffle with bounded auto-repeat.
+- **Undo / Hint / Shuffle:** Undo restores a pair (and its score), a hint highlights a matching free pair, and dead boards offer a confirm-gated reshuffle. No-moves recovery evaluates 15 candidate shuffles in the background and keeps the one with the most available matching free pairs, with bounded auto-repeat if all candidates remain stuck.
 - **Auto-solve:** Long-press the Hint button to let the solver clear the board automatically.
 - **Failure recognition:** Provably-dead boards (e.g. two identical tiles stacked) trigger a loss dialog instead of an endless shuffle loop.
 - **Pause:** Freeze the game clock behind a tap-consuming overlay.

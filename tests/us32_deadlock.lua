@@ -18,6 +18,8 @@
 --     pair with other free positions) offers the shuffle again, and the
 --     in-game no-moves path does the same (regression: the old stacked-kind
 --     check wrongly sent these to the loss dialog).
+--   * the no-moves shuffle evaluates 15 candidates asynchronously and commits
+--     the candidate with the most available matching free pairs.
 --
 -- The geometric closure check is skipped: on these grids "out of grid =
 -- open side" guarantees every position is eventually freeable, so
@@ -391,6 +393,52 @@ mj_ingame:handleNoMoves()
 expect(ctx.last_confirm ~= nil
         and lastConfirmText():find("Shuffle the board", 1, true) ~= nil,
     "in-game no-moves on a fixable board also offers the shuffle")
+
+-- ---- Dead-board shuffle picks the best of 15 background candidates ------------
+
+local mj_best = Mahjong:new()
+mj_best.board = boardWith{
+    {4,2,0,"b1"}, {4,2,1,"b1"},
+    {5,2,0,"c1"}, {5,2,1,"c1"},
+}
+mj_best.layout = "turtle"
+mj_best:buildUILayout()
+mj_best.shuffles_used = 0
+local before_best = {}
+for key, kind in pairs(mj_best.board) do before_best[key] = kind end
+
+local scheduled_best = {}
+local original_schedule = um.scheduleIn
+um.scheduleIn = function(_, seconds, fn)
+    scheduled_best[#scheduled_best + 1] = { seconds = seconds, fn = fn }
+end
+local original_shuffle = Logic.shuffleBoard
+local candidate_count = 0
+Logic.shuffleBoard = function(board)
+    candidate_count = candidate_count + 1
+    -- Candidate 2 puts the matching pair on the two free top tiles; all other
+    -- candidates remain dead, making the expected winner unambiguous.
+    if candidate_count == 2 then
+        board[pk(4,2,1)] = "b1"
+        board[pk(5,2,1)] = "b1"
+        board[pk(4,2,0)] = "c1"
+        board[pk(5,2,0)] = "c1"
+    end
+    return board
+end
+
+mj_best:shuffleBoard(true, 0, true, true)
+expect(candidate_count == 0 and before_best[pk(4,2,1)] == mj_best.board[pk(4,2,1)],
+    "dead-board candidate search starts in the background")
+for _ = 1, 15 do
+    local task = table.remove(scheduled_best, 1)
+    if task then task.fn() end
+end
+expect(candidate_count == 15, "dead-board shuffle evaluates exactly 15 candidates")
+expect(Logic.hasMoves(mj_best.board), "dead-board shuffle commits the candidate with most moves")
+expect(mj_best.shuffles_used == 1, "best-of-15 shuffle charges one penalty")
+Logic.shuffleBoard = original_shuffle
+um.scheduleIn = original_schedule
 
 if failures == 0 then
     print("\nALL US-32 DEADLOCK CHECKS PASSED")

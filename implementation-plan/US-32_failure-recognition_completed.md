@@ -60,7 +60,11 @@ At no-moves time (`checkGameState`, `showHint`'s dead branch, and the
    - **New Game** (→ layout picker)
    - **Close** (→ exit the game)
    - **Undo** (pops one move, restarts the timer; hidden when history is empty)
-3. **Not provably dead** → existing shuffle `ConfirmBox` (unchanged).
+3. **Not provably dead** → existing shuffle `ConfirmBox`; accepting it starts a
+   background search of 15 shuffled candidates, and commits the candidate with
+   the greatest number of matching free pairs. If every candidate is still
+   stuck, the bounded retry path repeats the search without charging another
+   shuffle penalty.
 
 > **Tap-outside fix (after shipping):** KOReader fires a ConfirmBox's
 > `cancel_callback` for a tap OUTSIDE the dialog too, so a stray tap next to
@@ -77,6 +81,16 @@ history is cleared, so Undo is naturally absent.
 
 The timer is paused while the loss dialog is up (matching the win-dialog
 pattern).
+
+## No-moves shuffle optimization (post-US-32)
+
+The no-moves recovery path does not mutate the live board during candidate
+evaluation. Each candidate is shuffled on a copy and scored with
+`MahjongLogic.countFreePairs`; one candidate is evaluated per scheduled UI tick
+to keep the KOReader UI responsive. After 15 candidates, the best candidate is
+committed, the board is rebuilt, and the user-initiated shuffle penalty is
+applied exactly once. A token invalidates pending callbacks when the game
+closes.
 
 ## Call sites (main.lua)
 
@@ -97,6 +111,7 @@ pattern).
   restores and resumes; New Game → picker; Close → exit; shuffle retries
   exhaust → dialog; auto-solve exhaust → dialog (no Undo); monkeypatched
   not-dead → shuffle prompt; reload of a saved 0-moves fixable board → shuffle
-  prompt (not the loss dialog).
+  prompt (not the loss dialog); no-moves recovery evaluates 15 candidates in
+  the background and commits the candidate with the most moves.
 - Existing tests (`us07_gameplay`, `us08_features`, `us18_penalties`) updated
   for the changed flow on boards that are now provably dead.
