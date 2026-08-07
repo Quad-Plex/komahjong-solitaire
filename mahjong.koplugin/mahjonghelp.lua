@@ -48,11 +48,17 @@ local function icon(name, size)
     return IconWidget:new{ icon = "mahjong/" .. name, width = size, height = size }
 end
 
-local function icon_group(names, description)
+local function icon_group(names, description, group_size)
+    group_size = group_size or #names
     local icons = {}
-    for _, name in ipairs(names) do
+    for i, name in ipairs(names) do
         icons[#icons + 1] = icon(name, 34)
-        icons[#icons + 1] = HorizontalSpan:new{ width = Screen:scaleBySize(4) }
+        if i < #names then
+            local boundary = i % group_size == 0
+            icons[#icons + 1] = HorizontalSpan:new{
+                width = Screen:scaleBySize(boundary and 12 or 1),
+            }
+        end
     end
     local group = { align = "left", HorizontalGroup:new(icons) }
     for line in t(description):gmatch("[^\n]+") do
@@ -201,7 +207,7 @@ function HelpWidget:buildPage()
             label("help.page_one_6", 12), label("help.page_one_7", 12),
             VerticalSpan:new{ width = gap },
             section_heading("help.tile_groups"),
-            icon_group({"c1", "d1", "b1"}, "help.characters"),
+            icon_group({"c1", "c2", "c3", "d1", "d2", "d3", "b1", "b2", "b3"}, "help.characters", 3),
             icon_group({"east", "south", "west", "north"}, "help.winds"),
             icon_group({"red", "green", "white"}, "help.dragons"),
             icon_group({"flower1", "flower2", "flower3", "flower4"}, "help.flowers"),
