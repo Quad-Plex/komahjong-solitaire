@@ -12,12 +12,17 @@
 --   current_streak   consecutive wins; reset to 0 by startGame() when the
 --                    previous game was abandoned (not won)
 --   longest_streak   all-time longest current_streak
---   layout_wins      map layout_id -> human-played wins on that layout (the
+--   layout_wins      layout per_id -> human-played wins on that layout (the
 --                    layout picker's trophy badge reads it; auto-solve wins
 --                    never count, matching games_won)
 --   layout_highscores map layout_id -> best winning score on that layout (the
 --                    layout picker's score chip reads it; auto-solve wins
 --                    never count, matching layout_wins)
+--   layout_best_times map layout_id -> fastest (fewest-seconds) winning time on
+--                    that layout (the layout picker's time chip reads it,
+--                    formatted mm:ss; auto-solve wins never count, matching
+--                    layout_wins). For a layout with no win yet it stays nil,
+--                    so a never-won layout shows no time chip.
 --
 -- UI code only reaches in through defaults() / load() / startGame() /
 -- recordWin() / recordLayoutWin(), so the record stays a plain serializable
@@ -40,6 +45,7 @@ function MahjongStats.defaults()
         longest_streak = 0,
         layout_wins = {},
         layout_highscores = {},
+        layout_best_times = {},
     }
 end
 
@@ -80,6 +86,17 @@ function MahjongStats.load(saved)
         for id, n in pairs(saved.layout_highscores) do
             if type(id) == "string" and type(n) == "number" and n >= 0 then
                 stats.layout_highscores[id] = n
+            end
+        end
+    end
+    -- layout_best_times is a per-id fastest-win-seconds map, sanitized like
+    -- layout_highscores (non-negative numbers; garbage keys become absent). Old
+    -- records saved before this map existed default to {}.
+    stats.layout_best_times = {}
+    if type(saved.layout_best_times) == "table" then
+        for id, n in pairs(saved.layout_best_times) do
+            if type(id) == "string" and type(n) == "number" and n >= 0 then
+                stats.layout_best_times[id] = n
             end
         end
     end
@@ -131,22 +148,40 @@ end
 -- Records a human-played win on a specific layout (the layout picker's trophy
 -- badge). Shares recordWin's gating: the caller must NOT reach here for
 -- auto-solve wins. Missing layout_wins maps degrade to zero wins. The optional
--- `score` also records the best winning score for the layout (the picker's
--- score chip); passing nil/omitting it keeps the win counter behavior so
--- existing two-argument callers stay valid.
-function MahjongStats.recordLayoutWin(stats, layout_id, score)
-    if type(layout_id) ~= "string" or layout_id == "" then return end
+-- `score` also records the layout's best winning score (the picker's score
+-- chip) and the optional `elapsed` (seconds) remembers the layout's fastest
+-- winning time (the picker's mm:ss time chip) — auto-solve wins never set
+-- either, matching the win counter. Passing nil/omitting any keeps the win
+-- counter behavior so existing two-argument callers stay valid. Returns
+-- (new_layout_score, new_layout_time) — whether THIS win set a new per-layout
+-- best for each, so the win summary can mark the just-set records.
+function MahjongStats.recordLayoutWin(stats, layout_id, score, elapsed)
+    if type(layout_id) ~= "string" or layout_id == "" then return false, false end
     if type(stats.layout_wins) ~= "table" then
         stats.layout_wins = {}
     end
     stats.layout_wins[layout_id] = (stats.layout_wins[layout_id] or 0) + 1
+    local new_layout_score, new_layout_time = false, false
     if type(score) == "number" and score >= 0 then
         if type(stats.layout_highscores) ~= "table" then
             stats.layout_highscores = {}
         end
-        stats.layout_highscores[layout_id] =
-            math.max(stats.layout_highscores[layout_id] or 0, score)
+        if score > (stats.layout_highscores[layout_id] or 0) then
+            stats.layout_highscores[layout_id] = score
+            new_layout_score = true
+        end
     end
+    if type(elapsed) == "number" and elapsed >= 0 then
+        if type(stats.layout_best_times) ~= "table" then
+            stats.layout_best_times = {}
+        end
+        local prev = stats.layout_best_times[layout_id]
+        if prev == nil or elapsed < prev then
+            stats.layout_best_times[layout_id] = elapsed
+            new_layout_time = true
+        end
+    end
+    return new_layout_score, new_layout_time
 end
 
 -- Self-tests ---------------------------------------------------------------
@@ -169,6 +204,8 @@ function MahjongStats.runSelfTests()
         "defaults() has an empty layout_wins map")
     check(next(s.layout_highscores) == nil,
         "defaults() has an empty layout_highscores map")
+    check(next(s.layout_best_times) == nil,
+        "defaults() has an empty layout_best_times map")
 
     -- startGame bumps games_played; it only breaks the streak when the
     -- previous game was abandoned (not won).
@@ -286,15 +323,20 @@ function MahjongStats.runSelfTests()
     -- layout_highscores: recordLayoutWin(id, score) records the best winning
     -- score per layout; a lower score never replaces the record, and a
     -- two-argument call (score omitted) still bumps the win counter without
-    -- touching the highscore.
+    -- touching the highscore. It returns which per-layout record THIS win set.
     local hs = MahjongStats.defaults()
-    MahjongStats.recordLayoutWin(hs, "turtle", 100)
+    local hs_s1, hs_t1 = MahjongStats.recordLayoutWin(hs, "turtle", 100)
     check(hs.layout_highscores.turtle == 100 and hs.layout_wins.turtle == 1,
         "recordLayoutWin(id, score) sets the layout highscore")
-    MahjongStats.recordLayoutWin(hs, "turtle", 50)
-    MahjongStats.recordLayoutWin(hs, "turtle", 150)
+    check(hs_s1 and not hs_t1,
+        "a scored win with no elapsed reports a new layout score, not time")
+    local hs_s2, hs_t2 = MahjongStats.recordLayoutWin(hs, "turtle", 50)
+    local hs_s3, hs_t3 = MahjongStats.recordLayoutWin(hs, "turtle", 150)
     check(hs.layout_highscores.turtle == 150,
         "a lower win never replaces the layout highscore")
+    check(not hs_s2 and not hs_t2 and hs.layout_wins.turtle == 3,
+        "a lower layout score is not a new layout best and sets no time")
+    check(hs_s3 and not hs_t3, "a higher layout score reports a new layout best")
     MahjongStats.recordLayoutWin(hs, "spider")
     check(hs.layout_highscores.spider == nil and hs.layout_wins.spider == 1,
         "a two-argument recordLayoutWin bumps wins but not the highscore")
@@ -320,6 +362,47 @@ function MahjongStats.runSelfTests()
     MahjongStats.recordLayoutWin(old_record, "turtle", 77)
     check(old_record.layout_highscores.turtle == 77,
         "a pre-feature record gains a highscore after its first scored win")
+
+    -- layout_best_times: recordLayoutWin(id, score, elapsed) keeps the fastest
+    -- winning time per layout (only ever decreasing); a missing/Slower/equal
+    -- time never replaces the record, and a call without elapsed touches
+    -- nothing. It returns whether THIS win set a new layout time record.
+    local bt = MahjongStats.defaults()
+    local bt_s1, bt_t1 = MahjongStats.recordLayoutWin(bt, "turtle", 100, 300)
+    check(bt.layout_best_times.turtle == 300,
+        "recordLayoutWin(id, score, elapsed) sets the layout best time")
+    check(bt_s1 and bt_t1, "a scored+timed win reports new layout score and time")
+    local bt_s2, bt_t2 = MahjongStats.recordLayoutWin(bt, "turtle", 100, 120)
+    local bt_s3, bt_t3 = MahjongStats.recordLayoutWin(bt, "turtle", 100, 200)
+    check(bt.layout_best_times.turtle == 120,
+        "a faster win replaces the layout best time; a slower one does not")
+    check(not bt_s2 and bt_t2 and not bt_s3 and not bt_t3,
+        "only the faster win reports a new layout time; an equal/lower score sets no record")
+    MahjongStats.recordLayoutWin(bt, "spider", 50)
+    check(bt.layout_best_times.spider == nil,
+        "a two-argument recordLayoutWin does not set a layout best time")
+    MahjongStats.recordLayoutWin(bt, "", 50, 60)
+    MahjongStats.recordLayoutWin(bt, nil, 50, 60)
+    check(bt.layout_best_times.turtle == 120,
+        "recordLayoutWin ignores nil/empty layout ids for best times")
+    local bt2 = MahjongStats.defaults()
+    bt2.layout_best_times = nil
+    MahjongStats.recordLayoutWin(bt2, "turtle", 100, 42)
+    check(bt2.layout_best_times ~= nil and bt2.layout_best_times.turtle == 42,
+        "recordLayoutWin recreates a missing layout_best_times map")
+    local bt3 = MahjongStats.load{ layout_best_times = { turtle = 300, spider = "x", ziggurat = -1, [5] = 2 } }
+    check(bt3.layout_best_times.turtle == 300 and bt3.layout_best_times.spider == nil
+        and bt3.layout_best_times.ziggurat == nil and bt3.layout_best_times[5] == nil,
+        "load() keeps valid layout_best_times entries and drops garbage")
+    check(next(MahjongStats.load(nil).layout_best_times) == nil
+        and next(MahjongStats.load("garbage").layout_best_times) == nil,
+        "load() defaults layout_best_times for non-table records")
+    local old_bt = MahjongStats.load{ games_played = 5, layout_wins = { turtle = 1 } }
+    check(old_bt.layout_best_times ~= nil and next(old_bt.layout_best_times) == nil,
+        "load() defaults layout_best_times for pre-feature records")
+    MahjongStats.recordLayoutWin(old_bt, "turtle", 100, 77)
+    check(old_bt.layout_best_times.turtle == 77,
+        "a pre-feature record gains a best time after its first timed win")
 
     io.write("All self-tests passed.\n")
     return true

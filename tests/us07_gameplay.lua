@@ -171,7 +171,7 @@ mj_win:handleTileTap(2, 2, 0)
 mj_win:handleTileTap(4, 2, 0)
 expect(Logic.isWin(mj_win.board), "removing the last pair empties the board")
 expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again"
-    and tostring(ctx.last_confirm.text):find("Score: 10", 1, true) ~= nil,
+    and ctx.summaryText(ctx.last_confirm):find("Score: 10", 1, true) ~= nil,
     "win dialog is shown with the final score")
 ctx.last_confirm.ok_callback()
 -- US-14: "Play again" shows the picker; pick Turtle to deal the fresh board.
@@ -215,7 +215,7 @@ mj_dead:handleTileTap(2, 2, 0)
 mj_dead:handleTileTap(4, 2, 0)
 expect(Logic.tileCount(mj_dead.board) == 2, "pair removed from the dead-board game")
 expect(ctx.last_confirm ~= nil
-        and tostring(ctx.last_confirm.text):find("can't help", 1, true) ~= nil,
+        and ctx.summaryText(ctx.last_confirm):find("can't help", 1, true) ~= nil,
     "dead board with odd parity shows the loss dialog (not the shuffle prompt)")
 expect(mj_dead.score == 10 and #mj_dead.history == 1,
     "the removal that dead-locked the board still counts")

@@ -191,7 +191,7 @@ ctx.last_confirm = nil
 mj5:handleTileTap(6, 2, 0)
 mj5:handleTileTap(8, 2, 0)
 expect(ctx.last_confirm ~= nil
-        and tostring(ctx.last_confirm.text):find("Score: 35", 1, true) ~= nil,
+        and ctx.summaryText(ctx.last_confirm):find("Score: 35", 1, true) ~= nil,
     "win dialog shows the chain/combo-inclusive score (35)")
 expect(mj5.score == 35, "score is 35 at the win")
 

@@ -607,7 +607,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     Seeded deals (self-tests, deterministic checks) are byte-identical — only the nil-rng
     path re-deals.
  18. **Per-layout highscore chip (US-31):** each picker card shows the layout's best
-    winning score as a plain-number chip in the thumbnail's **bottom-left corner**
+    winning score as a plain-number chip in the thumbnail's **bottom-right corner**
     (opposite the trophy badge's top-right), only when a human win has recorded one.
     The value comes from `MahjongStats.layout_highscores` (a `layout_id -> best score`
     map added to the stats record, `defaults()`/`load()`-sanitized — old pre-US-31
@@ -617,8 +617,38 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     passes `self.score` at win time inside the same human-win gate as `recordWin`
     (auto-solve never sets a highscore) and hands the picker `highscores_by_layout`; the
     chip is the thumbnail OverlapGroup's **third child** (badge stays child 2, so the
-    US-30 badge assertions hold) and is simply absent when there is no record.
- 19. **Tap-outside a dialog never closes the game.** The shuffle / dead-board / win
+    US-30 badge assertions hold) and is simply absent when there is no record. A **time
+    chip** extends this: the layout's fastest winning time (`MahjongStats.layout_best_times`,
+    a `layout_id -> seconds` map tracked by the same `recordLayoutWin(stats, id, score,
+    elapsed)`, sanitized `defaults()`/`load()` like the highscore map) renders as an
+    mm:ss chip in the thumbnail's **bottom-left corner** (opposite the score chip's
+    bottom-right), only when a human win has set one; `main.lua` hands the
+    picker `best_times_by_layout`. `recordLayoutWin` returns `(new_layout_score,
+    new_layout_time)` so the win summary can distinguish a **layout** best from an
+    **overall** best.
+ 19. **Win-summary headline variants (US-12+):** the confirm text's first line varies
+    with what the win achieved — a new **overall** best score and/or time headlines
+    "Congratulations! New (overall) best score/best time!", a record that only breaks
+    THIS layout's best headlines "…New best score/time **on this layout**!", and a win
+    that breaks nothing falls back to "You cleared the board!". The summary also lists
+    both the overall (all-layouts) bests and the current layout's bests (`<Layout> best
+    score/time`), each marked "(New best!)" only when that specific record fell.
+    Auto-solve wins (US-19/33) set none of these flags, so they always show the plain
+    fallback headline. **The dialog is a floating centered card
+    (`mahjongwinsummary.lua`), not a ConfirmBox**: a stock ConfirmBox centers a
+    wide headline text area, which leaves a narrow aligned label/value block
+    hugging the window's left edge. The card sizes itself to its content and is
+    centered (the pause/stats floating-card pattern), the headline is centered
+    via a CenterContainer over the content width, and each row is a
+    HorizontalGroup `{ leading right-align span, label, gap, value }` — labels
+    right-aligned to the widest one so every value TextWidget starts at the same
+    x, LEFT-aligned in its column. A full-screen tap is consumed (only the
+    buttons dismiss), matching the tap-outside contract. The widget exposes
+    `text` (headline), `win_rows` (`{label, value}` pairs), `ok_text`/
+    `cancel_text`, and `ok_callback`/`cancel_callback` so the headless harness
+    re-reads the summary with `ctx.summaryText` exactly as before; `_row_group`
+    holds the aligned-rows VerticalGroup for the structural check.
+ 20. **Tap-outside a dialog never closes the game.** The shuffle / dead-board / win
     ConfirmBoxes use `cancel_callback` to exit the game (the "Close" button's documented
     action), but KOReader fires `cancel_callback` for a tap OUTSIDE the dialog too — so a
     stray tap next to the dialog used to close the whole app (reported as a crash). These

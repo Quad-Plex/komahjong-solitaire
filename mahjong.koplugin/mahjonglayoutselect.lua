@@ -9,7 +9,8 @@
 -- offset so the 3D shape reads) centered by the tower's face center of mass
 -- (US-30), a circular-arrows badge with the layout's human-win count (US-30), a
 -- trophy score chip with the layout's best winning score (US-31, only shown once a win
--- exists), and the layout name underneath (dark black, US-30). Tapping a card
+-- exists), a time chip with the layout's best winning time (mm:ss, only
+-- shown once a best time exists), and the layout name underneath (dark black, US-30). Tapping a card
 -- shows a pressed state and, after a short deferred tick, deals a game on that
 -- layout (US-30).
 --
@@ -70,6 +71,7 @@ local LayoutSelect = InputContainer:extend{
     onHelp = nil,      -- function() — show gameplay help above this picker
     wins_by_layout = nil, -- map layout_id -> human wins (sync badge, US-30)
     highscores_by_layout = nil, -- map layout_id -> best winning score (score chip)
+    best_times_by_layout = nil, -- map layout_id -> fastest win seconds (time chip)
     _card_rects = nil, -- { { id=, x=, y=, w=, h=, card= } } in widget-local coords
     _pending_pick = nil, -- layout id of a tapped-but-not-yet-dealt card (US-30)
 }
@@ -263,6 +265,43 @@ local function layoutScoreChip(score)
     return chip
 end
 
+-- Builds the small time chip shown in the thumbnail's bottom-left corner: the
+-- layout's best winning time as an mm:ss string (no icon -- the value reads
+-- clearly on its own, and this chip sits in the corner OPPOSITE the trophy
+-- score chip so the two numbers aren't confused). The chip is a real
+-- FrameContainer with a fixed dimen + getSize override, so it can sit as a
+-- child of an OverlapGroup (see the OverlapGroup child rules in AGENTS.md).
+-- The caller sets `overlap_offset` to position it on the thumb and only adds
+-- the chip to a card when the layout has a best time.
+local function layoutTimeChip(time_str)
+    local pad = Screen:scaleBySize(3)
+    local text = TextWidget:new{
+        text = time_str,
+        padding = 0,
+        face = Font:getFace("smallinfofont", Screen:scaleBySize(14)),
+        fgcolor = Blitbuffer.COLOR_BLACK,
+    }
+    local text_size = text:getSize()
+    local chip_w = text_size.w + 2 * pad
+    local chip_h = text_size.h + 2 * pad
+    local chip = FrameContainer:new{
+        text,
+        padding = pad,
+        bordersize = 1,
+        radius = Screen:scaleBySize(4),
+        background = Blitbuffer.COLOR_WHITE,
+        color = Blitbuffer.COLOR_DARK_GRAY,
+        width = chip_w,
+        height = chip_h,
+        _padding_left = pad,
+        _padding_right = pad,
+        _padding_top = pad,
+        _padding_bottom = pad,
+    }
+    chip.getSize = function() return Geometry:new{ w = chip_w, h = chip_h } end
+    return chip
+end
+
 function LayoutSelect:init()
     self.dimen = Geometry:new{ x = 0, y = 0, w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
@@ -371,6 +410,19 @@ function LayoutSelect:init()
                         thumb_h - chip:getSize().h - badge_margin,
                     }
                     thumb_children[#thumb_children + 1] = chip
+                end
+                -- Best winning time chip in the thumbnail's bottom-left corner
+                -- (opposite the score chip's bottom-right -- the corner the
+                -- US-31 score chip left free). Only added when the layout has a
+                -- best time, rendered as mm:ss; a never-won layout shows no chip.
+                local best_time = (self.best_times_by_layout and self.best_times_by_layout[id]) or nil
+                if best_time then
+                    local tchip = layoutTimeChip(MahjongLogic.formatElapsed(best_time))
+                    tchip.overlap_offset = {
+                        badge_margin,
+                        thumb_h - tchip:getSize().h - badge_margin,
+                    }
+                    thumb_children[#thumb_children + 1] = tchip
                 end
                 local name = TextWidget:new{
                     text = MahjongLogic.layoutName(id),

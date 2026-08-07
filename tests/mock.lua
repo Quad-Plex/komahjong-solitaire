@@ -339,7 +339,7 @@ function M.newContext()
     -- module to another (e.g. main.lua requires hudbar) resolves regardless
     -- of the order tests call ctx.loadPlugin(). The module bodies only run
     -- when require()'d; ctx.loadPlugin() (below) loads the same file.
-    for _, name in ipairs({ "mahjonglayouts", "mahjonglogic", "mahjongstats", "mahjongboard", "hudbar", "mahjongsettings", "mahjongstatswidget", "mahjongpause", "mahjonghelp", "mahjonglayoutselect", "main" }) do
+    for _, name in ipairs({ "mahjonglayouts", "mahjonglogic", "mahjongstats", "mahjongboard", "hudbar", "mahjongsettings", "mahjongstatswidget", "mahjongpause", "mahjonghelp", "mahjonglayoutselect", "mahjongwinsummary", "main" }) do
         local path = M.ROOT .. "/mahjong.koplugin/" .. name .. ".lua"
         local chunk, err = loadfile(path)
         assert(chunk, "cannot preload plugin module " .. name .. ": " .. tostring(err))
@@ -363,6 +363,19 @@ function M.newContext()
             e.fn()
         end
         return total
+    end
+
+    -- Reconstructs a ConfirmBox's rendered summary text as a plain string for
+    -- assertions: its `text` (headline) plus, for every row in its `win_rows`
+    -- (label, value) pairs, "label: value". The win dialog sets `win_rows`
+    -- (US-12) so the aligned widget rows can be checked as substrings without
+    -- walking layout internals.
+    ctx.summaryText = function(confirm)
+        local lines = { tostring(confirm.text) }
+        for _, r in ipairs(confirm.win_rows or {}) do
+            lines[#lines + 1] = r.label .. ": " .. r.value
+        end
+        return table.concat(lines, "\n")
     end
 
     -- Load a REAL plugin module as a preload chunk and require() it.

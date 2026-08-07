@@ -179,6 +179,114 @@ local tcard4 = cardById(picker4, "turtle")
 expect(tcard4 == nil or cardScoreChip(tcard4) == nil,
     "an auto-solve win leaves no score chip on the picker card")
 
+-- ---- A best time shows as an mm:ss chip in the bottom-left corner --------------
+
+-- The time chip is the LAST child of the thumbnail OverlapGroup (children are
+-- thumb, badge, [score chip when a highscore exists], time chip), sitting in
+-- the bottom-LEFT corner, read from layout_best_times. It is the only child
+-- whose content is a bare TextWidget holding an mm:ss string — the badge and
+-- score chip wrap their content in a HorizontalGroup, so a scan can find it
+-- regardless of whether the score chip is present.
+local function isTimeChip(x)
+    return x ~= nil and x[1] ~= nil and type(x[1].text) == "string"
+        and x[1].text:match("^%d%d:%d%d$") ~= nil
+end
+local function cardTimeChip(c)
+    local ovl = c.card[1][1][2]
+    if isTimeChip(ovl[#ovl]) then return ovl[#ovl] end
+    return nil
+end
+
+-- Fresh stats: no layout has a best time, so no time chips anywhere.
+local pickerT0 = openPicker()
+for _, c in ipairs(pickerT0._card_rects) do
+    expect(cardTimeChip(c) == nil,
+        "no time chip on '" .. c.id .. "' when no layout has a best time")
+end
+
+-- A persisted best time shows on the right card only, formatted mm:ss.
+store.game = nil
+store.stats = Stats.load{ layout_best_times = { turtle = 125, spider = 90 } }
+local pickerT = openPicker()
+local tcardT = cardById(pickerT, "turtle")
+local scardT = cardById(pickerT, "spider")
+local ocardT = cardById(pickerT, "bridge")
+if tcardT then
+    local tchip = cardTimeChip(tcardT)
+    expect(tchip ~= nil and tchip[1] ~= nil and tchip[1].text == "02:05",
+        "Turtle's chip shows its best time (125s) as mm:ss (02:05)")
+    if tchip then
+        local thumb_h = tcardT.h - 28 - 2 * 6
+        expect(tchip.overlap_offset[1] == 4,
+            "the time chip sits in the thumbnail's bottom-left corner (left margin)")
+        expect(tchip.overlap_offset[2] == thumb_h - tchip:getSize().h - 4,
+            "the time chip sits at the thumbnail's bottom edge")
+    end
+end
+expect(scardT ~= nil and cardTimeChip(scardT) ~= nil
+    and cardTimeChip(scardT)[1].text == "01:30",
+    "Spider's chip shows its own best time (90s) as mm:ss (01:30)")
+expect(ocardT ~= nil and cardTimeChip(ocardT) == nil,
+    "a layout without a best time shows no time chip")
+
+-- A human win records the layout best time and the chip appears after Play again.
+store.game = nil
+store.stats = Stats.load(nil)
+local mjT = Mahjong:new()
+mjT.elapsed_base = 75
+store.stats.best_time = nil
+mjT.board = { [pk(2, 2, 0)] = "b1", [pk(4, 2, 0)] = "b1" }
+mjT.layout = "turtle"
+mjT.score = 0
+mjT.last_match_kind = nil
+mjT.pairs_matched = 0
+mjT.history = {}
+mjT:buildUILayout()
+-- Advance the clock past elapsed_base so the win records a non-zero elapsed time.
+mjT:handleTileTap(2, 2, 0)
+mjT:handleTileTap(4, 2, 0)
+expect(Logic.isWin(mjT.board), "the timed tiny board is won")
+expect(mjT.stats.layout_best_times and mjT.stats.layout_best_times.turtle ~= nil,
+    "a human win records the layout best time")
+expect(store.stats and store.stats.layout_best_times
+    and store.stats.layout_best_times.turtle == mjT.stats.layout_best_times.turtle,
+    "the layout best time is persisted under the stats key")
+ctx.last_confirm.ok_callback()
+local pickerT2 = ctx.window_stack[#ctx.window_stack].widget
+local tcardT2 = cardById(pickerT2, "turtle")
+    if tcardT2 then
+        local tchip = cardTimeChip(tcardT2)
+        expect(tchip ~= nil and tchip[1] ~= nil and tchip[1].text == "01:15",
+            "Turtle's time chip shows the just-won time (01:15) after Play again")
+    end
+
+-- An auto-solve win never records a best time, so no time chip appears.
+store.game = nil
+store.stats = Stats.load(nil)
+local mj6 = Mahjong:new()
+mj6.board = { [pk(2, 2, 0)] = "b1", [pk(4, 2, 0)] = "b1",
+              [pk(6, 2, 0)] = "c1", [pk(8, 2, 0)] = "c1" }
+mj6.layout = "turtle"
+mj6:buildUILayout()
+mj6.score = 0
+scheduled = {}
+mj6.hint_button.hold_callback()
+local arm2 = scheduled[1][2]
+scheduled = {}
+arm2()
+local g2 = 0
+while scheduled[1] and g2 < 200 do
+    local e = table.remove(scheduled, 1)
+    e[2]()
+    g2 = g2 + 1
+end
+expect(Logic.isWin(mj6.board), "auto-solve cleared the timed board")
+expect((mj6.stats.layout_best_times and mj6.stats.layout_best_times.turtle or nil) == nil,
+    "an auto-solve win does not record a layout best time")
+expect(store.stats and store.stats.layout_best_times
+    and store.stats.layout_best_times.turtle == nil,
+    "an auto-solve win persists no layout best time")
+
 if failures == 0 then
     print("\nALL US-31 LAYOUT-SCORE CHECKS PASSED")
 else

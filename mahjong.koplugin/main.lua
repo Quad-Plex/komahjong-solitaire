@@ -29,6 +29,7 @@ local StatsWidget = require("mahjongstatswidget")
 local PauseWidget = require("mahjongpause")
 local LayoutSelect = require("mahjonglayoutselect")
 local HelpWidget = require("mahjonghelp")
+local WinSummary = require("mahjongwinsummary")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -437,6 +438,7 @@ function Mahjong:showLayoutPicker()
         parent = self,
         wins_by_layout = (self.stats and self.stats.layout_wins) or {},
         highscores_by_layout = (self.stats and self.stats.layout_highscores) or {},
+        best_times_by_layout = (self.stats and self.stats.layout_best_times) or {},
         onPick = function(id) self:startGameWithLayout(id) end,
         onHelp = function() self:showHelp() end,
         onClose = function()
@@ -1152,56 +1154,106 @@ function Mahjong:checkGameState()
 end
 
 -- US-12: the win screen is a summary — score, elapsed time, pairs matched,
--- best score/best time (with "New best!" the first time each record is set),
--- and the current winning streak. Only a human play-through records stats: the
--- long-press auto-solver (US-19) reaches this dialog too, and its wins record
--- no win, no bests, no streak change, and no games_played bump.
+-- overall (all layouts) best score/best time, this layout's own best score/
+-- best time, and the current winning streak. The headline varies with what the
+-- win achieved: "New overall best score/time" for overall records, "New best
+-- score/time on this layout" when only the current map's record fell, and the
+-- plain "You cleared the board!" otherwise. Only a human play-through records
+-- stats: the long-press auto-solver (US-19) reaches this dialog too, and its
+-- wins record no win, no bests, no streak change, and no games_played bump.
 function Mahjong:showWinDialog()
     -- Freeze the clock before reading it (the summary uses the final elapsed,
     -- and stopping the polling loop also stops periodic refreshes flashing
-    -- behind the modal dialog — same reason openSettings pauses the timer).
+    -- behind the modal dialog -- same reason openSettings pauses the timer).
     self:stopTimer()
     local elapsed = self:getElapsed()
     local pairs = self.pairs_matched or 0
     local new_best_score, new_best_time = false, false
+    local new_layout_score, new_layout_time = false, false
     if not self.game_was_autosolved then
         new_best_score, new_best_time = MahjongStats.recordWin(
             self.stats, self.score, elapsed, pairs)
         -- US-30: the layout picker's trophy badge counts human wins per layout
         -- (auto-solve wins never reach recordWin, so they never count either).
         -- US-31: the same call records the layout's best winning score for the
-        -- picker's score chip (auto-solve wins never set it, matching recordWin).
-        MahjongStats.recordLayoutWin(self.stats, self.layout, self.score)
+        -- picker's score chip, and the per-layout fastest win for its time chip.
+        -- recordLayoutWin returns which per-layout record THIS win just set, so
+        -- the summary can distinguish a layout best from an overall best.
+        new_layout_score, new_layout_time = MahjongStats.recordLayoutWin(
+            self.stats, self.layout, self.score, elapsed)
         self:saveStats()
         self.game_won = true
     end
+    -- Headline: celebrate whichever records this win broke, distinguishing the
+    -- overall (all layouts) records from this layout's own bests.
+    local headline
+    if new_best_score and new_best_time then
+        headline = _("Congratulations! New overall best score and best time!")
+    elseif new_best_score then
+        headline = _("Congratulations! New overall best score!")
+    elseif new_best_time then
+        headline = _("Congratulations! New overall best time!")
+    elseif new_layout_score and new_layout_time then
+        headline = _("Congratulations! New best score and time on this layout!")
+    elseif new_layout_score then
+        headline = _("Congratulations! New best score on this layout!")
+    elseif new_layout_time then
+        headline = _("Congratulations! New best time on this layout!")
+    else
+        headline = _("You cleared the board!")
+    end
     local best_time_str = self.stats.best_time
             and MahjongLogic.formatElapsed(self.stats.best_time) or "—"
+    local layout_highscores = self.stats.layout_highscores or {}
+    local layout_best_times = self.stats.layout_best_times or {}
+    local layout_best_score = layout_highscores[self.layout]
+    local layout_best_time = layout_best_times[self.layout]
+    local layout_best_time_str = layout_best_time
+            and MahjongLogic.formatElapsed(layout_best_time) or "—"
+    local layout_name = MahjongLogic.layoutName(self.layout)
     local best_score_marker = new_best_score and " " .. _("(New best!)") or ""
     local best_time_marker = new_best_time and " " .. _("(New best!)") or ""
-    local summary_lines = {
-        _("You cleared the board!"),
-        string.format(_("Score: %d"), self.score),
-        string.format(_("Time: %s"), MahjongLogic.formatElapsed(elapsed)),
-        string.format(_("Pairs matched: %d"), pairs),
-        string.format(_("Best score: %d%s"), self.stats.best_score, best_score_marker),
-        string.format(_("Best time: %s%s"), best_time_str, best_time_marker),
-        string.format(_("Current streak: %d"), self.stats.current_streak),
+    local layout_score_marker = new_layout_score and " " .. _("(New best!)") or ""
+    local layout_time_marker = new_layout_time and " " .. _("(New best!)") or ""
+    -- The summary rows as (label, value) pairs: the label is the description
+    -- (no trailing colon) and the value is the data, so the dialog can right-
+    -- align every label and start every value at the same x (the stats screen's
+    -- column trick). The pairs are also kept on the dialog (win_rows) so the
+    -- headless harness can reconstruct the rendered text for assertions.
+    local win_rows = {
+        { label = _("Score"),             value = tostring(self.score) },
+        { label = _("Time"),              value = MahjongLogic.formatElapsed(elapsed) },
+        { label = _("Pairs matched"),     value = tostring(pairs) },
+        { label = _("Overall best score"), value = string.format("%d%s", self.stats.best_score, best_score_marker) },
+        { label = _("Overall best time"), value = best_time_str .. best_time_marker },
+        { label = _("%s best score"):format(layout_name),
+          value = string.format("%d%s", layout_best_score or 0, layout_score_marker) },
+        { label = _("%s best time"):format(layout_name),
+          value = layout_best_time_str .. layout_time_marker },
+        { label = _("Current streak"),    value = tostring(self.stats.current_streak) },
+        -- US-18: always report the per-game help counters, including clean
+        -- wins, so the summary explicitly tells the player whether either was
+        -- used.
+        { label = _("Hints used"),        value = tostring(self.hints_used or 0) },
+        { label = _("Shuffles"),          value = tostring(self.shuffles_used or 0) },
     }
-    -- US-18: always report the per-game help counters, including clean wins,
-    -- so the summary explicitly tells the player whether either was used.
-    summary_lines[#summary_lines + 1] = string.format(_("Hints used: %d"), self.hints_used or 0)
-    summary_lines[#summary_lines + 1] = string.format(_("Shuffles: %d"), self.shuffles_used or 0)
-    -- Tap-outside keeps the summary up; the Close button still exits.
-    UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
-        text = table.concat(summary_lines, "\n"),
+    -- The summary is a floating centered card (mahjongwinsummary.lua): it
+    -- right-aligns the labels to the widest one so every value starts at the
+    -- same x (left-aligned column), centers the headline and buttons, and the
+    -- card itself is centered in the window (a stock ConfirmBox centers a wide
+    -- headline text area, leaving the narrow label/value rows hugging the left
+    -- edge). A tap outside the buttons is consumed, so only Close exits.
+    UIManager:show(WinSummary:new{
+        parent = self,
+        text = headline,
+        win_rows = win_rows,
         ok_text = _("Play again"),
-        ok_callback = function() self:showLayoutPicker() end,
         cancel_text = _("Close"),
+        ok_callback = function() self:showLayoutPicker() end,
         cancel_callback = function()
             UIManager:close(self, "full")
         end,
-    }))
+    })
 end
 
 -- US-08: Undo, hint, and shuffle ---------------------------------------------
