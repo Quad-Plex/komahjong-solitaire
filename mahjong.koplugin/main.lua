@@ -28,6 +28,7 @@ local SettingsWidget = require("mahjongsettings")
 local StatsWidget = require("mahjongstatswidget")
 local PauseWidget = require("mahjongpause")
 local LayoutSelect = require("mahjonglayoutselect")
+local HelpWidget = require("mahjonghelp")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -260,6 +261,7 @@ local Mahjong = FrameContainer:extend{
     _pause_dlg = nil, -- the pause overlay while it is up (US-17)
     layout = "turtle", -- current layout id (US-14); saved with the game state
     _picker_dlg = nil, -- the layout picker while it is up (US-14)
+    _help_dlg = nil, -- gameplay help above the layout picker
 }
 
 function Mahjong:init()
@@ -422,6 +424,7 @@ function Mahjong:showLayoutPicker()
         wins_by_layout = (self.stats and self.stats.layout_wins) or {},
         highscores_by_layout = (self.stats and self.stats.layout_highscores) or {},
         onPick = function(id) self:startGameWithLayout(id) end,
+        onHelp = function() self:showHelp() end,
         onClose = function()
             self._picker_dlg = nil
             if self.board and not MahjongLogic.isWin(self.board) then
@@ -440,6 +443,14 @@ function Mahjong:showLayoutPicker()
         end,
     }
     self._picker_dlg:show()
+end
+
+function Mahjong:showHelp()
+    if self._help_dlg then return end
+    self._help_dlg = HelpWidget:new{
+        onClose = function() self._help_dlg = nil end,
+    }
+    UIManager:show(self._help_dlg)
 end
 
 -- US-14: deals a fresh game on the chosen layout and shows the game (or

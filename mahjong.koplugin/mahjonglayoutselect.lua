@@ -67,6 +67,7 @@ local LayoutSelect = InputContainer:extend{
     parent = nil,      -- the Mahjong instance
     onPick = nil,      -- function(layout_id) — deals a fresh game on the layout
     onClose = nil,     -- function() — close X / tap outside (owner resumes timer)
+    onHelp = nil,      -- function() — show gameplay help above this picker
     wins_by_layout = nil, -- map layout_id -> human wins (sync badge, US-30)
     highscores_by_layout = nil, -- map layout_id -> best winning score (score chip)
     _card_rects = nil, -- { { id=, x=, y=, w=, h=, card= } } in widget-local coords
@@ -270,7 +271,7 @@ function LayoutSelect:init()
     local edge_pad = Screen:scaleBySize(16)
     local gap = Screen:scaleBySize(12)
 
-    -- Title row: "Choose a layout" centered, with a close X pinned top-right
+    -- Title row: help at left, "Choose a layout" centered, close X at right.
     -- (the same grey-square style as the other dialogs). Tapping the X
     -- cancels (closes the picker without dealing).
     local title_widget = TextWidget:new{
@@ -292,12 +293,24 @@ function LayoutSelect:init()
         background = Blitbuffer.COLOR_LIGHT_GRAY,
         callback = function() self:closeDialog() end,
     }
+    self._help_btn = ButtonWidget:new{
+        text = "?",
+        text_font_face = "tfont",
+        text_font_size = 22,
+        width = close_size,
+        height = close_size,
+        bordersize = Screen:scaleBySize(1),
+        radius = Screen:scaleBySize(4),
+        padding = 0,
+        callback = function() if self.onHelp then self.onHelp() end end,
+    }
     local title_w = title_widget:getSize().w
     local title_row_w = self.full_width - 2 * edge_pad
     local title_space = math.max(0, math.floor((title_row_w - title_w - close_size) / 2))
     local title_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = edge_pad },
-        HorizontalSpan:new{ width = title_space },
+        self._help_btn,
+        HorizontalSpan:new{ width = math.max(0, title_space - close_size) },
         title_widget,
         HorizontalSpan:new{ width = math.max(0, title_row_w - title_w - close_size - title_space) },
         self._close_btn,
