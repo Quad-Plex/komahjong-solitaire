@@ -229,7 +229,7 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
         text = label,
         padding = 0,
         face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
-        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+        fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local cell = VerticalGroup:new{
         align = "center",
