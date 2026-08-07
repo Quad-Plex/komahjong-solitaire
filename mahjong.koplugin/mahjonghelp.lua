@@ -218,6 +218,7 @@ function HelpWidget:buildPage()
             align = "left",
             section_heading("help.scoring"),
             bullet("help.each_pair"), bullet("help.chain_bonus"), label("help.chain_method", 15),
+            label("help.chain_method_2", 15),
             bullet("help.combo_1"), label("help.combo_2", 15), bullet("help.combo_3"),
             label("help.combo_4", 15), bullet("help.hint_penalty"), label("help.hint_session", 15),
             bullet("help.shuffle_penalty"),

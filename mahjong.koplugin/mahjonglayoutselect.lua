@@ -360,20 +360,29 @@ function LayoutSelect:init()
     local title_w = title_widget:getSize().w
     local title_row_w = self.full_width - 2 * edge_pad
     -- Keep the title centered in the full row, rather than centered in the
-    -- space between the two buttons.
-    local title_space = math.max(0, math.floor((title_row_w - title_w) / 2) - close_size * 1.5)
+    -- space between the buttons. The left side carries two buttons (settings +
+    -- help) while the right carries only the close X, so the two flexible
+    -- spans must be asymmetric: right_space bumps left_space by a button
+    -- (close_size + the 4px gap) so the title sits exactly at the row center.
+    local btn_gap = Screen:scaleBySize(4)
+    local left_btns = 2 * close_size + btn_gap
+    local right_btn = close_size
+    local flex = math.max(0, title_row_w - 2 * edge_pad
+        - left_btns - right_btn - title_w)
+    local left_space = math.max(0, math.floor((flex - (left_btns - right_btn)) / 2))
+    local right_space = math.max(0, flex - left_space)
     local title_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = edge_pad },
         self._settings_btn,
-        HorizontalSpan:new{ width = Screen:scaleBySize(4) },
+        HorizontalSpan:new{ width = btn_gap },
         self._help_btn,
-        HorizontalSpan:new{ width = title_space },
+        HorizontalSpan:new{ width = left_space },
         title_widget,
-        HorizontalSpan:new{ width = title_space },
+        HorizontalSpan:new{ width = right_space },
         self._close_btn,
         HorizontalSpan:new{ width = edge_pad },
+        width = title_row_w,
     }
-    title_row.width = title_row_w
 
     -- Grid: 3 columns with a dynamically computed row count. Every registered
     -- layout gets a card (one per id, sorted); rows = ceil(#ids / 3) floored at

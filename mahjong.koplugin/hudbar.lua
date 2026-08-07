@@ -193,13 +193,17 @@ function HudBar:init()
     end
     self._left_buttons = left_buttons
 
-    -- Row 1: Centered title in content_w
+    -- Row 1: Center the title in the full bar, not merely in the space
+    -- between the left controls and the quit button. With settings + stats on
+    -- the left, centering within content_w visibly shifts the title right.
     local title_w = title_widget:getSize().w
-    local title_space = math.max(0, math.floor((content_w - title_w) / 2))
+    local title_left = math.floor((self.full_width - title_w) / 2)
+    local title_space = math.max(0, title_left - left_w)
+    local title_right_space = math.max(0, content_w - title_w - title_space)
     local row1 = HorizontalGroup:new{
         HorizontalSpan:new{ width = title_space },
         title_widget,
-        HorizontalSpan:new{ width = math.max(0, content_w - title_w - title_space) },
+        HorizontalSpan:new{ width = title_right_space },
     }
     row1.width = content_w
 

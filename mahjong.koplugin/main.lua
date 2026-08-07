@@ -61,7 +61,7 @@ local ICON_DIR = "mahjong"
 -- US-09 scoring: base + chain bonus live in mahjonglogic.lua
 -- (MahjongLogic.pairPoints / SCORE_PER_PAIR / CHAIN_BONUS); main.lua only
 -- tracks the kind and active-game time of the previous match for chain/combo
--- scoring. The combo is independent of the score-method chain setting.
+-- scoring. Combos only apply in Chain mode (score_method="chain").
 -- FLASH_TIMEOUT: how long a non-blocking feedback message (e.g. "Tile is
 -- blocked") stays visible in the band between the board and the toolbar.
 local FLASH_TIMEOUT = 2
@@ -1112,14 +1112,18 @@ function Mahjong:applyMatch(a, b)
     local prev_match_elapsed = self.last_match_elapsed
     local now_elapsed = self:getElapsed()
     -- Auto-solve paces its own moves and keeps the persistent "Auto-solving…"
-    -- message; combos are a reward for the player's fast clears.
-    local combo = not self._auto_solve_active
+    -- message; combos are a reward for the player's fast clears. Combos only
+    -- apply in Chain mode — the Basic score method disables both the group
+    -- chain bonus and the combo bonus.
+    local chain_enabled = self.score_method == "chain"
+    local combo = chain_enabled
+        and not self._auto_solve_active
         and prev_match_elapsed ~= nil
         and now_elapsed >= prev_match_elapsed
         and now_elapsed - prev_match_elapsed <= COMBO_WINDOW_SECONDS
     local combo_chain = combo and ((self.combo_chain or 0) + 1) or 0
     local points
-    if self.score_method == "chain" then
+    if chain_enabled then
         points = MahjongLogic.pairPoints(prev_last, ka)
     else
         points = MahjongLogic.SCORE_PER_PAIR

@@ -298,7 +298,7 @@ dlg = ctx.window_stack[#ctx.window_stack].widget
 expect(dlg.changes.score_method == "basic", "score row reflects the saved basic method")
 dlg._rows.score_method.callback()
 expect(dlg.changes.score_method == "chain"
-        and dlg._rows.score_method.text == "Chain (+5 bonus)",
+        and dlg._rows.score_method.text == "Chain/Combo",
     "score row cycles basic -> chain and restores the full label")
 dlg:cancel()
 

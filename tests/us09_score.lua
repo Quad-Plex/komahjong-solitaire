@@ -243,6 +243,25 @@ mj7:handleTileTap(8, 2, 0)
 expect(mj7.score == 25, "a match after five seconds gets chain points but no combo")
 expect(mj7.flash_text.text ~= "COMBO +10", "expired combo window shows no combo message")
 
+-- ---- Basic score method disables BOTH chain and combo -------------------------
+
+local mj8 = Mahjong:new()
+mj8.score_method = "basic"
+mj8.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"b1"}, {8,2,0,"b1"},
+}
+mj8:buildUILayout()
+-- Set score_method via assignment above; buildUILayout must not overwrite it.
+mj8:handleTileTap(2, 2, 0)
+mj8:handleTileTap(4, 2, 0)
+expect(mj8.score == 10, "basic: first pair scores base 10 (got " .. tostring(mj8.score) .. ")")
+mj8:handleTileTap(6, 2, 0)
+mj8:handleTileTap(8, 2, 0)
+expect(mj8.score == 20, "basic: fast same-kind pair gets NO chain and NO combo, total 20 (got " .. tostring(mj8.score) .. ")")
+expect(mj8.flash_text.text ~= "COMBO +10", "basic: fast pair shows no combo message")
+expect(Logic.isWin(mj8.board), "board emptied after the basic-method pair")
+
 if failures == 0 then
     print("\nALL US-09 SCORE/STATUS CHECKS PASSED")
 else
