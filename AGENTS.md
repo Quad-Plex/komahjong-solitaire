@@ -676,22 +676,44 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 
 ### Installing/updating on the connected Kindle
 
-The dev PC is WSL; a Kindle shows up in Windows as drive **D:** and is mounted here under
-`/mnt/d` (`sudo mount -t drvfs 'D:' /mnt/d`). KOReader lives at `/mnt/d/koreader/`, plugins at
-`/mnt/d/koreader/plugins/`. Automate with:
+The Kindle now runs a SSH server, so the preferred (and only) transport in daily use is **SSH**
+`root@192.168.2.213` with an **empty root password**. This is faster than USB/KMS and works
+over wi-fi. `install_plugin.sh` tries SSH first and only falls back to USB mass-storage
+(mounting D: under WSL) when SSH is unreachable.
 
 ```
-./install_plugin.sh            # mount if needed, rsync --delete, diff-verify
-./install_plugin.sh --unmount  # same, then unmount D:
+./install_plugin.sh            # SSH → rsync over ssh → verify; falls back to /mnt/d
+./install_plugin.sh --unmount  # USB path only: then unmount D:
 ```
 
-The script pre-flights that Windows actually sees `D:\` (via `powershell.exe Test-Path`), so a
+After the SSH path the running KOReader instance is **stopped automatically** (SIGTERM to
+`reader.lua`/`koreader.sh` so state saves cleanly, with a SIGKILL fallback) **and relaunched
+automatically** afterwards (`(./koreader.sh >/var/tmp/koreader.log 2>&1 &)` from
+`/mnt/us/koreader`, in a detached subshell — BusyBox has no `nohup` — so it survives the SSH
+session ending), so the freshly-installed plugin is already loaded when the install finishes.
+The USB path leaves KOReader running; restart it manually.
+
+**SSH transport facts (verified):**
+- Login is `root` with an **empty password**, which requires `sshpass` (`sudo apt-get install
+  sshpass`). The script uses `sshpass -e` (password from the `SSHPASS` env var) with
+  `export SSHPASS=""` — this avoids the empty password being word-split as an argument.
+- The Kindle is ROOTED and its shell is BusyBox v1.17.1: no `grep -E` (`grep` with basic
+  `\|` instead), no `readlink -m`, no `find -printf`. Scripts must test paths with `test -d`
+  rather than rely on those tools. KOReader lives at `/mnt/us/koreader/` (plugins at
+  `/mnt/us/koreader/plugins/`) as seen over SSH.
+- `rsync -e "sshpass -e ssh <opts>"` is used for the transfer. Verification avoids any extra
+  device tooling: a `rsync -rcn --delete` checksum dry-run prints nothing only when the trees
+  are identical.
+
+**USB/KMS fallback (legacy, only when SSH is down):** the Kindle shows up in Windows as drive
+**D:** mounted here under `/mnt/d` (`sudo mount -t drvfs 'D:' /mnt/d`). The script pre-flights
+that Windows actually sees `D:\` (via `powershell.exe Test-Path`), so a
 disconnected/charging-only Kindle fails with a clear message. Gotchas handled by the script:
 - `/mnt/d` can linger as an empty leftover dir after unmount; the script checks `/proc/mounts`
   (not `ls`) to decide whether to mount.
-- The Kindle's filesystem is FAT32 with no Unix perms/groups, so the script uses `rsync -r
+- The Kindle's filesystem is FAT32 with no Unix perms/groups, so the USB path uses `rsync -r
   --delete` — NOT `rsync -a`, which fails with "Operation not permitted".
-After install, the user must fully restart KOReader (plugins load at startup), then open
+After install, fully restart KOReader (plugins load at startup), then open over
 **Tools → Mahjong Solitaire**. If Windows stops seeing the drive after use, `sudo umount /mnt/d`.
 
 ## Reference
