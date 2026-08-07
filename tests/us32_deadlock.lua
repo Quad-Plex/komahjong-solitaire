@@ -191,6 +191,8 @@ Logic.isPermanentlyDead = orig_dead
 local shuffle_dlg = ctx.last_confirm
 expect(tostring(shuffle_dlg.text):find("No moves left", 1, true) ~= nil,
     "shuffle prompt shown (not dead board)")
+expect(tostring(shuffle_dlg.text):find("-10 Score", 1, true) ~= nil,
+    "shuffle prompt shows its score penalty")
 shuffle_dlg:onTapClose(nil, { pos = { x = 1, y = 1 } })  -- tap next to the prompt
 local game2_still_open = false
 for _, e in ipairs(ctx.window_stack) do

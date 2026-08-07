@@ -1091,7 +1091,7 @@ function Mahjong:handleNoMoves()
         -- to this dialog must only keep it open — the old cancel_callback here
         -- exited the whole game.
         UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
-            text = _("No moves left! Shuffle the board?"),
+            text = _("No moves left! Shuffle the board? (-10 Score)"),
             ok_text = _("Shuffle"),
             ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
             cancel_text = _("Close"),
@@ -1454,7 +1454,7 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
         do_shuffle()
     else
         UIManager:show(ConfirmBox:new{
-            text        = _("Reshuffle remaining tiles?"),
+            text        = _("Reshuffle remaining tiles? (-10 Score)"),
             ok_text     = _("Shuffle"),
             ok_callback = do_shuffle,
         })

@@ -275,7 +275,7 @@ function LayoutSelect:init()
     -- (the same grey-square style as the other dialogs). Tapping the X
     -- cancels (closes the picker without dealing).
     local title_widget = TextWidget:new{
-        text = _("Choose a layout"),
+        text = _("Choose a Layout"),
         padding = 0,
         face = Font:getFace("tfont", Screen:scaleBySize(22)),
     }
@@ -306,13 +306,15 @@ function LayoutSelect:init()
     }
     local title_w = title_widget:getSize().w
     local title_row_w = self.full_width - 2 * edge_pad
-    local title_space = math.max(0, math.floor((title_row_w - title_w - close_size) / 2))
+    -- Keep the title centered in the full row, rather than centered in the
+    -- space between the two buttons.
+    local title_space = math.max(0, math.floor((title_row_w - title_w) / 2) - close_size)
     local title_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = edge_pad },
         self._help_btn,
-        HorizontalSpan:new{ width = math.max(0, title_space - close_size) },
+        HorizontalSpan:new{ width = title_space },
         title_widget,
-        HorizontalSpan:new{ width = math.max(0, title_row_w - title_w - close_size - title_space) },
+        HorizontalSpan:new{ width = title_space },
         self._close_btn,
         HorizontalSpan:new{ width = edge_pad },
     }
@@ -454,6 +456,7 @@ function LayoutSelect:init()
         dimen = Geometry:new{ w = grid_content_w, h = math.min(grid_avail_h, grid_total_h) },
     }
     local content = VerticalGroup:new{
+        VerticalSpan:new{ width = Screen:scaleBySize(5) },
         title_row,
         VerticalSpan:new{ width = Screen:scaleBySize(16) },
         grid_scroller,

@@ -794,6 +794,10 @@ def generate():
         for suffix, bottom, right in VARIANTS:
             written[f"flower{n}{suffix}.svg"] = svg(body_f, bottom, right)
             written[f"season{n}{suffix}.svg"] = svg(body_s, bottom, right)
+    # Blank 2.5D faces are used by the help screen's instructional board. They
+    # retain the generated bevel geometry without competing with its markers.
+    for suffix, bottom, right in VARIANTS:
+        written[f"empty{suffix}.svg"] = svg("", bottom, right)
     # Overlays + empty face (no face rect). Portrait, matching the tile box so
     # the highlight covers the whole face. Dark strokes so the selection / hint
     # highlights read on the (white) tile faces.
@@ -817,8 +821,6 @@ def generate():
                            f'viewBox="0 0 100 140">{hint_brackets.format(sw=6)}</svg>')
     written["hint_bold.svg"] = (f'<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
                                 f'viewBox="0 0 100 140">{hint_brackets.format(sw=9)}</svg>')
-    written["empty.svg"] = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="140" '
-                            'viewBox="0 0 100 140"/>')
     # Toolbar icons (hint = lightbulb, shuffle = crossing arrows), imported from
     # Google's Material Design icon set (24px, flat fills). The toolbar buttons
     # in main.lua reference them as "mahjong/lightbulb" / "mahjong/shuffle";
