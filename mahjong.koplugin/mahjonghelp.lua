@@ -96,6 +96,7 @@ local function example_board()
     local positions = {
         { x = 0, y = 1, layer = 0 }, { x = 1, y = 1, layer = 0 },
         { x = 2, y = 1, layer = 0 }, { x = 3, y = 1, layer = 0 },
+        { x = 4, y = 0.5, layer = 0 },
         { x = 1.5, y = 0.5, layer = 1 },
     }
     for _, p in ipairs(positions) do
@@ -110,7 +111,7 @@ local function example_board()
             marker, px, py, tw + bw, th + bh)
     end
     children.dimen = Geometry:new{
-        w = Screen:scaleBySize(190), h = Screen:scaleBySize(100),
+        w = Screen:scaleBySize(235), h = Screen:scaleBySize(100),
     }
     return OverlapGroup:new(children)
 end
@@ -198,8 +199,8 @@ function HelpWidget:buildPage()
                 lifted_example_board(inner_w),
                 dimen = Geometry:new{ w = inner_w, h = Screen:scaleBySize(96) },
             },
-            label("Checkmarks are selectable. X tiles are blocked: the raised tile covers", 12),
-            label("the two middle tiles, which also have no open side.", 12),
+            label("Checkmarks are selectable. The raised tile covers the two middle tiles,", 12),
+            label("and the far-right tile blocks its neighbor's side, so its neighbor is X.", 12),
             VerticalSpan:new{ width = gap },
             section_heading("Tile Groups"),
             icon_group({"c1", "d1", "b1"}, "Characters, dots and bamboo: match the same number\nand suit."),
