@@ -31,6 +31,7 @@ local PauseWidget = require("mahjongpause")
 local LayoutSelect = require("mahjonglayoutselect")
 local HelpWidget = require("mahjonghelp")
 local WinSummary = require("mahjongwinsummary")
+local MahjongUI = require("mahjongui")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -164,7 +165,8 @@ end
 
 -- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
 -- the tap area — with a square icon centered inside it, plus a small hint
--- label beneath. Padding keeps the icon off the button edges, bordersize draws
+-- label beneath (labels are omitted in compact mode). Padding keeps the icon
+-- off the button edges, bordersize draws
 -- a slim rounded border, and radius rounds the corners. The icon button and
 -- its label are stacked in a VerticalGroup so each toolbar cell carries a
 -- caption (Undo / Hint / Shuffle / New Game). The cells are separated by
@@ -177,7 +179,7 @@ end
 -- bottom-right corner and attaches it as `button.badge` for updates.
 -- Returns the cell (the VerticalGroup), the ButtonWidget itself (so tests can
 -- reach the hold callbacks), and the badge (or nil).
-local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_cb, counter)
+local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_cb, counter, hide_label)
     local pad = Screen:scaleBySize(6)
     local border = Screen:scaleBySize(1)
     local radius = Screen:scaleBySize(4)
@@ -225,17 +227,22 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
         end
         button_opts.badge = badge
     end
-    local label_widget = TextWidget:new{
-        text = label,
-        padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
-        fgcolor = Blitbuffer.COLOR_BLACK,
-    }
-    local cell = VerticalGroup:new{
-        align = "center",
-        button_opts,
-        label_widget,
-    }
+    local cell
+    if hide_label then
+        cell = VerticalGroup:new{ align = "center", button_opts }
+    else
+        local label_widget = TextWidget:new{
+            text = label,
+            padding = 0,
+            face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
+            fgcolor = Blitbuffer.COLOR_BLACK,
+        }
+        cell = VerticalGroup:new{
+            align = "center",
+            button_opts,
+            label_widget,
+        }
+    end
     return cell, button_opts, badge
 end
 
@@ -323,6 +330,7 @@ local Mahjong = FrameContainer:extend{
 }
 
 function Mahjong:init()
+    MahjongUI.refreshDimensions(self)
     self.history = {}
     self.dimensions = Geometry:new{
         w = self.full_width,
@@ -487,6 +495,8 @@ function Mahjong:showLayoutPicker()
     self:stopAutoSolve()
     self:stopTimer()
     self._picker_dlg = LayoutSelect:new{
+        full_width = self.full_width,
+        full_height = self.full_height,
         parent = self,
         wins_by_layout = (self.stats and self.stats.layout_wins) or {},
         highscores_by_layout = (self.stats and self.stats.layout_highscores) or {},
@@ -517,6 +527,8 @@ end
 function Mahjong:showHelp()
     if self._help_dlg then return end
     self._help_dlg = HelpWidget:new{
+        full_width = self.full_width,
+        full_height = self.full_height,
         onClose = function() self._help_dlg = nil end,
     }
     UIManager:show(self._help_dlg)
@@ -717,6 +729,8 @@ function Mahjong:openSettings()
     local picker_was_open = self._picker_dlg ~= nil
     self:stopTimer()
     local dlg = SettingsWidget:new{
+        full_width = self.full_width,
+        full_height = self.full_height,
         parent = self,
         settings_defaults = SETTINGS_DEFAULTS,
         onApply = function(changes)
@@ -767,6 +781,8 @@ function Mahjong:openStats()
     -- (tap-outside or the panel's X) resumes via onClose.
     self:stopTimer()
     local dlg = StatsWidget:new{
+        full_width = self.full_width,
+        full_height = self.full_height,
         parent = self,
         onClose = function()
             self:startTimer()
@@ -790,6 +806,8 @@ function Mahjong:pauseGame()
     -- while paused. Resume restarts via the overlay's onResume hook.
     self:stopTimer()
     local dlg = PauseWidget:new{
+        full_width = self.full_width,
+        full_height = self.full_height,
         parent = self,
         onResume = function()
             self._pause_dlg = nil
@@ -802,6 +820,10 @@ function Mahjong:pauseGame()
 end
 
 function Mahjong:buildUILayout()
+    -- Screen dimensions can change when KOReader rotates a phone. Re-read them
+    -- before rebuilding so the board and all surrounding chrome use one canvas.
+    MahjongUI.refreshDimensions(self)
+    self.dimensions = Geometry:new{ w = self.full_width, h = self.full_height }
     self.status_bar = self:createStatusBar()
     local status_h = self.status_bar:getSize().h
 
@@ -809,17 +831,19 @@ function Mahjong:buildUILayout()
     -- under each icon, small gaps between the buttons, edge gaps so the outer
     -- buttons don't scrape the screen sides, and a bottom spacer that lifts
     -- the row off the screen edge; the board fills what remains.
-    local toolbar_btn_h = Screen:scaleBySize(48)
+    local compact_toolbar = MahjongUI.isNarrow(self.full_width)
+    local toolbar_btn_h = math.min(Screen:scaleBySize(compact_toolbar and 44 or 48),
+        math.max(Screen:scaleBySize(30), math.floor(self.full_height * 0.10)))
     local toolbar_gap = Screen:scaleBySize(6)
     -- 6 gaps: one at each edge + 4 between the 5 buttons.
-    local toolbar_btn_w = math.floor((self.full_width - 6 * toolbar_gap) / 5)
+    local toolbar_btn_w = math.max(1, math.floor((self.full_width - 6 * toolbar_gap) / 5))
     -- Probe the hint-label height so the toolbar row reserves room for it.
     local label_probe = TextWidget:new{
         text = "Ag",
         padding = 0,
         face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
     }
-    local label_h = label_probe:getSize().h
+    local label_h = compact_toolbar and 0 or label_probe:getSize().h
     label_probe:free()
     local toolbar_h = toolbar_btn_h + label_h
     local bottom_gap = Screen:scaleBySize(12)
@@ -828,7 +852,7 @@ function Mahjong:buildUILayout()
     -- reserved so the board geometry stays stable when a message shows/clears.
     -- Font is kept small (~0.8× HUD labels) so it reads as a subtle notice;
     -- height is probed from the font so it fits any DPI.
-    local flash_font_size = Screen:scaleBySize(30)
+    local flash_font_size = Screen:scaleBySize(compact_toolbar and 22 or 30)
     local flash_probe = TextWidget:new{
         text = "Ag",
         padding = 0,
@@ -837,9 +861,10 @@ function Mahjong:buildUILayout()
     local flash_text_h = flash_probe:getSize().h
     flash_probe:free()
     local flash_pad_top = Screen:scaleBySize(4)
-    local flash_pad_bottom = Screen:scaleBySize(14)
+    local flash_pad_bottom = Screen:scaleBySize(compact_toolbar and 8 or 14)
     local flash_h = flash_text_h + flash_pad_top + flash_pad_bottom
-    local board_h = self.full_height - status_h - flash_h - toolbar_h - bottom_gap
+    local board_h = math.max(Screen:scaleBySize(80),
+        self.full_height - status_h - flash_h - toolbar_h - bottom_gap)
 
     self.board_view = MahjongBoard:new{
         board = self.board,
@@ -954,14 +979,14 @@ function Mahjong:buildUILayout()
         function() self:showHint() end,
         function() self:armAutoSolve() end,
         function() self:disarmAutoSolve() end,
-        self.hints_used or 0)
+         self.hints_used or 0, compact_toolbar)
     self.hint_button = hint_button
     self.hint_counter_badge = hint_badge
 
     -- The Shuffle button carries the same count pill for shuffles_used.
     local shuffle_cell, shuffle_button, shuffle_badge = createToolbarButton(
         "mahjong/shuffle", t("toolbar.shuffle"), toolbar_btn_w, toolbar_btn_h,
-        function() self:shuffleBoard() end, nil, nil, self.shuffles_used or 0)
+         function() self:shuffleBoard() end, nil, nil, self.shuffles_used or 0, compact_toolbar)
     self.shuffle_button = shuffle_button
     self.shuffle_counter_badge = shuffle_badge
 
@@ -970,21 +995,21 @@ function Mahjong:buildUILayout()
     -- clock and blocks every tap until Resume.
     local pause_cell, pause_button = createToolbarButton(
         "mahjong/pause", t("toolbar.pause"), toolbar_btn_w, toolbar_btn_h,
-        function() self:pauseGame() end)
+         function() self:pauseGame() end, nil, nil, nil, compact_toolbar)
     self.pause_button = pause_button
 
     local toolbar = HorizontalGroup:new{
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("chevron.left", t("toolbar.undo"), toolbar_btn_w, toolbar_btn_h,
-            function() self:undo() end),
+         createToolbarButton("chevron.left", t("toolbar.undo"), toolbar_btn_w, toolbar_btn_h,
+            function() self:undo() end, nil, nil, nil, compact_toolbar),
         HorizontalSpan:new{ width = toolbar_gap },
         hint_cell,
         HorizontalSpan:new{ width = toolbar_gap },
         shuffle_cell,
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("plus", t("toolbar.new_game"), toolbar_btn_w, toolbar_btn_h, function()
-            self:showLayoutPicker()
-        end),
+         createToolbarButton("plus", t("toolbar.new_game"), toolbar_btn_w, toolbar_btn_h, function()
+             self:showLayoutPicker()
+         end, nil, nil, nil, compact_toolbar),
         HorizontalSpan:new{ width = toolbar_gap },
         pause_cell,
         HorizontalSpan:new{ width = toolbar_gap },
@@ -1009,6 +1034,7 @@ function Mahjong:createStatusBar()
     -- (right). Pause (US-17) lives in the bottom toolbar (US-20). updateStatus()
     -- pushes the values via setStats().
     return HudBar:new{
+            full_width            = self.full_width,
             title                  = t("app.name"),
         left_icons = {
             { icon = "appbar.settings", size_ratio = 0.45,
@@ -1323,7 +1349,9 @@ function Mahjong:showWinDialog()
     -- headline text area, leaving the narrow label/value rows hugging the left
     -- edge). A tap outside the buttons is consumed, so only Close exits.
     UIManager:show(WinSummary:new{
-        parent = self,
+         full_width = self.full_width,
+         full_height = self.full_height,
+         parent = self,
         text = headline,
         win_rows = win_rows,
         ok_text = t("toolbar.play_again"),

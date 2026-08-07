@@ -30,6 +30,7 @@ local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
 local I18n = require("mahjongi18n")
 local t = I18n.t
+local MahjongUI = require("mahjongui")
 
 local PauseWidget = InputContainer:extend{
     name = "mahjongpause",
@@ -43,6 +44,7 @@ local PauseWidget = InputContainer:extend{
 }
 
 function PauseWidget:init()
+    MahjongUI.refreshDimensions(self)
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
 

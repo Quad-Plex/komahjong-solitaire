@@ -26,6 +26,7 @@ local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
 local I18n = require("mahjongi18n")
 local t = I18n.t
+local MahjongUI = require("mahjongui")
 
 local BAR_BG = Blitbuffer.COLOR_WHITE
 local QUIT_BG = Blitbuffer.COLOR_LIGHT_GRAY
@@ -55,30 +56,30 @@ local HudBar = FrameContainer:extend{
 -- One stat chip: rounded pill, icon (left), bold value (center),
 -- label text (right). Returns the chip widget, its layout (for size
 -- invalidation) and the value TextWidget (for setStats).
-local function buildChip(icon, label, chip_w, chip_h)
-    local pad = Screen:scaleBySize(6)
-    local icon_size = Screen:scaleBySize(20)
+local function buildChip(icon, label, chip_w, chip_h, compact)
+    local pad = Screen:scaleBySize(compact and 4 or 6)
+    local icon_size = Screen:scaleBySize(compact and 16 or 20)
     local value = TextWidget:new{
         text = "0",
         bold = true,
         padding = 0,
-        face = Font:getFace("smallinfofontbold", Screen:scaleBySize(16)),
+        face = Font:getFace("smallinfofontbold", Screen:scaleBySize(compact and 14 or 16)),
     }
-    local label_widget = TextWidget:new{
-        text = label,
-        padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(10)),
-        fgcolor = Blitbuffer.COLOR_BLACK, -- high contrast
-    }
-
-    -- Chip content: icon | spacer | value | spacer | label
-    local content = HorizontalGroup:new{
+    local content_children = {
         IconWidget:new{ icon = icon, width = icon_size, height = icon_size },
         HorizontalSpan:new{ width = Screen:scaleBySize(4) },
         value,
-        HorizontalSpan:new{ width = Screen:scaleBySize(4) },
-        label_widget,
     }
+    if not compact then
+        content_children[#content_children + 1] = HorizontalSpan:new{ width = Screen:scaleBySize(4) }
+        content_children[#content_children + 1] = TextWidget:new{
+            text = label,
+            padding = 0,
+            face = Font:getFace("smallinfofont", Screen:scaleBySize(10)),
+            fgcolor = Blitbuffer.COLOR_BLACK, -- high contrast
+        }
+    end
+    local content = HorizontalGroup:new(content_children)
 
     local chip = FrameContainer:new{
         content,
@@ -99,6 +100,7 @@ local function buildChip(icon, label, chip_w, chip_h)
 end
 
 function HudBar:init()
+    MahjongUI.refreshDimensions(self)
     self._padding_left = 0
     self._padding_right = 0
     self._padding_top = 0
@@ -110,17 +112,18 @@ function HudBar:init()
     local right_pad = Screen:scaleBySize(8)
 
     -- Title text (row 1, center)
+    local compact = MahjongUI.isNarrow(self.full_width)
     local title_widget = TextWidget:new{
         text = self.title or "",
         padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(18)),
+        face = Font:getFace("tfont", Screen:scaleBySize(compact and 16 or 18)),
     }
     local h1 = title_widget:getSize().h
 
     -- Dummy chip to measure natural chip height (initial estimate)
-    local dummy_chip = select(1, buildChip("mahjong/hud_pairs", t("hud.pairs"), 100, 40))
+    local dummy_chip = select(1, buildChip("mahjong/hud_pairs", t("hud.pairs"), 100, 40, compact))
     local h2 = dummy_chip:getSize().h
-    self.HUD_H = h1 + h2 + Screen:scaleBySize(12)
+    self.HUD_H = h1 + h2 + Screen:scaleBySize(compact and 8 or 12)
 
     -- Square quit button width = height = HUD_H
     local quit_w = self.right_icon and self.right_icon_tap_callback and self.HUD_H or 0
@@ -144,12 +147,12 @@ function HudBar:init()
     local content_w = self.full_width - quit_w - left_w
 
     local available_for_chips = content_w - edge_pad - right_pad - (2 * chip_gap)
-    local chip_w = math.floor(available_for_chips / 3)
+    local chip_w = math.max(1, math.floor(available_for_chips / 3))
 
     -- Build chips with precise chip_w and h2
-    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", t("hud.pairs"), chip_w, h2)
-    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", t("hud.free"), chip_w, h2)
-    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", t("hud.score"), chip_w, h2)
+    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", t("hud.pairs"), chip_w, h2, compact)
+    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", t("hud.free"), chip_w, h2, compact)
+    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", t("hud.score"), chip_w, h2, compact)
     self._value_widgets = { pairs = val_pairs, free = val_free, score = val_score }
     self._chip_layouts = { lay_pairs, lay_free, lay_score }
 

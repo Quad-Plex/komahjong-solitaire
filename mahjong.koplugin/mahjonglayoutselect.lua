@@ -2,9 +2,10 @@
 --
 -- A full-screen opaque widget (not a floating card): choosing a layout is a
 -- fresh start, so the previous board does not need to show through. A 3-column
--- grid of cards (one per registered layout, dynamically many rows — minimum 3)
--- wrapped in a scroll container so 4+ rows scroll on small screens instead of
--- clipping (US-21). Each card carries a small thumbnail (a miniature schematic
+-- grid on Kindle-sized canvases, and a 2-column grid on narrow phones, holds one
+-- card per registered layout (dynamically many rows — minimum 3) and is wrapped
+-- in a scroll container so extra rows scroll instead of clipping (US-21). Each
+-- card carries a small thumbnail (a miniature schematic
 -- of the layout's positions — small rounded rects per tile, per-layer up-left
 -- offset so the 3D shape reads) centered by the tower's face center of mass
 -- (US-30), a circular-arrows badge with the layout's human-win count (US-30), a
@@ -49,6 +50,7 @@ local ButtonWidget = require("ui/widget/button")
 local I18n = require("mahjongi18n")
 local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
+local MahjongUI = require("mahjongui")
 
 -- Tile face aspect (portrait) and bevel fraction — must match the board
 -- (mahjongboard.lua) so the thumbnail's 3D offset reads the same as the real
@@ -113,9 +115,10 @@ local function layoutThumbnail(id, w, h)
     -- side, so a width-filling layout (e.g. the wide Spider/Bridge/Taipei
     -- shapes on a near-square portrait card) never touches the thumbnail's
     -- edge — a flush tower reads as "not centered" even when its mass is.
-    local margin = math.max(Screen:scaleBySize(6), math.floor(math.min(w, h) * 0.05))
-    local fit_w = w - 2 * margin
-    local fit_h = h - 2 * margin
+    local margin = math.min(math.max(Screen:scaleBySize(6), math.floor(math.min(w, h) * 0.05)),
+        math.floor(math.min(w, h) / 3))
+    local fit_w = math.max(2, w - 2 * margin)
+    local fit_h = math.max(2, h - 2 * margin)
     -- Portrait faces (th = TILE_ASPECT * tw) sized to fit both axes.
     local scale = math.min(fit_w / w_units, (fit_h / h_units) / TILE_ASPECT)
     local tw = math.max(2, math.floor(scale))
@@ -306,20 +309,24 @@ local function layoutTimeChip(time_str)
 end
 
 function LayoutSelect:init()
+    MahjongUI.refreshDimensions(self)
     self.dimen = Geometry:new{ x = 0, y = 0, w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
     self._card_rects = {}
 
-    local edge_pad = Screen:scaleBySize(16)
-    local gap = Screen:scaleBySize(12)
+    local edge_pad = math.min(Screen:scaleBySize(16),
+        math.max(Screen:scaleBySize(4), math.floor(self.full_width * 0.04)))
+    local gap = math.min(Screen:scaleBySize(12),
+        math.max(Screen:scaleBySize(2), math.floor(self.full_width * 0.03)))
 
     -- Title row: settings + help at left, title centered, close X at right.
     -- (the same grey-square style as the other dialogs). Tapping the X
     -- cancels (closes the picker without dealing).
+    local compact = MahjongUI.isNarrow(self.full_width)
     local title_widget = TextWidget:new{
         text = t("picker.title"),
         padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(22)),
+        face = Font:getFace("tfont", Screen:scaleBySize(compact and 18 or 22)),
     }
     local title_h = title_widget:getSize().h
     local close_size = title_h + Screen:scaleBySize(8)
@@ -358,7 +365,7 @@ function LayoutSelect:init()
         callback = function() if self.onSettings then self.onSettings() end end,
     }
     local title_w = title_widget:getSize().w
-    local title_row_w = self.full_width - 2 * edge_pad
+    local title_row_w = self.full_width
     -- Keep the title centered in the full row, rather than centered in the
     -- space between the buttons. The left side carries two buttons (settings +
     -- help) while the right carries only the close X, so the two flexible
@@ -389,23 +396,26 @@ function LayoutSelect:init()
     -- 3 so the grid never shrinks below the original 3-row footprint. An SVContainer
     -- wraps the grid so a tall grid (4+ rows on small e-ink screens) scrolls instead
     -- of clipping (US-21 — prerequisite for the full GNOME board set).
-    local cols = 3
+    -- Three columns preserve the original picker on Kindle-sized canvases.
+    -- A narrow phone gets two wider cards; the scroll container handles the
+    -- extra rows without shrinking the thumbnails into unreadable slivers.
+    local cols = self.full_width < 480 and 2 or 3
     local ids = MahjongLogic.layoutIds()
     local rows = math.max(3, math.ceil(#ids / cols))
     local title_row_h = math.max(title_h, close_size)
     local top_pad = Screen:scaleBySize(5)
     local grid_top = top_pad + title_row_h + Screen:scaleBySize(16)
     local grid_w = self.full_width - 2 * edge_pad - (cols - 1) * gap
-    local card_w = math.floor(grid_w / cols)
-    local grid_h = self.full_height - grid_top - edge_pad - (rows - 1) * gap
-    local card_h = math.floor(grid_h / rows)
+    local card_w = math.max(1, math.floor(grid_w / cols))
+    local grid_h = math.max(1, self.full_height - grid_top - edge_pad - (rows - 1) * gap)
+    local card_h = math.max(Screen:scaleBySize(120), math.floor(grid_h / rows))
 
     -- Card layout: thumbnail on top, name underneath.
-    local name_h = Screen:scaleBySize(28)
-    local thumb_pad = Screen:scaleBySize(6)
-    local badge_margin = Screen:scaleBySize(4)
-    local thumb_w = card_w - 2 * thumb_pad
-    local thumb_h = card_h - name_h - 2 * thumb_pad
+    local name_h = math.min(Screen:scaleBySize(28), math.max(Screen:scaleBySize(16), math.floor(card_h * 0.25)))
+    local thumb_pad = math.min(Screen:scaleBySize(6), math.max(1, math.floor(card_w * 0.05)))
+    local badge_margin = math.min(Screen:scaleBySize(4), math.max(1, math.floor(card_w * 0.03)))
+    local thumb_w = math.max(1, card_w - 2 * thumb_pad)
+    local thumb_h = math.max(1, card_h - name_h - 2 * thumb_pad)
 
     local grid_rows = {}
     local slot = 0
@@ -525,7 +535,7 @@ function LayoutSelect:init()
     -- the available screen space, letting the full grid scroll when it
     -- overflows (US-21).
     local grid_total_h = rows * card_h + (rows - 1) * gap
-    local grid_avail_h = self.full_height - grid_top - edge_pad
+    local grid_avail_h = math.max(1, self.full_height - grid_top - edge_pad)
     local grid_content_w = 2 * edge_pad + cols * card_w + (cols - 1) * gap
     local grid_scroller = SVContainer:new{
         VerticalGroup:new{

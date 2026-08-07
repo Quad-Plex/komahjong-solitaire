@@ -21,6 +21,7 @@ local ButtonWidget = require("ui/widget/button")
 local I18n = require("mahjongi18n")
 local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
+local MahjongUI = require("mahjongui")
 
 local HelpWidget = InputContainer:extend{
     name = "mahjonghelp",
@@ -48,19 +49,47 @@ local function icon(name, size)
     return IconWidget:new{ icon = "mahjong/" .. name, width = size, height = size }
 end
 
-local function icon_group(names, description, group_size)
+local function icon_group(names, description, group_size, max_width)
     group_size = group_size or #names
+    local icon_size = Screen:scaleBySize(34)
+    local row_gap = Screen:scaleBySize(1)
+    local boundary_gap = Screen:scaleBySize(12)
+    if max_width then
+        icon_size = math.min(icon_size,
+            math.max(Screen:scaleBySize(12),
+                math.floor((max_width - (group_size - 1) * row_gap) / group_size)))
+    end
     local icons = {}
     for i, name in ipairs(names) do
-        icons[#icons + 1] = icon(name, 34)
+        icons[#icons + 1] = icon(name, icon_size / Screen:scaleBySize(1))
         if i < #names then
-            local boundary = i % group_size == 0
             icons[#icons + 1] = HorizontalSpan:new{
-                width = Screen:scaleBySize(boundary and 12 or 1),
+                width = i % group_size == 0 and boundary_gap or row_gap,
             }
         end
     end
-    local group = { align = "left", HorizontalGroup:new(icons) }
+    local group = { align = "left" }
+    local boundary_count = math.floor((#names - 1) / group_size)
+    local total_width = #names * icon_size + (#names - 1 - boundary_count) * row_gap
+        + boundary_count * boundary_gap
+    if max_width and #names > group_size and total_width > max_width then
+        group = { align = "left" }
+        for first = 1, #names, group_size do
+            local row = {}
+            for i = first, math.min(first + group_size - 1, #names) do
+                row[#row + 1] = icon(names[i], icon_size / Screen:scaleBySize(1))
+                if i < math.min(first + group_size - 1, #names) then
+                    row[#row + 1] = HorizontalSpan:new{ width = row_gap }
+                end
+            end
+            group[#group + 1] = HorizontalGroup:new(row)
+            if first + group_size <= #names then
+                group[#group + 1] = VerticalSpan:new{ height = row_gap }
+            end
+        end
+    else
+        group[#group + 1] = HorizontalGroup:new(icons)
+    end
     for line in t(description):gmatch("[^\n]+") do
         group[#group + 1] = label(line, 13)
     end
@@ -93,12 +122,18 @@ local function board_tile(board, x, y, layer, marker, px, py, tw, th)
     return tile
 end
 
-local function example_board()
-    local tw = Screen:scaleBySize(42)
-    local th = Screen:scaleBySize(59)
-    local bw = Screen:scaleBySize(4)
-    local bh = Screen:scaleBySize(6)
-    local origin_x = Screen:scaleBySize(9)
+local function example_board(max_width)
+    -- Keep the illustration at its original small reference size. It is an
+    -- explanatory example between paragraphs, not a second board; only shrink
+    -- it when a very narrow phone panel cannot hold the reference width.
+    local reference_w = Screen:scaleBySize(235)
+    local board_width = math.min(reference_w, max_width)
+    local ratio = board_width / reference_w
+    local tw = math.max(Screen:scaleBySize(12), math.floor(Screen:scaleBySize(42) * ratio))
+    local th = math.max(Screen:scaleBySize(16), math.floor(Screen:scaleBySize(59) * ratio))
+    local bw = math.max(1, math.floor(Screen:scaleBySize(4) * ratio))
+    local bh = math.max(1, math.floor(Screen:scaleBySize(6) * ratio))
+    local origin_x = math.max(0, math.floor(Screen:scaleBySize(9) * ratio))
     local board = {}
     local positions = {
         { x = 0, y = 1, layer = 0 }, { x = 1, y = 1, layer = 0 },
@@ -118,14 +153,17 @@ local function example_board()
             marker, px, py, tw + bw, th + bh)
     end
     children.dimen = Geometry:new{
-        w = Screen:scaleBySize(235), h = Screen:scaleBySize(100),
+        w = board_width, h = math.max(Screen:scaleBySize(70), th + Screen:scaleBySize(8)),
     }
     return OverlapGroup:new(children)
 end
 
 local function lifted_example_board(width)
-    local board = example_board()
-    board.overlap_offset = { Screen:scaleBySize(150), -Screen:scaleBySize(30) }
+    local board = example_board(width)
+    board.overlap_offset = {
+        math.max(0, math.floor((width - board.dimen.w) / 2)),
+        -Screen:scaleBySize(38),
+    }
     return OverlapGroup:new{
         board,
         dimen = Geometry:new{ w = width, h = Screen:scaleBySize(96) },
@@ -133,6 +171,7 @@ local function lifted_example_board(width)
 end
 
 function HelpWidget:init()
+    MahjongUI.refreshDimensions(self)
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
     self:buildPage()
@@ -150,8 +189,10 @@ function HelpWidget:buildPage()
         icon_width = Screen:scaleBySize(20), icon_height = Screen:scaleBySize(20),
         bordersize = 0, padding = 0, callback = function() self:closeDialog() end,
     }
-    local panel_w = math.floor(self.full_width * 0.86)
-    local inner_w = panel_w - 2 * Screen:scaleBySize(22)
+    local panel_w = math.max(1, math.floor(self.full_width * 0.86))
+    panel_w = math.min(panel_w, math.max(1, self.full_width - 2 * Screen:scaleBySize(8)))
+    local panel_padding = math.min(Screen:scaleBySize(22), math.max(2, math.floor(panel_w * 0.08)))
+    local inner_w = math.max(1, panel_w - 2 * panel_padding)
     local function section_heading(value)
         return CenterContainer:new{
             TextWidget:new{
@@ -165,7 +206,7 @@ function HelpWidget:buildPage()
         HorizontalSpan:new{ width = close.width },
         CenterContainer:new{
             title,
-            dimen = Geometry:new{ w = inner_w - 2 * close.width, h = Screen:scaleBySize(36) },
+            dimen = Geometry:new{ w = math.max(1, inner_w - 2 * close.width), h = Screen:scaleBySize(36) },
         },
         close,
     }
@@ -207,11 +248,11 @@ function HelpWidget:buildPage()
             label("help.page_one_6", 12), label("help.page_one_7", 12),
             VerticalSpan:new{ width = gap },
             section_heading("help.tile_groups"),
-            icon_group({"c1", "c2", "c3", "d1", "d2", "d3", "b1", "b2", "b3"}, "help.characters", 3),
-            icon_group({"east", "south", "west", "north"}, "help.winds"),
-            icon_group({"red", "green", "white"}, "help.dragons"),
-            icon_group({"flower1", "flower2", "flower3", "flower4"}, "help.flowers"),
-            icon_group({"season1", "season2", "season3", "season4"}, "help.seasons"),
+            icon_group({"c1", "c2", "c3", "d1", "d2", "d3", "b1", "b2", "b3"}, "help.characters", 3, inner_w),
+            icon_group({"east", "south", "west", "north"}, "help.winds", nil, inner_w),
+            icon_group({"red", "green", "white"}, "help.dragons", nil, inner_w),
+            icon_group({"flower1", "flower2", "flower3", "flower4"}, "help.flowers", nil, inner_w),
+            icon_group({"season1", "season2", "season3", "season4"}, "help.seasons", nil, inner_w),
         }
     else
         content = VerticalGroup:new{
@@ -229,8 +270,8 @@ function HelpWidget:buildPage()
         }
     end
     local panel_h = math.floor(self.full_height * 0.82) + Screen:scaleBySize(35)
-    local panel_padding = Screen:scaleBySize(22)
-    local inner_h = panel_h - 2 * panel_padding
+    panel_h = math.min(panel_h, math.max(1, self.full_height - 2 * Screen:scaleBySize(8)))
+    local inner_h = math.max(1, panel_h - 2 * panel_padding)
     local title_h = Screen:scaleBySize(36)
     local footer_h = Screen:scaleBySize(34)
     local credits

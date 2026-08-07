@@ -42,6 +42,7 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
+local MahjongUI = require("mahjongui")
 
 local WinSummary = InputContainer:extend{
     name = "mahjongwinsummary",
@@ -60,6 +61,7 @@ local WinSummary = InputContainer:extend{
 }
 
 function WinSummary:init()
+    MahjongUI.refreshDimensions(self)
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
 
@@ -112,7 +114,11 @@ function WinSummary:init()
     local gap = Screen:scaleBySize(14)
 
     -- Buttons: Play again (primary) + Close, centered at the bottom.
-    local btn_w = Screen:scaleBySize(150)
+    local panel_padding = math.min(Screen:scaleBySize(24),
+        math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05)))
+    local max_content_w = math.max(1, self.full_width - 2 * panel_padding - 2 * Screen:scaleBySize(8))
+    local btn_w = math.min(Screen:scaleBySize(150),
+        math.max(1, math.floor((max_content_w - Screen:scaleBySize(10)) / 2)))
     local btn_h = Screen:scaleBySize(32)
     local primary = ButtonWidget:new{
         text = self.ok_text,
@@ -148,7 +154,7 @@ function WinSummary:init()
     -- never depends on a container's getSize — mirroring the stats screen).
     local rows_w = max_label_w + label_gap + max_value_w
     local buttons_w = 2 * btn_w + Screen:scaleBySize(10)
-    local content_w = math.max(rows_w, headline_size.w, buttons_w)
+    local content_w = math.min(max_content_w, math.max(rows_w, headline_size.w, buttons_w))
     local headline_h = headline_size.h
 
     -- Horizontal children are centered at `content_w`; the rows keep their
@@ -172,7 +178,7 @@ function WinSummary:init()
         color = Blitbuffer.COLOR_DARK_GRAY,
         bordersize = Screen:scaleBySize(1),
         radius = Screen:scaleBySize(10),
-        padding = Screen:scaleBySize(24),
+        padding = panel_padding,
         VerticalGroup:new(vchildren),
     }
 

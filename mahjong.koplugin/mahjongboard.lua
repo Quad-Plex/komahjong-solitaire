@@ -121,9 +121,13 @@ function Board:computeGeometry()
     local width_units = bounds.width_units
     local height_units = bounds.height_units
 
-    local margin = Screen:scaleBySize(MARGIN)
-    local usable_w = self.width - 2 * margin
-    local usable_h = self.height - 2 * margin
+    -- Very small/short canvases still get a positive fit area. This matters on
+    -- phone split-screen and after rotation, where the surrounding chrome can
+    -- temporarily leave less room than the normal Kindle layout.
+    local margin = math.min(Screen:scaleBySize(MARGIN),
+        math.max(0, math.floor(math.min(self.width, self.height) / 20)))
+    local usable_w = math.max(1, self.width - 2 * margin)
+    local usable_h = math.max(1, self.height - 2 * margin)
 
     -- Portrait faces (th = TILE_ASPECT * tw) sized to fit both axes.
     local tw_w = usable_w / width_units

@@ -47,6 +47,7 @@ local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
 local I18n = require("mahjongi18n")
 local t = I18n.t
+local MahjongUI = require("mahjongui")
 
 local DEFAULTS = {
     language = "en",
@@ -119,6 +120,7 @@ local function setButtonText(btn, text)
 end
 
 function SettingsWidget:init()
+    MahjongUI.refreshDimensions(self)
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
 
@@ -139,7 +141,8 @@ function SettingsWidget:init()
     }
     self._rows = {}
 
-    local label_gap = Screen:scaleBySize(12) -- label -> control gap
+    local label_gap = math.min(Screen:scaleBySize(12),
+        math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.03)))
     local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(16))
     local label_color = Blitbuffer.COLOR_DARK_GRAY
 
@@ -204,10 +207,32 @@ function SettingsWidget:init()
         local w = measureText(l, label_face, false)
         if w > max_label_w then max_label_w = w end
     end
+    -- The desktop card keeps its compact, aligned rows. When the available
+    -- width cannot hold the longest translated value, stack each label above
+    -- its control instead of letting KOReader truncate the setting.
+    local compact_padding = math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05))
+    local panel_padding = math.min(Screen:scaleBySize(24), compact_padding)
+    local max_panel_w = math.max(1, self.full_width - 2 * Screen:scaleBySize(8))
+    local natural_content_w = max_label_w + label_gap + toggle_w
+    local stacked = natural_content_w + 2 * panel_padding > max_panel_w
+    local control_w = stacked
+        and math.max(1, max_panel_w - 2 * panel_padding)
+        or toggle_w
     local function row(label, control)
+        local label_widget = TextWidget:new{
+            text = label, padding = 0, face = label_face, fgcolor = label_color,
+        }
+        if stacked then
+            return VerticalGroup:new{
+                align = "left",
+                label_widget,
+                VerticalSpan:new{ height = math.max(1, math.floor(label_gap / 2)) },
+                control,
+            }
+        end
         return HorizontalGroup:new{
             HorizontalSpan:new{ width = max_label_w - measureText(label, label_face, false) },
-            TextWidget:new{ text = label, padding = 0, face = label_face, fgcolor = label_color },
+            label_widget,
             HorizontalSpan:new{ width = label_gap },
             control,
         }
@@ -216,7 +241,7 @@ function SettingsWidget:init()
     -- Hint button --------------------------------------------------------
     local hints_btn
     hints_btn = makeButton(
-        self.changes.hints and t("settings.on") or t("settings.off"), toggle_w, Screen:scaleBySize(32),
+        self.changes.hints and t("settings.on") or t("settings.off"), control_w, Screen:scaleBySize(32),
         function() return self.changes.hints and t("settings.on") or t("settings.off") end)
     hints_btn.callback = function()
         self.changes.hints = not (self.changes.hints or false)
@@ -226,7 +251,7 @@ function SettingsWidget:init()
     self._rows.hints = hints_btn
 
     local language_btn
-    language_btn = makeButton(languageText(self.changes.language), toggle_w, Screen:scaleBySize(32),
+    language_btn = makeButton(languageText(self.changes.language), control_w, Screen:scaleBySize(32),
         function() return languageText(self.changes.language) end)
     language_btn.callback = function()
         self.changes.language = self.changes.language == "de" and "en" or "de"
@@ -238,7 +263,7 @@ function SettingsWidget:init()
     -- Score-method button (cycles Chain -> Basic) -------------------------
     local score_btn
     score_btn = makeButton(
-        scoreText(self.changes.score_method), toggle_w, Screen:scaleBySize(32),
+        scoreText(self.changes.score_method), control_w, Screen:scaleBySize(32),
         function() return scoreText(self.changes.score_method) end)
     score_btn.callback = function()
         local idx = 1
@@ -259,7 +284,7 @@ function SettingsWidget:init()
     local setIntervalEnabled
     local timer_mode_btn
     timer_mode_btn = makeButton(
-        timerModeText(self.changes.timer_update), toggle_w, Screen:scaleBySize(32),
+        timerModeText(self.changes.timer_update), control_w, Screen:scaleBySize(32),
         function() return timerModeText(self.changes.timer_update) end)
     timer_mode_btn.callback = function()
         local idx = 1
@@ -279,7 +304,7 @@ function SettingsWidget:init()
     -- meaningless (the mm:ss only repaints on board interaction), so the
     -- button is greyed out and its taps are ignored.
     timer_interval_btn = makeButton(
-        intervalText(self.changes.timer_interval), toggle_w, Screen:scaleBySize(32),
+        intervalText(self.changes.timer_interval), control_w, Screen:scaleBySize(32),
         function() return intervalText(self.changes.timer_interval) end)
     setIntervalEnabled = function()
         local on = self.changes.timer_update ~= "move"
@@ -307,7 +332,10 @@ function SettingsWidget:init()
     -- Bottom buttons: Reset / Save ------------------------------------------
     -- (No Cancel button: a tap outside the panel or the title-row close X
     -- already discards the collected changes, so Cancel would be redundant.)
-    local bottom_w = Screen:scaleBySize(150)
+    local gap = math.min(Screen:scaleBySize(14),
+        math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.025)))
+    local bottom_w = math.min(Screen:scaleBySize(150),
+        math.max(1, math.floor((max_panel_w - 2 * panel_padding - gap) / 2)))
     local reset_btn = makeButton(t("settings.reset"), bottom_w, Screen:scaleBySize(32))
     reset_btn.callback = function() self:resetToDefaults() end
     local save_btn = makeButton(t("settings.save"), bottom_w, Screen:scaleBySize(32))
@@ -322,8 +350,7 @@ function SettingsWidget:init()
     -- so a title row sized to the value column would be centered with
     -- empty space to the right of the X. Sizing it to the widest child pins
     -- the X flush against the panel's inner right edge.
-    local gap = Screen:scaleBySize(14)
-    local content_w = max_label_w + label_gap + toggle_w
+    local content_w = stacked and control_w or natural_content_w
     local title_row_w = math.max(content_w, 2 * bottom_w + gap)
     local title_widget = TextWidget:new{
         text = t("settings.title"),
@@ -354,13 +381,14 @@ function SettingsWidget:init()
 
     -- Floating panel: a white rounded card centered over the game. The outer
     -- widget stays transparent, so the board shows through around the card.
-    local top_pad = Screen:scaleBySize(40)
+    local top_pad = math.min(stacked and Screen:scaleBySize(16) or Screen:scaleBySize(40),
+        math.max(Screen:scaleBySize(8), math.floor(self.full_height * 0.04)))
     local panel = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
         bordersize = Screen:scaleBySize(1),
         radius = Screen:scaleBySize(10),
-        padding = Screen:scaleBySize(24),
+        padding = panel_padding,
         VerticalGroup:new{
             align = "center",
             title_row,

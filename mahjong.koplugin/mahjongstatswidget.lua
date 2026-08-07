@@ -43,6 +43,7 @@ local I18n = require("mahjongi18n")
 local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
 local MahjongStats = require("mahjongstats")
+local MahjongUI = require("mahjongui")
 
 local StatsWidget = InputContainer:extend{
     name = "mahjongstatswidget",
@@ -137,6 +138,7 @@ function StatsWidget:updateValues()
 end
 
 function StatsWidget:init()
+    MahjongUI.refreshDimensions(self)
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
 
@@ -145,8 +147,10 @@ function StatsWidget:init()
     local vs = valueStrings(stats)
     local map_vs = layoutValueStrings(stats, layout_id)
 
-    local label_gap = Screen:scaleBySize(12) -- label -> value gap
-    local col_gap = Screen:scaleBySize(24)   -- Global column -> layout column gap
+    local label_gap = math.min(Screen:scaleBySize(12),
+        math.max(Screen:scaleBySize(6), math.floor(self.full_width * 0.03)))
+    local col_gap = math.min(Screen:scaleBySize(24),
+        math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.06)))
     local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(16))
     local label_color = Blitbuffer.COLOR_DARK_GRAY
     local value_face = Font:getFace("cfont", Screen:scaleBySize(18))
@@ -188,6 +192,10 @@ function StatsWidget:init()
     end
     local column_w = max_label_w + label_gap + max_value_w
     local content_w = column_w * 2 + col_gap
+    local panel_padding = math.min(Screen:scaleBySize(24),
+        math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05)))
+    local max_panel_w = math.max(1, self.full_width - 2 * Screen:scaleBySize(8))
+    local stacked = content_w + 2 * panel_padding > max_panel_w
 
     self._values = {}
 
@@ -235,7 +243,8 @@ function StatsWidget:init()
     -- Reset button (bottom): clears the whole record (global + per-layout
     -- maps) back to defaults, after a ConfirmBox so an accidental tap cannot
     -- wipe the lifetime stats.
-    local reset_w = Screen:scaleBySize(160)
+    local reset_w = math.min(Screen:scaleBySize(160),
+        math.max(1, max_panel_w - 2 * panel_padding))
     local reset_btn = ButtonWidget:new{
         text = t("settings.reset"),
         text_font_face = "cfont",
@@ -250,8 +259,9 @@ function StatsWidget:init()
     }
     self._reset_btn = reset_btn
 
-    local gap = Screen:scaleBySize(14)
-    local panel_content_w = math.max(content_w, reset_w)
+    local gap = math.min(Screen:scaleBySize(14),
+        math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.025)))
+    local panel_content_w = math.max(stacked and column_w or content_w, reset_w)
     local pad_side = math.max(0, math.floor((panel_content_w - reset_w) / 2))
     local reset_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = pad_side },
@@ -291,21 +301,31 @@ function StatsWidget:init()
 
     -- Floating panel: a white rounded card centered over the game. The outer
     -- widget stays transparent, so the board shows through around the card.
-    local top_pad = Screen:scaleBySize(40)
+    local top_pad = math.max(Screen:scaleBySize(8), math.floor(self.full_height * 0.04))
+    local columns_layout
+    if stacked then
+        columns_layout = VerticalGroup:new{
+            global_col,
+            VerticalSpan:new{ height = col_gap },
+            map_col,
+        }
+    else
+        columns_layout = HorizontalGroup:new{
+            global_col,
+            HorizontalSpan:new{ width = col_gap },
+            map_col,
+        }
+    end
     local panel = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
         bordersize = Screen:scaleBySize(1),
         radius = Screen:scaleBySize(10),
-        padding = Screen:scaleBySize(24),
+        padding = panel_padding,
         VerticalGroup:new{
             title_row,
             VerticalSpan:new{ width = gap },
-            HorizontalGroup:new{
-                global_col,
-                HorizontalSpan:new{ width = col_gap },
-                map_col,
-            },
+            columns_layout,
             VerticalSpan:new{ width = gap * 2 },
             reset_row,
             VerticalSpan:new{ width = top_pad },
