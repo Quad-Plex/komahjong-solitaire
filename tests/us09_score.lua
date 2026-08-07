@@ -1,9 +1,9 @@
--- US-09 score & status suite: base + chain scoring, HUD feedback, and the
+-- US-09 score & status suite: base + chain/combo scoring, HUD feedback, and the
 -- invalid-selection flash.
 --
 -- Checks:
 --   * Logic: pairPoints (base 10 / +5 chain) and matchGroup;
---   * A consecutive same-kind match chains (+5) through the real tap flow;
+--   * A consecutive same-kind match chains (+5) and a fast match gets +10;
 --   * A different-kind match does NOT chain;
 --   * Flower pairs chain with any flower;
 --   * Undo restores the score AND the chain state (last_match_kind);
@@ -41,6 +41,8 @@ end
 
 expect(Logic.SCORE_PER_PAIR == 10, "logic base score constant is 10")
 expect(Logic.CHAIN_BONUS == 5, "logic chain bonus constant is 5")
+expect(Logic.COMBO_BONUS == 10, "logic combo bonus constant is 10")
+expect(Logic.COMBO_INCREMENT == 5, "combo-chain increment is 5")
 expect(Logic.pairPoints(nil, "b1") == 10, "first match scores the base 10")
 expect(Logic.pairPoints("b1", "b1") == 15, "same-kind chain scores 15")
 expect(Logic.pairPoints("b2", "b1") == 10, "different kind scores 10")
@@ -66,8 +68,9 @@ expect(mj.status_bar.stats.score == 10, "HUD score chip shows 10")
 
 mj:handleTileTap(6, 2, 0)
 mj:handleTileTap(8, 2, 0)
-expect(mj.score == 25, "consecutive same-kind pair chains (+15), total 25 (got " .. tostring(mj.score) .. ")")
-expect(mj.status_bar.stats.score == 25, "HUD score chip reflects the chain bonus")
+expect(mj.score == 35, "fast consecutive same-kind pair gets chain + combo, total 35 (got " .. tostring(mj.score) .. ")")
+expect(mj.status_bar.stats.score == 35, "HUD score chip reflects the chain and combo bonuses")
+expect(mj.flash_text.text == "COMBO +10", "fast pair shows COMBO +10 in the feedback band")
 expect(Logic.isWin(mj.board), "board emptied after the chain pair")
 
 -- ---- Undo restores score AND chain state -----------------------------------
@@ -77,7 +80,8 @@ expect(mj.score == 10, "undo restores score to 10")
 expect(mj.last_match_kind == "b1", "undo restores the chain state")
 mj:handleTileTap(6, 2, 0)
 mj:handleTileTap(8, 2, 0)
-expect(mj.score == 25, "chain still applies after an undo (back to 25)")
+expect(mj.score == 25, "undo breaks the combo window but preserves chain scoring (back to 25)")
+expect(mj.flash_text.text ~= "COMBO +10", "redoing an undone pair shows no combo message")
 
 -- ---- No chain across different kinds ---------------------------------------
 
@@ -91,7 +95,7 @@ mj2:handleTileTap(2, 2, 0)
 mj2:handleTileTap(4, 2, 0)
 mj2:handleTileTap(6, 2, 0)
 mj2:handleTileTap(8, 2, 0)
-expect(mj2.score == 20, "different-kind match does not chain (10 + 10 = 20)")
+expect(mj2.score == 30, "different-kind match gets combo but not chain (10 + 20 = 30)")
 expect(mj2.last_match_kind == "c1", "last kind updates to c1")
 expect(Logic.isWin(mj2.board), "board emptied")
 
@@ -107,7 +111,28 @@ mj3:handleTileTap(2, 2, 0)
 mj3:handleTileTap(4, 2, 0)
 mj3:handleTileTap(6, 2, 0)
 mj3:handleTileTap(8, 2, 0)
-expect(mj3.score == 25, "flower pairs chain (10 + 15 = 25)")
+expect(mj3.score == 35, "flower pairs chain and combo (10 + 25 = 35)")
+
+-- ---- Escalating combo chain ---------------------------------------------------
+
+local mj_chain = Mahjong:new()
+mj_chain.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"b1"}, {8,2,0,"b1"},
+    {10,2,0,"b1"}, {12,2,0,"b1"},
+}
+mj_chain:buildUILayout()
+mj_chain:handleTileTap(2, 2, 0)
+mj_chain:handleTileTap(4, 2, 0)
+mj_chain:handleTileTap(6, 2, 0)
+mj_chain:handleTileTap(8, 2, 0)
+expect(mj_chain.score == 35 and mj_chain.flash_text.text == "COMBO +10",
+    "the first fast clear gets a +10 combo")
+mj_chain:handleTileTap(10, 2, 0)
+mj_chain:handleTileTap(12, 2, 0)
+expect(mj_chain.score == 65 and mj_chain.flash_text.text == "COMBO-CHAIN +15"
+        and mj_chain.flash_text.bold == true,
+    "the next fast clear escalates to COMBO-CHAIN +15")
 
 -- ---- Invalid selection shows non-blocking feedback ---------------------------
 
@@ -166,9 +191,9 @@ ctx.last_confirm = nil
 mj5:handleTileTap(6, 2, 0)
 mj5:handleTileTap(8, 2, 0)
 expect(ctx.last_confirm ~= nil
-        and tostring(ctx.last_confirm.text):find("Score: 25", 1, true) ~= nil,
-    "win dialog shows the chain-inclusive score (25)")
-expect(mj5.score == 25, "score is 25 at the win")
+        and tostring(ctx.last_confirm.text):find("Score: 35", 1, true) ~= nil,
+    "win dialog shows the chain/combo-inclusive score (35)")
+expect(mj5.score == 35, "score is 35 at the win")
 
 -- ---- Shuffle keeps the chain state -------------------------------------------
 
@@ -196,9 +221,27 @@ end
 expect(ta ~= nil, "shuffled board still has a playable pair")
 mj6:handleTileTap(ta.x, ta.y, ta.layer)
 mj6:handleTileTap(tb.x, tb.y, tb.layer)
--- The second same-kind pair chains (+15), but the user-initiated shuffle in
--- between cost SHUFFLE_PENALTY (10), so the net is 10 + 15 - 10 = 15 (US-18).
-expect(mj6.score == 15, "chain bonus applies across a shuffle (10 + 15 - 10 = 15)")
+-- The second same-kind pair chains (+15) and is fast (+10), but the
+-- user-initiated shuffle in between costs SHUFFLE_PENALTY (10), so the net is
+-- 10 + 25 - 10 = 25 (US-18).
+expect(mj6.score == 25, "chain/combo applies across a shuffle (10 + 25 - 10 = 25)")
+
+-- ---- Combo window ------------------------------------------------------------
+
+local mj7 = Mahjong:new()
+mj7.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {6,2,0,"b1"}, {8,2,0,"b1"},
+    {10,2,0,"c1"}, {12,2,0,"c1"},
+}
+mj7:buildUILayout()
+mj7:handleTileTap(2, 2, 0)
+mj7:handleTileTap(4, 2, 0)
+mj7.last_match_elapsed = mj7:getElapsed() - 6
+mj7:handleTileTap(6, 2, 0)
+mj7:handleTileTap(8, 2, 0)
+expect(mj7.score == 25, "a match after five seconds gets chain points but no combo")
+expect(mj7.flash_text.text ~= "COMBO +10", "expired combo window shows no combo message")
 
 if failures == 0 then
     print("\nALL US-09 SCORE/STATUS CHECKS PASSED")

@@ -149,24 +149,24 @@ expect(ctx.last_confirm ~= nil, "a win shows the win dialog")
 local win_text = tostring(ctx.last_confirm.text)
 expect(win_text:find("You cleared the board!", 1, true) ~= nil,
     "the summary keeps the cleared-the-board headline")
-expect(win_text:find("Score: 25", 1, true) ~= nil, "the summary shows the final score")
+expect(win_text:find("Score: 35", 1, true) ~= nil, "the summary shows the final score")
 expect(win_text:find("Time: 00:45", 1, true) ~= nil, "the summary shows the elapsed time")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil, "the summary shows the pairs matched")
 expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
     "the summary shows zero shuffles on a clean win")
-expect(win_text:find("Best score: 25", 1, true) ~= nil, "the summary shows the best score")
+expect(win_text:find("Best score: 35", 1, true) ~= nil, "the summary shows the best score")
 expect(win_text:find("Best time: 00:45", 1, true) ~= nil, "the summary shows the best time")
 expect(win_text:find("Current streak: 1", 1, true) ~= nil, "the summary shows the current streak")
 expect(win_text:find("New best!", 1, true) ~= nil,
     "a first record marks the best lines with New best!")
-expect(mj1.stats.games_won == 1 and mj1.stats.best_score == 25
+expect(mj1.stats.games_won == 1 and mj1.stats.best_score == 35
         and mj1.stats.best_time == 45 and mj1.stats.current_streak == 1
         and mj1.stats.longest_streak == 1,
     "a human win recorded games_won / bests / streak")
 expect(mj1.game_won == true, "showWinDialog sets the game_won flag")
-expect(store.stats ~= nil and store.stats.games_won == 1 and store.stats.best_score == 25,
+expect(store.stats ~= nil and store.stats.games_won == 1 and store.stats.best_score == 35,
     "the win was persisted to the stats key")
 expect(store.game == nil, "a won board is still not saved under the game key")
 
@@ -198,7 +198,7 @@ expect(win_text:find("New best!", 1, true) == nil,
     "a win that beats no record shows no New best! marker")
 expect(mj1.stats.games_won == 2 and mj1.stats.current_streak == 2,
     "a worse win still counts and extends the streak")
-expect(mj1.stats.best_score == 25 and mj1.stats.best_time == 45,
+expect(mj1.stats.best_score == 35 and mj1.stats.best_time == 45,
     "a worse win keeps the existing records")
 
 -- ---- A better third win marks the records again -------------------------------
@@ -211,14 +211,14 @@ setBoard(mj1, {
 mj1.elapsed_base = 30
 playAndWin(mj1, 3)
 expect(Logic.isWin(mj1.board), "six-tile board emptied for the win")
-expect(mj1.score == 40, "the six-tile chain win scores 40 (10+15+15)")
+expect(mj1.score == 65, "the six-tile chain/combo win scores 65 (10+25+30)")
 expect(mj1.pairs_matched == 3, "the pair counter tracked the three matched pairs")
 win_text = tostring(ctx.last_confirm.text)
-expect(win_text:find("Best score: 40 (New best!)", 1, true) ~= nil,
+expect(win_text:find("Best score: 65 (New best!)", 1, true) ~= nil,
     "a new best score is marked New best!")
 expect(win_text:find("Best time: 00:30 (New best!)", 1, true) ~= nil,
     "a new best time is marked New best!")
-expect(mj1.stats.best_score == 40 and mj1.stats.best_time == 30,
+expect(mj1.stats.best_score == 65 and mj1.stats.best_time == 30,
     "the records updated to the better win")
 
 -- ---- A mid-game New Game abandons the game and resets the streak --------------
@@ -280,7 +280,7 @@ while scheduled[1] and guard < 200 do
     guard = guard + 1
 end
 expect(Logic.isWin(mj2.board), "auto-solve cleared the board")
-expect(mj2.stats.games_won == 3 and mj2.stats.best_score == 40
+expect(mj2.stats.games_won == 3 and mj2.stats.best_score == 65
         and mj2.stats.best_time == 30 and mj2.stats.current_streak == 0
         and mj2.stats.games_played == 3,
     "an auto-solve win leaves the loaded lifetime stats untouched")

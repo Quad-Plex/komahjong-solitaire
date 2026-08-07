@@ -58,11 +58,13 @@ local ICON_DIR = "mahjong"
 
 -- US-09 scoring: base + chain bonus live in mahjonglogic.lua
 -- (MahjongLogic.pairPoints / SCORE_PER_PAIR / CHAIN_BONUS); main.lua only
--- tracks the kind of the previous match for the chain. A timer bonus is not
--- implemented, but elapsed time IS tracked and displayed (US-10).
+-- tracks the kind and active-game time of the previous match for chain/combo
+-- scoring. The combo is independent of the score-method chain setting.
 -- FLASH_TIMEOUT: how long a non-blocking feedback message (e.g. "Tile is
 -- blocked") stays visible in the band between the board and the toolbar.
 local FLASH_TIMEOUT = 2
+local COMBO_WINDOW_SECONDS = 5
+local COMBO_PULSE_STEP_SECONDS = 0.5
 
 -- A dead board gets several cheap candidate shuffles instead of accepting the
 -- first random result.  Candidates are evaluated one per UI tick so the
@@ -236,6 +238,8 @@ local Mahjong = FrameContainer:extend{
     selected = nil, -- { x, y, layer, kind } of the currently selected tile
     score = 0,
     last_match_kind = nil, -- kind of the last matched pair (chain scoring, US-09)
+    last_match_elapsed = nil, -- active-game time of the last pair (combo scoring)
+    combo_chain = 0, -- consecutive fast-clear count (the first combo is 1)
     history = nil, -- stack of { a, b, ka, kb, score, prev_last }
     settings = nil, -- LuaSettings handle (US-10)
     score_method = "chain", -- "chain" or "basic" (settings, defaulted for tests)
@@ -378,6 +382,8 @@ function Mahjong:startGame()
         self.history = restored.history
         self.score = restored.score
         self.last_match_kind = restored.last_match_kind
+        self.last_match_elapsed = restored.last_match_elapsed
+        self.combo_chain = restored.combo_chain or 0
         self.elapsed_base = restored.elapsed
         -- US-18: the per-game help counters ride along in the saved state.
         self.hints_used = restored.hints_used or 0
@@ -482,6 +488,8 @@ function Mahjong:startGameWithLayout(id)
     self.selected = nil
     self.score = 0
     self.last_match_kind = nil
+    self.last_match_elapsed = nil
+    self.combo_chain = 0
     self.history = {}
     self.pairs_matched = 0
     self.hints_used = 0
@@ -532,7 +540,7 @@ function Mahjong:saveGameState()
             self.board, self.history, self.score,
             self.last_match_kind, self:getElapsed(),
             self.hints_used, self.shuffles_used, self.layout,
-            self.game_was_autosolved)
+            self.game_was_autosolved, self.last_match_elapsed, self.combo_chain)
         self.settings:saveSetting("game", data)
     end
     self.settings:flush()
@@ -1017,18 +1025,41 @@ function Mahjong:applyMatch(a, b)
     self:clearHint()
     self.board_view:removePair(a, b)
     local prev_last = self.last_match_kind
+    local prev_match_elapsed = self.last_match_elapsed
+    local now_elapsed = self:getElapsed()
+    -- Auto-solve paces its own moves and keeps the persistent "Auto-solving…"
+    -- message; combos are a reward for the player's fast clears.
+    local combo = not self._auto_solve_active
+        and prev_match_elapsed ~= nil
+        and now_elapsed >= prev_match_elapsed
+        and now_elapsed - prev_match_elapsed <= COMBO_WINDOW_SECONDS
+    local combo_chain = combo and ((self.combo_chain or 0) + 1) or 0
     local points
     if self.score_method == "chain" then
         points = MahjongLogic.pairPoints(prev_last, ka)
     else
         points = MahjongLogic.SCORE_PER_PAIR
     end
+    if combo then
+        points = points + MahjongLogic.COMBO_BONUS
+            + (combo_chain - 1) * MahjongLogic.COMBO_INCREMENT
+    end
     self.last_match_kind = ka
+    self.last_match_elapsed = now_elapsed
+    self.combo_chain = combo_chain
     self.score = self.score + points
     self.pairs_matched = (self.pairs_matched or 0) + 1
-    table.insert(self.history, { a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last })
+    table.insert(self.history, {
+        a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last,
+    })
     self:updateStatus()
     self:updateTimerDisplay()
+    if combo then
+        local combo_points = MahjongLogic.COMBO_BONUS
+            + (combo_chain - 1) * MahjongLogic.COMBO_INCREMENT
+        local label = combo_chain == 1 and _("COMBO +%d") or _("COMBO-CHAIN +%d")
+        self:flashMessage(string.format(label, combo_points), true)
+    end
     self:saveGameState()
     return true
 end
@@ -1183,6 +1214,7 @@ function Mahjong:undo()
     if not move then return end
 
     self:clearSelection()
+    self:clearFlash()
     -- US-34: the board changed under the hint, so drop it (clearHint is a
     -- no-op when no hint is up).
     self:clearHint()
@@ -1194,6 +1226,10 @@ function Mahjong:undo()
     self.score = MahjongLogic.applyPenalty(self.score, move.score)
     self.pairs_matched = math.max(0, (self.pairs_matched or 0) - 1)
     self.last_match_kind = move.prev_last
+    -- Undo restores chain state, but it intentionally breaks the combo window:
+    -- redoing an undone pair must not receive a speed bonus.
+    self.last_match_elapsed = nil
+    self.combo_chain = 0
     self:updateStatus()
     self:updateTimerDisplay()
     self:saveGameState()
@@ -1546,9 +1582,24 @@ end
 -- accepting taps while a message is showing — an accidental blocked-tile tap
 -- can be corrected immediately. Each call bumps a sequence token; a stale
 -- clear timer (e.g. from before a close/new game) is a no-op.
-function Mahjong:flashMessage(text)
+function Mahjong:flashMessage(text, pulse)
     self:setFlash(text)
     local seq = self._flash_seq
+    if pulse and self.flash_text then
+        self.flash_text.bold = true
+        UIManager:setDirty(self, "ui")
+        local elapsed = 0
+        local tick
+        tick = function()
+            if self._flash_seq ~= seq or not self.flash_text then return end
+            elapsed = elapsed + COMBO_PULSE_STEP_SECONDS
+            if elapsed >= FLASH_TIMEOUT then return end
+            self.flash_text.bold = not self.flash_text.bold
+            UIManager:setDirty(self, "ui")
+            UIManager:scheduleIn(COMBO_PULSE_STEP_SECONDS, tick)
+        end
+        UIManager:scheduleIn(COMBO_PULSE_STEP_SECONDS, tick)
+    end
     UIManager:scheduleIn(FLASH_TIMEOUT, function()
         if self._flash_seq == seq then
             self:clearFlash()
@@ -1565,6 +1616,7 @@ function Mahjong:setFlash(text)
     self._flash_seq = seq
     if self.flash_text then
         self.flash_text:setText(text)
+        self.flash_text.bold = false
         if self.flash_band_icon then
             -- ImageWidget:paintTo skips painting when `hide` is true (the
             -- `visible` field is ignored by KOReader widgets).
@@ -1582,6 +1634,7 @@ function Mahjong:clearFlash()
     self._flash_seq = (self._flash_seq or 0) + 1
     if self.flash_text and self.flash_text.text and self.flash_text.text ~= "" then
         self.flash_text:setText("")
+        self.flash_text.bold = false
         if self.flash_band_icon then
             self.flash_band_icon.hide = true
         end

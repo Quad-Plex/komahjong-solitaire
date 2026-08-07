@@ -401,11 +401,15 @@ end
 --
 -- US-09: base 10 points per matched pair, plus a +5 consecutive bonus when
 -- the pair belongs to the same tile group as the previous match (a chain).
--- A timer bonus is not implemented (elapsed-time tracking is out of scope).
+-- A fast-clear combo is scored by the UI using the active-game elapsed time.
 local SCORE_PER_PAIR = 10
 local CHAIN_BONUS = 5
+local COMBO_BONUS = 10
+local COMBO_INCREMENT = 5
 MahjongLogic.SCORE_PER_PAIR = SCORE_PER_PAIR
 MahjongLogic.CHAIN_BONUS = CHAIN_BONUS
+MahjongLogic.COMBO_BONUS = COMBO_BONUS
+MahjongLogic.COMBO_INCREMENT = COMBO_INCREMENT
 
 -- US-18: using a hint or reshuffling costs points, so those helps are a real
 -- trade-off. The penalty is applied at USE time and is NOT part of the pair
@@ -628,8 +632,8 @@ end
 -- US-10: the whole game state is serialized to a plain Lua table that
 -- LuaSettings can write to disk. The board is stored as-is (a flat
 -- posKey -> kind table, which is what makes this story a plain table), and
--- the undo history is flattened to compact 10-field arrays
--- { ax, ay, al, bx, by, bl, ka, kb, score, prev_last } instead of nested
+-- the undo history is flattened to compact arrays
+-- { ax, ay, al, bx, by, bl, ka, kb, score, prev_last, prev_match_elapsed } instead of nested
 -- tables, so a mid-game save stays small.
 --
 -- A valid mid-game state satisfies `tileCount(board) + 2 * #history == 144`
@@ -641,14 +645,14 @@ end
 -- stack ({ a, b, ka, kb, score, prev_last } records), `last_match_kind` the
 -- chain-scoring kind, `elapsed` the elapsed seconds, `hints_used` /
 -- `shuffles_used` the per-game help counters (US-18), `layout` the layout
--- id the board was dealt on (US-14, defaults to "turtle"), and `autosolved`
+-- id the board was dealt on (US-14, defaults to "turtle"), `autosolved`
 -- the auto-solve taint flag (US-33): true once the solver has ever run on
--- this game, so a reload can never resurrect the partial score as a hand-played
--- win. Returns a fresh table (no references into live state, so later
+-- this game, and `last_match_elapsed` the active-game time of the previous
+-- match for combo scoring. Returns a fresh table (no references into live state, so later
 -- mutations can't corrupt the save).
 function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
-                                          elapsed, hints_used, shuffles_used, layout,
-                                          autosolved)
+                                           elapsed, hints_used, shuffles_used, layout,
+                                           autosolved, last_match_elapsed, combo_chain)
     local out_board = {}
     for key, kind in pairs(board) do
         out_board[key] = kind
@@ -668,6 +672,8 @@ function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
         history = out_history,
         score = score or 0,
         last = last_match_kind,
+        last_match_elapsed = last_match_elapsed,
+        combo_chain = combo_chain or 0,
         elapsed = elapsed or 0,
         hints = hints_used or 0,
         shuffles = shuffles_used or 0,
@@ -677,7 +683,7 @@ end
 
 -- Validates and restores a serialized game state. Returns
 -- { board, history, score, last_match_kind, elapsed, hints_used, shuffles_used,
--- layout, autosolved } with the history un-flattened back to the UI's record
+-- layout, autosolved, last_match_elapsed, combo_chain } with the history un-flattened back to the UI's record
 -- shape, or nil if the state is corrupt/invalid (the caller then silently
 -- starts a new game).
 --
@@ -764,6 +770,17 @@ function MahjongLogic.deserializeGameState(data)
     elseif type(elapsed) ~= "number" or elapsed < 0 then
         return nil
     end
+    local last_match_elapsed = data.last_match_elapsed
+    if last_match_elapsed ~= nil
+        and (type(last_match_elapsed) ~= "number" or last_match_elapsed < 0) then
+        return nil
+    end
+    local combo_chain = data.combo_chain
+    if combo_chain == nil then
+        combo_chain = 0
+    elseif type(combo_chain) ~= "number" or combo_chain < 0 or math.floor(combo_chain) ~= combo_chain then
+        return nil
+    end
 
     -- US-18: per-game help counters. Absent on a pre-US-18 save -> 0 (a valid
     -- older state restores fine); present but non-count invalidates.
@@ -800,6 +817,8 @@ function MahjongLogic.deserializeGameState(data)
         shuffles_used = shuffles_used,
         layout = layout_id,
         autosolved = autosolved,
+        last_match_elapsed = last_match_elapsed,
+        combo_chain = combo_chain,
     }
 end
 
@@ -1506,7 +1525,7 @@ function MahjongLogic.runSelfTests()
     check(p_serialized.board[MahjongLogic.posKey(p_pair.a.x, p_pair.a.y, p_pair.a.layer)] == nil,
         "serialized board does not include the removed tile")
     check(#p_serialized.history == 1 and p_serialized.history[1][7] == p_ka,
-        "serialized history is a flat 10-field record")
+        "serialized history is a flat move record")
     local p_restored = MahjongLogic.deserializeGameState(p_serialized)
     check(p_restored ~= nil, "deserializeGameState accepts a valid mid-game state")
     check(MahjongLogic.tileCount(p_restored.board) == MahjongLogic.tileCount(p_board),
