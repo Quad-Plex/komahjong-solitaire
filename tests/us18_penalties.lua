@@ -43,15 +43,15 @@ local function boardWith(tiles)
     return b
 end
 
--- ---- Pure logic: constants + applyPenalty floors at 0 ------------------------
+-- ---- Pure logic: constants + applyPenalty can go negative --------------------
 
 expect(Logic.HINT_PENALTY == 5, "hint penalty is 5")
 expect(Logic.SHUFFLE_PENALTY == 10, "shuffle penalty is 10")
 expect(Logic.applyPenalty(100, Logic.HINT_PENALTY) == 95,
     "applyPenalty subtracts the hint penalty")
-expect(Logic.applyPenalty(3, 5) == 0, "applyPenalty floors at 0")
-expect(Logic.applyPenalty(0, 10) == 0, "applyPenalty(0, n) stays 0")
-expect(Logic.applyPenalty(5, 10) == 0, "applyPenalty never goes negative")
+expect(Logic.applyPenalty(3, 5) == -2, "applyPenalty can sink below 0")
+expect(Logic.applyPenalty(0, 10) == -10, "applyPenalty(0, n) goes negative")
+expect(Logic.applyPenalty(5, 10) == -5, "applyPenalty goes negative from a low score")
 
 -- ---- A real hint deducts once and increments hints_used -----------------------
 
@@ -172,12 +172,14 @@ mj_u.hints_used = 0
 mj_u:handleTileTap(2, 2, 0)
 mj_u:handleTileTap(4, 2, 0) -- +10 -> 10
 mj_u:showHint()             -- -5  -> 5
-mj_u:undo()
+mj_u:undo()                 -- -10 -> -5 (penalty stays; pair's points come off)
 expect(Logic.tileCount(mj_u.board) == 4, "undo restored the pair's tiles")
-expect(mj_u.score == 0 and mj_u.hints_used == 1,
+expect(mj_u.score == -5 and mj_u.hints_used == 1,
     "undo subtracts the pair's points but never refunds the hint penalty")
 
--- A penalty applied right after a pair cannot push the restored score negative.
+-- Undoing a pair after a penalty can sink the score negative: removing the
+-- pair's points from a penalty-weighed balance goes below 0 (a score may be
+-- negative at any time).
 local mj_neg = Mahjong:new()
 mj_neg.board = boardWith{
     {2,2,0,"b1"}, {4,2,0,"b1"},
@@ -192,9 +194,9 @@ mj_neg:showHint()             -- -5  -> 5
 mj_neg:handleTileTap(6, 2, 0) -- select
 mj_neg:handleTileTap(8, 2, 0) -- +10 -> 15
 mj_neg:undo()                 -- -10 -> 5
-mj_neg:undo()                 -- -10 -> 0 (floored, not -5)
-expect(mj_neg.score == 0 and Logic.tileCount(mj_neg.board) == 4,
-    "undoing a pair after a penalty floors the score at 0 (never negative)")
+mj_neg:undo()                 -- -10 -> -5
+expect(mj_neg.score == -5 and Logic.tileCount(mj_neg.board) == 4,
+    "undoing a pair after a penalty sinks the score negative")
 
 -- ---- The counters survive a save/restore --------------------------------------
 

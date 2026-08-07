@@ -419,10 +419,11 @@ local SHUFFLE_PENALTY = 10
 MahjongLogic.HINT_PENALTY = HINT_PENALTY
 MahjongLogic.SHUFFLE_PENALTY = SHUFFLE_PENALTY
 
--- Returns `score` minus `amount`, never going below 0 (a score can't go
--- negative, no matter how many helps are used).
+-- Returns `score` minus `amount`. A score may go negative — using a help on a
+-- zero (or low) score sinks the balance below 0 rather than clamping, so the
+-- help still costs real points (a score is only ever the running total).
 function MahjongLogic.applyPenalty(score, amount)
-    return math.max(0, (score or 0) - (amount or 0))
+    return (score or 0) - (amount or 0)
 end
 
 -- The chain group of a kind: suited/wind/dragon kinds chain with themselves
@@ -761,7 +762,9 @@ function MahjongLogic.deserializeGameState(data)
     if n + 2 * #out_history ~= 144 then return nil end
 
     local score = data.score
-    if type(score) ~= "number" or score < 0 then return nil end
+    -- A score may legitimately be negative (a hint/shuffle used on a low score
+    -- sinks it below 0), so only a non-number is rejected as corrupt.
+    if type(score) ~= "number" then return nil end
     local last = data.last
     if last ~= nil and not MahjongLogic.isKind(last) then return nil end
     local elapsed = data.elapsed
@@ -1420,10 +1423,10 @@ function MahjongLogic.runSelfTests()
         "applyPenalty subtracts the hint penalty")
     check(MahjongLogic.applyPenalty(100, MahjongLogic.SHUFFLE_PENALTY) == 90,
         "applyPenalty subtracts the shuffle penalty")
-    check(MahjongLogic.applyPenalty(3, 5) == 0, "applyPenalty floors at 0")
-    check(MahjongLogic.applyPenalty(0, 10) == 0, "applyPenalty(0, n) stays 0")
-    check(MahjongLogic.applyPenalty(5, 10) == 0, "applyPenalty never goes negative")
-    check(MahjongLogic.applyPenalty(nil, 5) == 0, "applyPenalty handles a nil score")
+    check(MahjongLogic.applyPenalty(3, 5) == -2, "applyPenalty can sink below 0")
+    check(MahjongLogic.applyPenalty(0, 10) == -10, "applyPenalty(0, n) goes negative")
+    check(MahjongLogic.applyPenalty(5, 10) == -5, "applyPenalty goes negative from a low score")
+    check(MahjongLogic.applyPenalty(nil, 5) == -5, "applyPenalty handles a nil score")
 
     -- Elapsed formatting (US-10).
     check(MahjongLogic.formatElapsed(0) == "00:00", "formatElapsed(0) is 00:00")
@@ -1654,10 +1657,18 @@ function MahjongLogic.runSelfTests()
     check(MahjongLogic.deserializeGameState(bad_count) == nil, "deserialize rejects count + 2*history != 144")
     bad_count.history = p_serialized.history
 
-    local bad_score = p_serialized
-    bad_score.score = -1
-    check(MahjongLogic.deserializeGameState(bad_score) == nil, "deserialize rejects a negative score")
-    bad_score.score = p_serialized.score
+        -- A negative score is legitimate (a hint/shuffle used on a low score), so
+    -- it must load. Serialize fresh here: the rejection-path tests above alias
+    -- p_serialized and leave its history corrupted.
+    local neg_serialized = MahjongLogic.serializeGameState(p_board, p_hist, -5, p_ka, 123)
+    local neg_restored = MahjongLogic.deserializeGameState(neg_serialized)
+    check(neg_restored ~= nil and neg_restored.score == -5,
+        "deserialize accepts a negative score (a low-score help still saves)")
+
+    local nan_score = p_serialized
+    nan_score.score = "corrupt"
+    check(MahjongLogic.deserializeGameState(nan_score) == nil, "deserialize rejects a non-number score")
+    nan_score.score = p_serialized.score
 
     local bad_last = p_serialized
     bad_last.last = "not-a-kind"

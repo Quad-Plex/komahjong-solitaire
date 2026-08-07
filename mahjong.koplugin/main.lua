@@ -88,7 +88,7 @@ local AUTO_SOLVE_STEP_SECONDS = 0.3
 -- starting and ending on the bold variant — then the highlight stays at bold
 -- until the player acts (taps a tile, matches a pair, shuffles, etc.).
 local HINT_PULSE_STEP_SECONDS = 0.5
-local HINT_PULSE_TICKS = 4
+local HINT_PULSE_TICKS = 6
 
 -- Settings keys (persisted via LuaSettings in the KOReader settings dir).
 -- score_method: "chain" (default, +5 for consecutive same-group matches) or
@@ -1221,8 +1221,9 @@ function Mahjong:undo()
     MahjongLogic.undoPair(self.board, move.a, move.b, move.ka, move.kb)
     self.board_view:addPair({ x = move.a.x, y = move.a.y, layer = move.a.layer, kind = move.ka },
                             { x = move.b.x, y = move.b.y, layer = move.b.layer, kind = move.kb })
-    -- US-18: undo restores only the pair's points (the move's score is
-    -- subtracted, floored at 0) — a hint/shuffle penalty is never refunded.
+    -- US-18: undo restores only the pair's points (the move's incremental score
+    -- is subtracted — a hint/shuffle penalty is never refunded). The balance may
+    -- go negative here too: removing a pair's points from a low score is fine.
     self.score = MahjongLogic.applyPenalty(self.score, move.score)
     self.pairs_matched = math.max(0, (self.pairs_matched or 0) - 1)
     self.last_match_kind = move.prev_last
