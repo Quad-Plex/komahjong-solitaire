@@ -1228,41 +1228,34 @@ function Mahjong:showWinDialog()
     else
         headline = t("game.cleared")
     end
-    local best_time_str = self.stats.best_time
-            and MahjongLogic.formatElapsed(self.stats.best_time) or "—"
-    local layout_highscores = self.stats.layout_highscores or {}
-    local layout_best_times = self.stats.layout_best_times or {}
-    local layout_best_score = layout_highscores[self.layout]
-    local layout_best_time = layout_best_times[self.layout]
-    local layout_best_time_str = layout_best_time
-            and MahjongLogic.formatElapsed(layout_best_time) or "—"
-    local layout_name = t("layout." .. self.layout)
-    local best_score_marker = new_best_score and " " .. t("game.new_best") or ""
-    local best_time_marker = new_best_time and " " .. t("game.new_best") or ""
-    local layout_score_marker = new_layout_score and " " .. t("game.new_best") or ""
-    local layout_time_marker = new_layout_time and " " .. t("game.new_best") or ""
     -- The summary rows as (label, value) pairs: the label is the description
     -- (no trailing colon) and the value is the data, so the dialog can right-
     -- align every label and start every value at the same x (the stats screen's
     -- column trick). The pairs are also kept on the dialog (win_rows) so the
     -- headless harness can reconstruct the rendered text for assertions.
+    --
+    -- These are the stats for THIS play session only — score, time, pairs
+    -- matched, and the per-game help counters — plus the current winning
+    -- streak, placed last (below the shuffle and hint counters). The global
+    -- best records (overall / per-layout best score and time, which the
+    -- headline above still celebrates) are NOT listed here, so the card stays
+    -- focused on what was achieved in this session. A "New best!" marker is
+    -- still shown next to the "score"/"time" values when that win breaks the
+    -- overall or this-layout record for it.
+    local score_marker = (new_best_score or new_layout_score) and " " .. t("game.new_best") or ""
+    local time_marker = (new_best_time or new_layout_time) and " " .. t("game.new_best") or ""
     local win_rows = {
-        { label = t("hud.score"),         value = tostring(self.score) },
-        { label = t("game.time"),         value = MahjongLogic.formatElapsed(elapsed) },
-        { label = t("game.pairs_matched"), value = tostring(pairs) },
-        { label = t("game.overall_best_score"),
-          value = string.format("%d%s", self.stats.best_score, best_score_marker) },
-        { label = t("game.overall_best_time"), value = best_time_str .. best_time_marker },
-        { label = t("game.score_layout", layout_name),
-          value = string.format("%d%s", layout_best_score or 0, layout_score_marker) },
-        { label = t("game.time_layout", layout_name),
-          value = layout_best_time_str .. layout_time_marker },
-        { label = t("game.current_streak"), value = tostring(self.stats.current_streak) },
+        { label = t("hud.score"),           value = tostring(self.score) .. score_marker },
+        { label = t("game.time"),           value = MahjongLogic.formatElapsed(elapsed) .. time_marker },
+        { label = t("game.pairs_matched"),  value = tostring(pairs) },
         -- US-18: always report the per-game help counters, including clean
         -- wins, so the summary explicitly tells the player whether either was
         -- used.
         { label = t("game.hints_used"), value = tostring(self.hints_used or 0) },
-        { label = t("game.shuffles"), value = tostring(self.shuffles_used or 0) },
+        { label = t("game.shuffles"),   value = tostring(self.shuffles_used or 0) },
+        -- The winning streak (consecutive wins) is shown after the help
+        -- counters, as the last row of the session summary.
+        { label = t("game.current_streak"), value = tostring(self.stats.current_streak) },
     }
     -- The summary is a floating centered card (mahjongwinsummary.lua): it
     -- right-aligns the labels to the widest one so every value starts at the

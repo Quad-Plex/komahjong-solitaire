@@ -149,24 +149,28 @@ expect(ctx.last_confirm ~= nil, "a win shows the win dialog")
 local win_text = ctx.summaryText(ctx.last_confirm)
 expect(win_text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil,
     "a first win headlines a new overall best score and best time")
-expect(win_text:find("Score: 35", 1, true) ~= nil, "the summary shows the final score")
-expect(win_text:find("Time: 00:45", 1, true) ~= nil, "the summary shows the elapsed time")
+expect(win_text:find("Score: 35 (New best!)", 1, true) ~= nil,
+    "a first win marks the score row with New best!")
+expect(win_text:find("Time: 00:45 (New best!)", 1, true) ~= nil,
+    "a first win marks the time row with New best!")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil, "the summary shows the pairs matched")
 expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
     "the summary shows zero shuffles on a clean win")
-expect(win_text:find("Overall best score: 35 (New best!)", 1, true) ~= nil,
-    "the summary shows the overall best score")
-expect(win_text:find("Overall best time: 00:45 (New best!)", 1, true) ~= nil,
-    "the summary shows the overall best time")
-expect(win_text:find("Turtle best score: 35 (New best!)", 1, true) ~= nil,
-    "the summary shows the layout best score")
-expect(win_text:find("Turtle best time: 00:45 (New best!)", 1, true) ~= nil,
-    "the summary shows the layout best time")
+expect(win_text:find("Overall best score: 35", 1, true) == nil,
+    "the session summary no longer lists the global overall best score")
+expect(win_text:find("Overall best time: 00:45", 1, true) == nil,
+    "the session summary no longer lists the global overall best time")
+expect(win_text:find("Turtle best score: 35", 1, true) == nil,
+    "the session summary no longer lists the layout best score")
+expect(win_text:find("Turtle best time: 00:45", 1, true) == nil,
+    "the session summary no longer lists the layout best time")
 expect(win_text:find("Current streak: 1", 1, true) ~= nil, "the summary shows the current streak")
-expect(win_text:find("New best!", 1, true) ~= nil,
-    "a first record marks the best lines with New best!")
+-- The headline still celebrates the record-breaks, even though the global
+-- stat rows are gone from the session summary.
+expect(win_text:find("Congratulations!", 1, true) ~= nil,
+    "the headline still celebrates the records")
 
 -- The win summary is a centered floating card (mahjongwinsummary.lua). Its
 -- headline is centered (wrapped in a CenterContainer over the content width),
@@ -180,7 +184,7 @@ local row_group = win_summary._row_group
 expect(row_group ~= nil and row_group[1] ~= nil,
     "the summary card builds the aligned rows as a widget")
 local row_count = #(win_summary.win_rows or {})
-expect(row_count == 10, "the summary has 10 aligned rows (got " .. row_count .. ")")
+expect(row_count == 6, "the summary has 6 session rows (got " .. row_count .. ")")
 local text_is_headline = win_summary.text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil
 expect(text_is_headline, "the dialog's text is the headline (centered title)")
 -- The headline is the first child of the card's content VerticalGroup, wrapped
@@ -261,14 +265,12 @@ expect(Logic.isWin(mj1.board), "six-tile board emptied for the win")
 expect(mj1.score == 65, "the six-tile chain/combo win scores 65 (10+25+30)")
 expect(mj1.pairs_matched == 3, "the pair counter tracked the three matched pairs")
 win_text = ctx.summaryText(ctx.last_confirm)
-expect(win_text:find("Overall best score: 65 (New best!)", 1, true) ~= nil,
-    "a new overall best score is marked New best!")
-expect(win_text:find("Overall best time: 00:30 (New best!)", 1, true) ~= nil,
-    "a new overall best time is marked New best!")
-expect(win_text:find("Turtle best score: 65 (New best!)", 1, true) ~= nil,
-    "a new layout best score is marked New best!")
-expect(win_text:find("Turtle best time: 00:30 (New best!)", 1, true) ~= nil,
-    "a new layout best time is marked New best!")
+expect(win_text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil,
+    "a better third win headlines a new overall best score and best time")
+expect(win_text:find("Overall best score: 65", 1, true) == nil,
+    "the session summary omits the global overall best score row")
+expect(win_text:find("Turtle best score: 65", 1, true) == nil,
+    "the session summary omits the global layout best score row")
 expect(mj1.stats.best_score == 65 and mj1.stats.best_time == 30,
     "the records updated to the better win")
 
@@ -374,12 +376,10 @@ expect(win_text:find("Congratulations! New best score and time on this layout!",
     "a win that breaks only THIS layout's records headlines that layout")
 expect(win_text:find("Congratulations! New overall", 1, true) == nil,
     "a layout-only record win does not headline the overall records")
-expect(win_text:find("Turtle best score: 35 (New best!)", 1, true) ~= nil,
-    "the layout score line marks the new layout best")
-expect(win_text:find("Turtle best time: 00:25 (New best!)", 1, true) ~= nil,
-    "the layout time line marks the new layout best")
-expect(win_text:find("Overall best score: 100", 1, true) ~= nil,
-    "the overall best score line is unchanged at 100")
+expect(win_text:find("Turtle best score: 35", 1, true) == nil,
+    "the session summary omits the layout score line")
+expect(win_text:find("Overall best score: 100", 1, true) == nil,
+    "the session summary omits the overall best score line")
 
 if failures == 0 then
     print("\nALL US-12 STATS/SUMMARY CHECKS PASSED")
