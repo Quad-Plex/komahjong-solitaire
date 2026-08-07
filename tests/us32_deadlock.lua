@@ -5,10 +5,10 @@
 --     and for odd-parity groups, false for winnable boards;
 --   * handleNoMoves shows the loss dialog (not the shuffle prompt) when the
 --     board is provably dead;
---   * the loss dialog has New Game / Close with an Undo button only when
+--   * the loss dialog has Play again / Select Layout with an Undo button only when
 --     history is non-empty;
 --   * Undo pops one move and resumes play;
---   * New Game shows the layout picker, Close closes the game;
+--   * Select Layout shows the layout picker;
 --   * shuffle retries-exhausted triggers the loss dialog;
 --   * auto-solver retries-exhausted triggers the loss dialog (no Undo — the
 --     solver clears history);
@@ -107,7 +107,7 @@ expect(mj2.score == 0, "Undo subtracted the pair's points")
 -- The timer was stopped by showDeadBoardDialog; the Undo callback should restart it.
 expect(mj2._timer_running, "timer restarted after Undo from loss dialog")
 
--- ---- New Game from loss dialog → layout picker ----------------------------------
+-- ---- Play again from loss dialog keeps the current layout ------------------------
 
 local mj3 = Mahjong:new()
 mj3.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
@@ -115,16 +115,21 @@ mj3.layout = "turtle"
 mj3:buildUILayout()
 mj3.history = {}
 mj3:handleNoMoves()
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "New Game",
-    "loss dialog ok_text is New Game")
-local windows_before = #ctx.window_stack
-ctx.last_confirm.ok_callback()  -- showLayoutPicker
--- showLayoutPicker creates a LayoutSelect widget and calls UIManager:show on it.
--- The mock adds every widget (not just ConfirmBox) to the window stack.
-expect(#ctx.window_stack > windows_before,
-    "New Game button shows the layout picker")
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again",
+    "loss dialog ok_text is Play again")
+ctx.last_confirm.ok_callback()  -- startGameWithLayout
+local picker_open = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget ~= nil and e.widget.name == "mahjonglayoutselect" then
+        picker_open = true
+    end
+end
+expect(not picker_open,
+    "Play again does not open the layout picker")
+expect(Logic.tileCount(mj3.board) == 144 and mj3.layout == "turtle",
+    "Play again starts a fresh game on the current layout")
 
--- ---- Close from loss dialog -----------------------------------------------------
+-- ---- Select Layout from loss dialog → layout picker ------------------------------
 
 local mj4 = Mahjong:new()
 mj4.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
@@ -133,22 +138,20 @@ mj4:buildUILayout()
 mj4.history = {}
 um:show(mj4)
 mj4:handleNoMoves()
--- The Close button runs cancel_callback, which exits the game (documented
--- US-32 behavior: Close -> exit the game).
-ctx.last_confirm.cancel_callback()  -- Close
-local mj4_still_on_stack = false
-for _, e in ipairs(ctx.window_stack) do
-    if e.widget == mj4 then mj4_still_on_stack = true end
-end
-expect(not mj4_still_on_stack,
-    "the loss dialog's Close button exits the game")
+expect(ctx.last_confirm.cancel_text == "Select Layout",
+    "loss dialog cancel_text is Select Layout")
+ctx.last_confirm.cancel_callback()  -- Select Layout
+local picker4 = ctx.window_stack[#ctx.window_stack].widget
+expect(picker4 ~= nil and picker4.name == "mahjonglayoutselect",
+    "Select Layout opens the layout picker")
+picker4:closeDialog()
 
 -- ---- Tap-outside the loss dialog does NOT exit the game ----------------------------
 
 -- The mock's ConfirmBox now models the real onTapClose: a tap outside the
 -- dialog's movable dimen triggers the dialog's close path. The loss dialog
 -- overrides onTapClose so a stray tap next to the dialog does NOTHING — the
--- dialog stays open, and only its buttons (Close) exit/dismiss — it must
+-- dialog stays open, and only its buttons act — it must
 -- never close the whole game (the reported "crash").
 local mj_tap = Mahjong:new()
 mj_tap.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }

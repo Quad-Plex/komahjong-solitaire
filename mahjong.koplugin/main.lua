@@ -1216,7 +1216,8 @@ function Mahjong:handleNoMoves()
     end
 end
 
--- US-32: permanent-dead-board dialog (New Game / Close + optional Undo).
+-- US-32: permanent-dead-board dialog (Play again / Select Layout + optional
+-- Undo).
 -- Shown when isPermanentlyDead is true, or when the shuffle/auto-solve
 -- retry loops exhaust with no moves. The dialog pauses the clock (like the
 -- win dialog) so the polling loop does not flash behind the modal.
@@ -1225,13 +1226,13 @@ function Mahjong:showDeadBoardDialog()
     local has_undo = self.history and #self.history > 0
     local opts = {
         text = t("game.no_moves_dead"),
-        ok_text = t("toolbar.new_game"),
+        ok_text = t("toolbar.play_again"),
         ok_callback = function()
-            self:showLayoutPicker()
+            self:startGameWithLayout(self.layout)
         end,
-        cancel_text = t("toolbar.close"),
+        cancel_text = t("toolbar.select_layout"),
         cancel_callback = function()
-            UIManager:close(self, "full")
+            self:showLayoutPicker()
         end,
     }
     if has_undo then
