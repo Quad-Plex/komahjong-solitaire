@@ -146,6 +146,22 @@ function LongPressButton:onHoldReleaseSelectButton()
     return ButtonWidget.onHoldReleaseSelectButton(self)
 end
 
+-- A tiny count number shown inside the Hint / Shuffle toolbar buttons'
+-- bottom-right corner (how many times they've been used this game). It's a
+-- bare dark number with no pill behind it, so it reads as a subtle readout
+-- that doesn't crowd the icon. Shown directly as a real TextWidget child of
+-- the button's OverlapGroup (a bare table can't be painted). Headless the
+-- badge is created but the button's frame is a plain stub, so it is only
+-- ever sized/painted on the device.
+local function createCountBadge(value)
+    return TextWidget:new{
+        text = tostring(value),
+        padding = 0,
+        face = Font:getFace("smallinfofont", Screen:scaleBySize(12)),
+        fgcolor = Blitbuffer.COLOR_DARK_GRAY,
+    }
+end
+
 -- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
 -- the tap area — with a square icon centered inside it, plus a small hint
 -- label beneath. Padding keeps the icon off the button edges, bordersize draws
@@ -157,9 +173,11 @@ end
 --
 -- Optional `hold_cb` / `hold_release_cb` turn the button into a LongPressButton
 -- (long-press arm + release hook, used by the Hint button's auto-solver).
--- Returns the cell (the VerticalGroup) and the ButtonWidget itself (so tests
--- can reach the hold callbacks).
-local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_cb)
+-- Optional `counter` (a number) drops the small count pill in the button's
+-- bottom-right corner and attaches it as `button.badge` for updates.
+-- Returns the cell (the VerticalGroup), the ButtonWidget itself (so tests can
+-- reach the hold callbacks), and the badge (or nil).
+local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_cb, counter)
     local pad = Screen:scaleBySize(6)
     local border = Screen:scaleBySize(1)
     local radius = Screen:scaleBySize(4)
@@ -182,6 +200,31 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
     else
         button_opts = ButtonWidget:new(button_opts)
     end
+    local badge = nil
+    if counter ~= nil then
+        badge = createCountBadge(counter)
+        -- Real device: the button's frame is a FrameContainer whose content is
+        -- the centered icon. Splice an OverlapGroup in so the count number
+        -- layers above the icon, anchored at the frame's bottom-right corner
+        -- (inside it). Headless the frame is a plain stub, so this branch is
+        -- skipped there.
+        local frame = button_opts.frame
+        if frame and frame[1] then
+            local inner = frame[1]
+            local iw = (inner.dimen and inner.dimen.w) or w
+            local ih = (inner.dimen and inner.dimen.h) or h
+            local bsz = badge:getSize()
+            local corner = Screen:scaleBySize(2)
+            -- overlap_offset must be an ARRAY {px, py} on the child itself.
+            -- The 3px extra on y nudges the number a touch lower in the corner.
+            badge.overlap_offset = { iw - bsz.w - corner, ih - bsz.h - corner + Screen:scaleBySize(3) }
+            frame[1] = OverlapGroup:new{
+                inner,
+                badge,
+            }
+        end
+        button_opts.badge = badge
+    end
     local label_widget = TextWidget:new{
         text = label,
         padding = 0,
@@ -193,7 +236,7 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
         button_opts,
         label_widget,
     }
-    return cell, button_opts
+    return cell, button_opts, badge
 end
 
 -- Binary copy in pure Lua (no shell subprocess).
@@ -904,13 +947,23 @@ function Mahjong:buildUILayout()
 
     -- US-19: the Hint button is a LongPressButton — a short tap hints, holding
     -- it for AUTO_SOLVE_HOLD_SECONDS arms the auto-solver. Keep a reference so
-    -- the test harness can drive the hold callbacks.
-    local hint_cell, hint_button = createToolbarButton(
+    -- the test harness can drive the hold callbacks. The small counter pill
+    -- shows how many hints this game has used.
+    local hint_cell, hint_button, hint_badge = createToolbarButton(
         "mahjong/lightbulb", t("toolbar.hint"), toolbar_btn_w, toolbar_btn_h,
         function() self:showHint() end,
         function() self:armAutoSolve() end,
-        function() self:disarmAutoSolve() end)
+        function() self:disarmAutoSolve() end,
+        self.hints_used or 0)
     self.hint_button = hint_button
+    self.hint_counter_badge = hint_badge
+
+    -- The Shuffle button carries the same count pill for shuffles_used.
+    local shuffle_cell, shuffle_button, shuffle_badge = createToolbarButton(
+        "mahjong/shuffle", t("toolbar.shuffle"), toolbar_btn_w, toolbar_btn_h,
+        function() self:shuffleBoard() end, nil, nil, self.shuffles_used or 0)
+    self.shuffle_button = shuffle_button
+    self.shuffle_counter_badge = shuffle_badge
 
     -- US-17/US-20: Pause moved off the cluttered HUD top bar into the bottom
     -- action-button row (the fifth button). The pause overlay still freezes the
@@ -927,8 +980,7 @@ function Mahjong:buildUILayout()
         HorizontalSpan:new{ width = toolbar_gap },
         hint_cell,
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("mahjong/shuffle", t("toolbar.shuffle"), toolbar_btn_w, toolbar_btn_h,
-            function() self:shuffleBoard() end),
+        shuffle_cell,
         HorizontalSpan:new{ width = toolbar_gap },
         createToolbarButton("plus", t("toolbar.new_game"), toolbar_btn_w, toolbar_btn_h, function()
             self:showLayoutPicker()
@@ -1725,6 +1777,14 @@ function Mahjong:updateStatus()
     local pairs = math.floor(MahjongLogic.tileCount(self.board) / 2)
     local free = MahjongLogic.countFreePairs(self.board, self.layout)
     self.status_bar:setStats(pairs, free, self.score)
+    -- Keep the toolbar Hint / Shuffle count pills in sync (they mirror the
+    -- persisted hints_used / shuffles_used counters the win summary reports).
+    if self.hint_counter_badge then
+        self.hint_counter_badge:setText(tostring(self.hints_used or 0))
+    end
+    if self.shuffle_counter_badge then
+        self.shuffle_counter_badge:setText(tostring(self.shuffles_used or 0))
+    end
     -- status_bar is a subwidget, so setDirty on it alone would not repaint;
     -- flag the window-level widget as well (same pattern as the chess example).
     UIManager:setDirty(self, "ui")
