@@ -222,7 +222,6 @@ expect(store.game == nil, "a won board is still not saved under the game key")
 -- ---- Play again starts a new game and keeps the streak ------------------------
 
 ctx.last_confirm.ok_callback()
-pickTurtle() -- US-14: Play again shows the picker
 expect(Logic.tileCount(mj1.board) == 144, "Play again dealt a fresh 144-tile board")
 expect(mj1.stats.games_played == 1, "Play again bumped games_played")
 expect(mj1.stats.current_streak == 1, "Play again keeps the streak after a win")
@@ -277,7 +276,6 @@ expect(mj1.stats.best_score == 65 and mj1.stats.best_time == 30,
 -- ---- A mid-game New Game abandons the game and resets the streak --------------
 
 ctx.last_confirm.ok_callback()
-pickTurtle() -- US-14: Play again shows the picker
 expect(mj1.stats.games_played == 2 and mj1.stats.current_streak == 3,
     "Play again after a win keeps the 3-win streak")
 expect(Logic.tileCount(mj1.board) == 144, "Play again dealt a fresh board")
@@ -351,7 +349,6 @@ expect(win_text:find("Shuffles: 2", 1, true) ~= nil,
 -- Play again after an auto-solve win: a genuinely new game DOES bump
 -- game_played (the auto-solve itself recorded nothing).
 ctx.last_confirm.ok_callback()
-pickTurtle() -- US-14: Play again shows the picker
 expect(mj2.stats.games_played == 4, "Play again after an auto-solve starts a fresh game")
 expect(mj2.game_won == false and mj2.game_was_autosolved == false,
     "a new game clears the game_won and auto-solved flags")

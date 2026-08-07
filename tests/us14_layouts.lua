@@ -9,7 +9,7 @@
 --   * registerLayout works end-to-end: deal → free tiles → render via a board
 --     built with that layout → serialize/restore round-trip → an unknown
 --     saved layout id deals fresh.
---   * The picker appears on first launch / New Game / Play again; choosing
+--   * The picker appears on first launch / New Game / Select Layout; choosing
 --     Turtle deals a game; the thumbnail renders for every registered layout.
 
 local mock = require("mock")
@@ -218,7 +218,7 @@ local v1_r = Logic.deserializeGameState(v1)
 expect(v1_r ~= nil and v1_r.layout == "turtle",
     "a v1 save (no layout field) restores as turtle")
 
--- ---- The picker appears on first launch / New Game / Play again --------------
+-- ---- The picker appears on first launch / New Game / Select Layout ------------
 
 -- First launch: no saved game -> menu callback shows the picker.
 store.game = nil
@@ -284,7 +284,7 @@ pickTurtle()
 expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144,
     "New Game -> pick Turtle deals a fresh board")
 
--- Play again (win dialog): the ok_callback shows the picker.
+-- Play again (win dialog): the ok_callback starts another game on the same map.
 local mj2 = Mahjong:new()
 mj2.board = (function()
     local b = {}
@@ -298,12 +298,22 @@ expect(Logic.isWin(mj2.board), "the two-tile board is won")
 expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again",
     "the win dialog offers Play again")
 ctx.last_confirm.ok_callback()
+expect(Logic.tileCount(mj2.board) == 144 and mj2.layout == "turtle",
+    "Play again deals a fresh game on the same layout")
+
+-- Select Layout is the separate path to the picker.
+local mj_select = Mahjong:new()
+mj_select.board = { [pk(2, 2, 0)] = "b1", [pk(4, 2, 0)] = "b1" }
+mj_select:buildUILayout()
+mj_select:handleTileTap(2, 2, 0)
+mj_select:handleTileTap(4, 2, 0)
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.cancel_text == "Select Layout",
+    "the win dialog offers Select Layout")
+ctx.last_confirm.cancel_callback()
 expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
         and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
-    "Play again shows the layout picker")
+    "Select Layout shows the layout picker")
 pickTurtle()
-expect(Logic.tileCount(mj2.board) == 144 and mj2.layout == "turtle",
-    "Play again -> pick Turtle deals a fresh turtle board")
 
 -- ---- Picker close X / tap outside ----------------------------------------------
 

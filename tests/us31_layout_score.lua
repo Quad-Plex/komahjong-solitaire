@@ -11,7 +11,7 @@
 --   * The chip reads the best score as a plain number, using the same corner
 --     margin as the badge;
 --   * A human win records the layout highscore and the chip appears after the
---     win dialog's "Play again" reopens the picker;
+--     win dialog's "Select Layout" reopens the picker;
 --   * Auto-solve wins never record a layout highscore, so no chip appears.
 
 local mock = require("mock")
@@ -115,7 +115,7 @@ expect(scard ~= nil and cardScoreChip(scard) ~= nil
 expect(ocard ~= nil and cardScoreChip(ocard) == nil,
     "a layout without a highscore shows no chip")
 
--- ---- A human win records the score; the chip appears after Play again ---------
+-- ---- A human win records the score; the chip appears after Select Layout ------
 
 store.game = nil
 store.stats = Stats.load(nil)
@@ -136,14 +136,14 @@ expect(store.stats and store.stats.layout_highscores
     and store.stats.layout_highscores.turtle == mj3.score,
     "the layout highscore is persisted under the stats key")
 local winning_score = mj3.score
-ctx.last_confirm.ok_callback()
+ctx.last_confirm.cancel_callback()
 local picker3 = ctx.window_stack[#ctx.window_stack].widget
 local tcard3 = cardById(picker3, "turtle")
 if tcard3 then
     local chip = cardScoreChip(tcard3)
         expect(chip ~= nil and chip[1] ~= nil and chip[1][3] ~= nil
             and chip[1][3].text == tostring(winning_score),
-            "Turtle's chip shows the just-won score after Play again")
+            "Turtle's chip shows the just-won score after Select Layout")
 end
 
 -- ---- Auto-solve wins never record a layout highscore --------------------------
@@ -173,7 +173,7 @@ expect((mj4.stats.layout_highscores and mj4.stats.layout_highscores.turtle or 0)
 expect(store.stats and store.stats.layout_highscores
     and store.stats.layout_highscores.turtle == nil,
     "an auto-solve win persists no layout highscore")
-ctx.last_confirm.ok_callback()
+ctx.last_confirm.cancel_callback()
 local picker4 = ctx.window_stack[#ctx.window_stack].widget
 local tcard4 = cardById(picker4, "turtle")
 expect(tcard4 == nil or cardScoreChip(tcard4) == nil,
@@ -229,7 +229,7 @@ expect(scardT ~= nil and cardTimeChip(scardT) ~= nil
 expect(ocardT ~= nil and cardTimeChip(ocardT) == nil,
     "a layout without a best time shows no time chip")
 
--- A human win records the layout best time and the chip appears after Play again.
+-- A human win records the layout best time and the chip appears after Select Layout.
 store.game = nil
 store.stats = Stats.load(nil)
 local mjT = Mahjong:new()
@@ -251,13 +251,13 @@ expect(mjT.stats.layout_best_times and mjT.stats.layout_best_times.turtle ~= nil
 expect(store.stats and store.stats.layout_best_times
     and store.stats.layout_best_times.turtle == mjT.stats.layout_best_times.turtle,
     "the layout best time is persisted under the stats key")
-ctx.last_confirm.ok_callback()
+ctx.last_confirm.cancel_callback()
 local pickerT2 = ctx.window_stack[#ctx.window_stack].widget
 local tcardT2 = cardById(pickerT2, "turtle")
     if tcardT2 then
         local tchip = cardTimeChip(tcardT2)
         expect(tchip ~= nil and tchip[1] ~= nil and tchip[1].text == "01:15",
-            "Turtle's time chip shows the just-won time (01:15) after Play again")
+            "Turtle's time chip shows the just-won time (01:15) after Select Layout")
     end
 
 -- An auto-solve win never records a best time, so no time chip appears.

@@ -127,11 +127,11 @@ expect(store.stats ~= nil and store.stats.layout_wins ~= nil
     and store.stats.layout_wins.turtle == 1,
     "layout wins are persisted under the stats key")
 
--- Win dialog "Play again" shows the picker again; Turtle's badge now shows 1.
-ctx.last_confirm.ok_callback()
+-- Win dialog "Select Layout" shows the picker; Turtle's badge now shows 1.
+ctx.last_confirm.cancel_callback()
 local picker2 = ctx.window_stack[#ctx.window_stack].widget
 expect(picker2 ~= nil and picker2.name == "mahjonglayoutselect",
-    "Play again re-opens the layout picker")
+    "Select Layout re-opens the layout picker")
 local tcard2 = turtleCard(picker2)
 if tcard2 then
     expect(cardBadgeCountWidget(tcard2).text == "1",
@@ -220,7 +220,7 @@ end
 
 -- ---- Win-case close X exits the game (never returns to an empty board) ---------
 
--- After a win, "Play again" shows the picker over the WON (empty) board. Tapping
+-- After a win, "Select Layout" shows the picker over the WON (empty) board. Tapping
 -- the picker's X must EXIT the game entirely — a bare close would land the player
 -- on the empty board (reported bug). The real ConfirmBox auto-closes itself after
 -- ok_callback runs, so mimic that before driving the picker's close X.
@@ -237,11 +237,11 @@ mj5:handleTileTap(2, 2, 0)
 mj5:handleTileTap(4, 2, 0)
 expect(Logic.isWin(mj5.board), "the second tiny board is won")
 local win_dlg = ctx.last_confirm
-win_dlg.ok_callback() -- "Play again" -> layout picker
+win_dlg.cancel_callback() -- "Select Layout" -> layout picker
 um.close(win_dlg)     -- the real ConfirmBox closes itself on OK
 local picker5 = ctx.window_stack[#ctx.window_stack].widget
 expect(picker5 ~= nil and picker5.name == "mahjonglayoutselect",
-    "win 'Play again' re-opens the layout picker")
+    "win 'Select Layout' re-opens the layout picker")
 picker5:closeDialog() -- the close X
 -- The flow fix: closing the picker over a WON board must close the game itself,
 -- never return the player to the empty board. (The harness drives games without

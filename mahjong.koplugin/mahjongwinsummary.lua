@@ -15,10 +15,10 @@
 --   * the summary rows as right-aligned labels (widest label drives the column)
 --     with the VALUES in a uniform, LEFT-aligned column — every value starts at
 --     the same x;
---   * a two-button row (Play again / Close) centered at the bottom.
+--   * a two-button row (Play again / Select Layout) centered at the bottom.
 --
 -- A tap anywhere OUTSIDE the buttons is silently consumed (never closes the
--- card), matching the dialog contract that only the Close button dismisses it
+-- card), matching the dialog contract that only the buttons dismiss it
 -- (US-20/32: a stray tap must not exit the whole app).
 --
 -- It exposes `text` (the headline), `win_rows` ({ label, value } pairs),
@@ -52,9 +52,9 @@ local WinSummary = InputContainer:extend{
     text = "",           -- headline string (the harness reads it)
     win_rows = nil,      -- { {label=, value=}, ... } (rows + harness surface)
     ok_text = nil,       -- "Play again"
-    cancel_text = nil,   -- "Close"
+    cancel_text = nil,   -- "Select Layout"
     ok_callback = nil,   -- fired by "Play again" (the harness calls it directly)
-    cancel_callback = nil, -- fired by "Close"
+    cancel_callback = nil, -- fired by "Select Layout"
     _done = false,       -- guards the buttons so a double tap fires once
     _row_group = nil,    -- the aligned-rows VerticalGroup (harness structural check)
     _panel_geom = nil,   -- absolute screen rect of the floating card
@@ -113,7 +113,7 @@ function WinSummary:init()
     local headline_size = headline_widget:getSize()
     local gap = Screen:scaleBySize(14)
 
-    -- Buttons: Play again (primary) + Close, centered at the bottom.
+    -- Buttons: Play again (primary) + Select Layout, centered at the bottom.
     local panel_padding = math.min(Screen:scaleBySize(24),
         math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05)))
     local max_content_w = math.max(1, self.full_width - 2 * panel_padding - 2 * Screen:scaleBySize(8))
@@ -218,7 +218,7 @@ function WinSummary:onTapClose() -- luacheck: no unused args
     return true
 end
 
--- Fires the action (Play again true / Close false), then drops the card.
+-- Fires the action (Play again true / Select Layout false), then drops the card.
 -- Guarded so a double tap cannot fire the callback twice.
 function WinSummary:_finish(ok)
     if self._done then return end

@@ -485,7 +485,7 @@ end
 -- US-14: shows the full-screen layout picker. Pauses the timer (if running)
 -- so the polling loop does not flash behind the opaque picker; the picker's
 -- onClose resumes it (or exits, see below). Used by startGame (first launch),
--- the New Game button, and the win dialog's "Play again" — choosing a layout
+-- the New Game button, and the win dialog's "Select Layout" — choosing a layout
 -- IS the confirmation, so the old New Game ConfirmBox is gone.
 function Mahjong:showLayoutPicker()
     -- US-33: the New Game button is dead while the auto-solver runs (dropping
@@ -1354,12 +1354,11 @@ function Mahjong:showWinDialog()
          parent = self,
         text = headline,
         win_rows = win_rows,
-        ok_text = t("toolbar.play_again"),
-        cancel_text = t("toolbar.close"),
-        ok_callback = function() self:showLayoutPicker() end,
-        cancel_callback = function()
-            UIManager:close(self, "full")
-        end,
+         ok_text = t("toolbar.play_again"),
+         cancel_text = t("toolbar.select_layout"),
+         -- Keep the winning map selected for the quick replay action.
+         ok_callback = function() self:startGameWithLayout(self.layout) end,
+         cancel_callback = function() self:showLayoutPicker() end,
     })
 end
 

@@ -174,8 +174,6 @@ expect(ctx.last_confirm ~= nil and ctx.last_confirm.ok_text == "Play again"
     and ctx.summaryText(ctx.last_confirm):find("Score: 10", 1, true) ~= nil,
     "win dialog is shown with the final score")
 ctx.last_confirm.ok_callback()
--- US-14: "Play again" shows the picker; pick Turtle to deal the fresh board.
-pickTurtle()
 expect(Logic.tileCount(mj_win.board) == 144 and mj_win.score == 0 and mj_win.selected == nil,
     "'Play again' resets to a fresh shuffled board")
 expect(mj_win.status_bar.stats.pairs == 72
@@ -185,22 +183,19 @@ expect(mj_win.status_bar.stats.pairs == 72
         .. tostring(mj_win.status_bar.stats.pairs) .. "/" .. tostring(mj_win.status_bar.stats.free)
         .. "/" .. tostring(mj_win.status_bar.stats.score) .. ")")
 
--- ---- Win dialog: Close ----------------------------------------------------------
+-- ---- Win dialog: Select Layout --------------------------------------------------
 
 local mj_win2 = Mahjong:new()
 mj_win2.board = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"} }
 mj_win2:buildUILayout()
 mj_win2:handleTileTap(2, 2, 0)
 mj_win2:handleTileTap(4, 2, 0)
-expect(ctx.last_confirm ~= nil and ctx.last_confirm.cancel_text == "Close",
-    "win dialog offers Close")
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.cancel_text == "Select Layout",
+    "win dialog offers Select Layout")
 ctx.last_confirm.cancel_callback()
-local still_on_stack = false
-for _, e in ipairs(ctx.window_stack) do
-    if e.widget == mj_win2 then still_on_stack = true end
-end
-expect(not still_on_stack and mj_win2.board == nil,
-    "'Close' exits the game and clears the board")
+expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
+        and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
+    "Select Layout opens the layout picker")
 
 -- ---- Dead board: shuffle prompt (US-08) → US-32 loss dialog ------------------
 
