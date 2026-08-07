@@ -39,7 +39,8 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
 local ConfirmBox = require("ui/widget/confirmbox")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
 local MahjongStats = require("mahjongstats")
 
@@ -158,14 +159,14 @@ function StatsWidget:init()
     end
 
     local row_specs = {
-        { key = "played",         label = _("Games played") },
-        { key = "won",            label = _("Games won") },
-        { key = "win_rate",       label = _("Win rate") },
-        { key = "best_score",     label = _("Best score") },
-        { key = "best_time",      label = _("Best time") },
-        { key = "avg_time",       label = _("Average time per win") },
-        { key = "current_streak", label = _("Current streak") },
-        { key = "longest_streak", label = _("Longest streak") },
+        { key = "played",         label = t("stats.games_played") },
+        { key = "won",            label = t("stats.games_won") },
+        { key = "win_rate",       label = t("stats.win_rate") },
+        { key = "best_score",     label = t("stats.best_score") },
+        { key = "best_time",      label = t("stats.best_time") },
+        { key = "avg_time",       label = t("stats.average_time") },
+        { key = "current_streak", label = t("stats.current_streak") },
+        { key = "longest_streak", label = t("stats.longest_streak") },
     }
 
     -- Right-align the labels to the widest one so the value column starts at
@@ -228,15 +229,15 @@ function StatsWidget:init()
         return VerticalGroup:new(vchildren)
     end
 
-    local global_col = buildColumn(_("Global"), vs, "")
-    local map_col = buildColumn(MahjongLogic.layoutName(layout_id), map_vs, "map_")
+    local global_col = buildColumn(t("stats.global"), vs, "")
+    local map_col = buildColumn(t("layout." .. layout_id), map_vs, "map_")
 
     -- Reset button (bottom): clears the whole record (global + per-layout
     -- maps) back to defaults, after a ConfirmBox so an accidental tap cannot
     -- wipe the lifetime stats.
     local reset_w = Screen:scaleBySize(160)
     local reset_btn = ButtonWidget:new{
-        text = _("Reset"),
+        text = t("settings.reset"),
         text_font_face = "cfont",
         text_font_size = 20,
         text_font_bold = true,
@@ -262,7 +263,7 @@ function StatsWidget:init()
     -- top-right corner (same grey-square style as the HUD's quit X). Tapping
     -- it closes the card (and runs onClose).
     local title_widget = TextWidget:new{
-        text = _("Stats"),
+        text = t("toolbar.stats"),
         padding = 0,
         face = Font:getFace("tfont", Screen:scaleBySize(20)),
     }
@@ -374,8 +375,8 @@ end
 -- defaults — after a ConfirmBox.
 function StatsWidget:resetStats()
     UIManager:show(ConfirmBox:new{
-        text = _("Reset all statistics? This cannot be undone."),
-        ok_text = _("Reset"),
+        text = t("stats.reset_confirm"),
+        ok_text = t("settings.reset"),
         ok_callback = function()
             local p = self.parent
             if p then

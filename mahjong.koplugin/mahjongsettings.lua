@@ -45,9 +45,11 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 
 local DEFAULTS = {
+    language = "en",
     hints = true,
     score_method = "chain",
     layout = "turtle",
@@ -129,6 +131,7 @@ function SettingsWidget:init()
     end
     self.changes = {
         hints = getv("hints", defaults.hints),
+        language = getv("language", defaults.language),
         score_method = getv("score_method", defaults.score_method),
         layout = getv("layout", defaults.layout),
         timer_update = getv("timer_update", defaults.timer_update),
@@ -142,13 +145,16 @@ function SettingsWidget:init()
 
     -- Value texts ----------------------------------------------------------
     local function scoreText(method)
-        return method == "basic" and _("Basic") or _("Chain (+5 bonus)")
+        return method == "basic" and t("settings.basic") or t("settings.chain")
     end
     local function timerModeText(mode)
-        return mode == "move" and _("On interaction") or _("Periodic")
+        return mode == "move" and t("settings.interaction") or t("settings.periodic")
     end
     local function intervalText(sec)
-        return string.format(_("%d s"), sec)
+        return t("settings.seconds", sec)
+    end
+    local function languageText(language)
+        return t("language." .. (language == "de" and "de" or "en"))
     end
 
     -- Measure a string in the face it will be rendered with. The probes are
@@ -171,15 +177,17 @@ function SettingsWidget:init()
         local w = measureText(v, btn_face, true)
         if w > widest_value then widest_value = w end
     end
-    considerValue(_("On"))
-    considerValue(_("Off"))
-    considerValue(_("Basic"))
+    considerValue(t("settings.on"))
+    considerValue(t("settings.off"))
+    considerValue(t("settings.basic"))
     considerValue(scoreText("chain"))
     considerValue(timerModeText("move"))
     considerValue(timerModeText("interval"))
     for _, sec in ipairs(TIMER_INTERVALS) do
         considerValue(intervalText(sec))
     end
+    considerValue(languageText("en"))
+    considerValue(languageText("de"))
     -- The button's inner content width is width - 2*padding - 2*bordersize;
     -- add that plus a little breathing room so nothing sits flush.
     local toggle_w = widest_value + 2 * Screen:scaleBySize(6) + 2 * Screen:scaleBySize(1)
@@ -189,8 +197,8 @@ function SettingsWidget:init()
     -- starts at the same x (the label lengths differ, which previously left
     -- the buttons staggered). (The Layout row was dropped from the dialog;
     -- the layout setting itself is still round-tripped via `changes`.)
-    local row_labels = { _("Hints"), _("Score"),
-                         _("Timer update"), _("Timer interval") }
+    local row_labels = { t("settings.hints"), t("settings.language"), t("hud.score"),
+                         t("settings.timer_update"), t("settings.timer_interval") }
     local max_label_w = 0
     for _, l in ipairs(row_labels) do
         local w = measureText(l, label_face, false)
@@ -208,14 +216,24 @@ function SettingsWidget:init()
     -- Hint button --------------------------------------------------------
     local hints_btn
     hints_btn = makeButton(
-        self.changes.hints and _("On") or _("Off"), toggle_w, Screen:scaleBySize(32),
-        function() return self.changes.hints and _("On") or _("Off") end)
+        self.changes.hints and t("settings.on") or t("settings.off"), toggle_w, Screen:scaleBySize(32),
+        function() return self.changes.hints and t("settings.on") or t("settings.off") end)
     hints_btn.callback = function()
         self.changes.hints = not (self.changes.hints or false)
         setButtonText(hints_btn, hints_btn.refresh())
         UIManager:setDirty(self, "ui")
     end
     self._rows.hints = hints_btn
+
+    local language_btn
+    language_btn = makeButton(languageText(self.changes.language), toggle_w, Screen:scaleBySize(32),
+        function() return languageText(self.changes.language) end)
+    language_btn.callback = function()
+        self.changes.language = self.changes.language == "de" and "en" or "de"
+        setButtonText(language_btn, language_btn.refresh())
+        UIManager:setDirty(self, "ui")
+    end
+    self._rows.language = language_btn
 
     -- Score-method button (cycles Chain -> Basic) -------------------------
     local score_btn
@@ -290,9 +308,9 @@ function SettingsWidget:init()
     -- (No Cancel button: a tap outside the panel or the title-row close X
     -- already discards the collected changes, so Cancel would be redundant.)
     local bottom_w = Screen:scaleBySize(150)
-    local reset_btn = makeButton(_("Reset"), bottom_w, Screen:scaleBySize(32))
+    local reset_btn = makeButton(t("settings.reset"), bottom_w, Screen:scaleBySize(32))
     reset_btn.callback = function() self:resetToDefaults() end
-    local save_btn = makeButton(_("Save"), bottom_w, Screen:scaleBySize(32))
+    local save_btn = makeButton(t("settings.save"), bottom_w, Screen:scaleBySize(32))
     save_btn.callback = function() self:save() end
 
     -- Title row: "Settings" centered, with a close X pinned at the panel's
@@ -308,7 +326,7 @@ function SettingsWidget:init()
     local content_w = max_label_w + label_gap + toggle_w
     local title_row_w = math.max(content_w, 2 * bottom_w + gap)
     local title_widget = TextWidget:new{
-        text = _("Settings"),
+        text = t("settings.title"),
         padding = 0,
         face = Font:getFace("tfont", Screen:scaleBySize(20)),
     }
@@ -347,13 +365,15 @@ function SettingsWidget:init()
             align = "center",
             title_row,
             VerticalSpan:new{ width = gap },
-            row(_("Hints"), hints_btn),
+            row(t("settings.hints"), hints_btn),
             VerticalSpan:new{ width = gap },
-            row(_("Score"), score_btn),
+            row(t("hud.score"), score_btn),
             VerticalSpan:new{ width = gap },
-            row(_("Timer update"), timer_mode_btn),
+            row(t("settings.timer_update"), timer_mode_btn),
             VerticalSpan:new{ width = gap },
-            row(_("Timer interval"), timer_interval_btn),
+            row(t("settings.timer_interval"), timer_interval_btn),
+            VerticalSpan:new{ width = gap },
+            row(t("settings.language"), language_btn),
             VerticalSpan:new{ width = gap * 2 },
             HorizontalGroup:new{
                 reset_btn,
@@ -413,6 +433,7 @@ function SettingsWidget:save()
     local p = self.parent
     if p and p.setSetting then
         p:setSetting("hints", self.changes.hints)
+        p:setSetting("language", self.changes.language)
         p:setSetting("score_method", self.changes.score_method)
         p:setSetting("layout", self.changes.layout)
         p:setSetting("timer_update", self.changes.timer_update)
@@ -444,11 +465,13 @@ end
 function SettingsWidget:resetToDefaults()
     local defaults = self.settings_defaults or DEFAULTS
     self.changes.hints = defaults.hints
+    self.changes.language = defaults.language
     self.changes.score_method = defaults.score_method
     self.changes.layout = defaults.layout
     self.changes.timer_update = defaults.timer_update
     self.changes.timer_interval = defaults.timer_interval
     setButtonText(self._rows.hints, self._rows.hints.refresh())
+    setButtonText(self._rows.language, self._rows.language.refresh())
     setButtonText(self._rows.score_method, self._rows.score_method.refresh())
     setButtonText(self._rows.timer_update, self._rows.timer_update.refresh())
     setButtonText(self._rows.timer_interval, self._rows.timer_interval.refresh())

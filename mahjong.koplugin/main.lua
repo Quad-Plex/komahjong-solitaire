@@ -19,7 +19,8 @@ local Font = require("ui/font")
 local LuaSettings = require("luasettings")
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
 local MahjongStats = require("mahjongstats")
 local MahjongBoard = require("mahjongboard")
@@ -100,6 +101,7 @@ local HINT_PULSE_TICKS = 6
 -- never forces an e-ink refresh). timer_interval: seconds between periodic
 -- repaints (cosmetic; a 1 Hz e-ink repaint is overkill, 5 s is the default).
 local SETTINGS_DEFAULTS = {
+    language = "en",
     hints = true,               -- show hints on the toolbar / allow the Hint button
     score_method = "chain",     -- "chain" or "basic"
     layout = "turtle",
@@ -284,16 +286,17 @@ function Mahjong:init()
         h = self.full_height,
     }
     self.covers_fullscreen = true
+    -- US-10: one LuaSettings file for both the game state and the settings.
+    self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/mahjong.lua")
+    I18n.setLanguage(self.settings:readSetting("language", SETTINGS_DEFAULTS.language))
     Dispatcher:registerAction("mahjong", {
         category = "none",
         event = "MahjongStart",
-        title = _("Mahjong Solitaire"),
+        title = t("app.name"),
         general = true,
     })
     self.ui.menu:registerToMainMenu(self)
     installIconsIfNeeded()
-    -- US-10: one LuaSettings file for both the game state and the settings.
-    self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/mahjong.lua")
     -- US-12: lifetime stats live under their own "stats" key (saveStats), so a
     -- win or a restore never touches them. A corrupt/missing record silently
     -- falls back to a fresh one (MahjongStats.load sanitizes).
@@ -311,6 +314,12 @@ function Mahjong:setSetting(key, value)
     if not self.settings then return end
     self.settings:saveSetting(key, value)
     self.settings:flush()
+end
+
+function Mahjong:setLanguage(language)
+    language = I18n.setLanguage(language)
+    self:setSetting("language", language)
+    return language
 end
 
 function Mahjong:refreshScoreMethod()
@@ -342,7 +351,7 @@ end
 
 function Mahjong:addToMainMenu(menu_items)
     menu_items.mahjong = {
-        text = _("Mahjong Solitaire"),
+        text = t("app.name"),
         sorting_hint = "tools",
         callback = function() self:startGame() end,
         keep_menu_open = false,
@@ -441,6 +450,7 @@ function Mahjong:showLayoutPicker()
         best_times_by_layout = (self.stats and self.stats.layout_best_times) or {},
         onPick = function(id) self:startGameWithLayout(id) end,
         onHelp = function() self:showHelp() end,
+        onSettings = function() self:openSettings() end,
         onClose = function()
             self._picker_dlg = nil
             if self.board and not MahjongLogic.isWin(self.board) then
@@ -661,11 +671,26 @@ function Mahjong:openSettings()
     -- settings dialog floats over the game now, and a periodic full-screen
     -- refresh (US-11 "interval" mode) would flash every tick behind the panel.
     -- Save restarts via onApply, Cancel / tap-outside via onCancel.
+    local picker_was_open = self._picker_dlg ~= nil
     self:stopTimer()
     local dlg = SettingsWidget:new{
         parent = self,
         settings_defaults = SETTINGS_DEFAULTS,
-        onApply = function()
+        onApply = function(changes)
+            local language_changed = changes.language ~= I18n.getLanguage()
+            if language_changed then
+                self:setLanguage(changes.language)
+            end
+            if language_changed and picker_was_open then
+                local old_picker = self._picker_dlg
+                self._picker_dlg = nil
+                if old_picker then UIManager:close(old_picker, "full") end
+                self:showLayoutPicker()
+            elseif language_changed and self.board then
+                self:buildUILayout()
+                self:updateStatus()
+                UIManager:setDirty(self, "full")
+            end
             self:refreshScoreMethod()
             self:updateStatus()
             -- The timer mode/interval may have changed (US-11): restart the
@@ -675,8 +700,10 @@ function Mahjong:openSettings()
             self:updateTimerDisplay()
         end,
         onCancel = function()
-            self:startTimer()
-            self:updateTimerDisplay()
+            if not picker_was_open then
+                self:startTimer()
+                self:updateTimerDisplay()
+            end
         end,
     }
     dlg:show()
@@ -876,7 +903,7 @@ function Mahjong:buildUILayout()
     -- it for AUTO_SOLVE_HOLD_SECONDS arms the auto-solver. Keep a reference so
     -- the test harness can drive the hold callbacks.
     local hint_cell, hint_button = createToolbarButton(
-        "mahjong/lightbulb", _("Hint"), toolbar_btn_w, toolbar_btn_h,
+        "mahjong/lightbulb", t("toolbar.hint"), toolbar_btn_w, toolbar_btn_h,
         function() self:showHint() end,
         function() self:armAutoSolve() end,
         function() self:disarmAutoSolve() end)
@@ -886,21 +913,21 @@ function Mahjong:buildUILayout()
     -- action-button row (the fifth button). The pause overlay still freezes the
     -- clock and blocks every tap until Resume.
     local pause_cell, pause_button = createToolbarButton(
-        "mahjong/pause", _("Pause"), toolbar_btn_w, toolbar_btn_h,
+        "mahjong/pause", t("toolbar.pause"), toolbar_btn_w, toolbar_btn_h,
         function() self:pauseGame() end)
     self.pause_button = pause_button
 
     local toolbar = HorizontalGroup:new{
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("chevron.left", _("Undo"), toolbar_btn_w, toolbar_btn_h,
+        createToolbarButton("chevron.left", t("toolbar.undo"), toolbar_btn_w, toolbar_btn_h,
             function() self:undo() end),
         HorizontalSpan:new{ width = toolbar_gap },
         hint_cell,
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("mahjong/shuffle", _("Shuffle"), toolbar_btn_w, toolbar_btn_h,
+        createToolbarButton("mahjong/shuffle", t("toolbar.shuffle"), toolbar_btn_w, toolbar_btn_h,
             function() self:shuffleBoard() end),
         HorizontalSpan:new{ width = toolbar_gap },
-        createToolbarButton("plus", _("New Game"), toolbar_btn_w, toolbar_btn_h, function()
+        createToolbarButton("plus", t("toolbar.new_game"), toolbar_btn_w, toolbar_btn_h, function()
             self:showLayoutPicker()
         end),
         HorizontalSpan:new{ width = toolbar_gap },
@@ -927,7 +954,7 @@ function Mahjong:createStatusBar()
     -- (right). Pause (US-17) lives in the bottom toolbar (US-20). updateStatus()
     -- pushes the values via setStats().
     return HudBar:new{
-        title                  = _("Mahjong Solitaire"),
+            title                  = t("app.name"),
         left_icons = {
             { icon = "appbar.settings", size_ratio = 0.45,
               callback = function() self:openSettings() end },
@@ -942,8 +969,8 @@ function Mahjong:createStatusBar()
             -- by hand on the next launch.
             if self._auto_solve_active then return end
             UIManager:show(ConfirmBox:new{
-                text        = _("Exit Mahjong Solitaire?"),
-                ok_text     = _("Exit"),
+                text        = t("game.exit_confirm"),
+                ok_text     = t("toolbar.exit"),
                 ok_callback = function()
                     UIManager:close(self, "full")
                 end,
@@ -985,7 +1012,7 @@ function Mahjong:handleTileTap(x, y, layer)
     local kind = MahjongLogic.tileAt(self.board, x, y, layer)
     if not kind then return end
     if not MahjongLogic.isFree(self.board, x, y, layer) then
-        self:flashMessage(_("Tile is blocked"))
+        self:flashMessage(t("game.blocked"))
         return
     end
 
@@ -1059,7 +1086,7 @@ function Mahjong:applyMatch(a, b)
     if combo then
         local combo_points = MahjongLogic.COMBO_BONUS
             + (combo_chain - 1) * MahjongLogic.COMBO_INCREMENT
-        local label = combo_chain == 1 and _("COMBO +%d") or _("COMBO-CHAIN +%d")
+        local label = combo_chain == 1 and t("game.combo") or t("game.combo_chain")
         self:flashMessage(string.format(label, combo_points), true)
     end
     self:saveGameState()
@@ -1093,10 +1120,10 @@ function Mahjong:handleNoMoves()
         -- to this dialog must only keep it open — the old cancel_callback here
         -- exited the whole game.
         UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
-            text = _("No moves left! Shuffle the board? (-10 Score)"),
-            ok_text = _("Shuffle"),
+            text = t("game.no_moves_shuffle"),
+            ok_text = t("toolbar.shuffle"),
             ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
-            cancel_text = _("Close"),
+            cancel_text = t("toolbar.close"),
             cancel_callback = function()
                 UIManager:close(self, "full")
             end,
@@ -1112,13 +1139,12 @@ function Mahjong:showDeadBoardDialog()
     self:stopTimer()
     local has_undo = self.history and #self.history > 0
     local opts = {
-        text = _([[No moves left, and shuffling can't help — this board can't be cleared.
-Undo your last move to try a different approach, or start a new game.]]),
-        ok_text = _("New Game"),
+        text = t("game.no_moves_dead"),
+        ok_text = t("toolbar.new_game"),
         ok_callback = function()
             self:showLayoutPicker()
         end,
-        cancel_text = _("Close"),
+        cancel_text = t("toolbar.close"),
         cancel_callback = function()
             UIManager:close(self, "full")
         end,
@@ -1126,7 +1152,7 @@ Undo your last move to try a different approach, or start a new game.]]),
     if has_undo then
         opts.other_buttons = { {
             {
-                text = _("Undo"),
+                text = t("toolbar.undo"),
                 callback = function()
                     self:undo()
                     self:startTimer()
@@ -1188,19 +1214,19 @@ function Mahjong:showWinDialog()
     -- overall (all layouts) records from this layout's own bests.
     local headline
     if new_best_score and new_best_time then
-        headline = _("Congratulations! New overall best score and best time!")
+        headline = t("game.congrats_overall_score_time")
     elseif new_best_score then
-        headline = _("Congratulations! New overall best score!")
+        headline = t("game.congrats_overall_score")
     elseif new_best_time then
-        headline = _("Congratulations! New overall best time!")
+        headline = t("game.congrats_overall_time")
     elseif new_layout_score and new_layout_time then
-        headline = _("Congratulations! New best score and time on this layout!")
+        headline = t("game.congrats_layout_score_time")
     elseif new_layout_score then
-        headline = _("Congratulations! New best score on this layout!")
+        headline = t("game.congrats_layout_score")
     elseif new_layout_time then
-        headline = _("Congratulations! New best time on this layout!")
+        headline = t("game.congrats_layout_time")
     else
-        headline = _("You cleared the board!")
+        headline = t("game.cleared")
     end
     local best_time_str = self.stats.best_time
             and MahjongLogic.formatElapsed(self.stats.best_time) or "—"
@@ -1210,32 +1236,33 @@ function Mahjong:showWinDialog()
     local layout_best_time = layout_best_times[self.layout]
     local layout_best_time_str = layout_best_time
             and MahjongLogic.formatElapsed(layout_best_time) or "—"
-    local layout_name = MahjongLogic.layoutName(self.layout)
-    local best_score_marker = new_best_score and " " .. _("(New best!)") or ""
-    local best_time_marker = new_best_time and " " .. _("(New best!)") or ""
-    local layout_score_marker = new_layout_score and " " .. _("(New best!)") or ""
-    local layout_time_marker = new_layout_time and " " .. _("(New best!)") or ""
+    local layout_name = t("layout." .. self.layout)
+    local best_score_marker = new_best_score and " " .. t("game.new_best") or ""
+    local best_time_marker = new_best_time and " " .. t("game.new_best") or ""
+    local layout_score_marker = new_layout_score and " " .. t("game.new_best") or ""
+    local layout_time_marker = new_layout_time and " " .. t("game.new_best") or ""
     -- The summary rows as (label, value) pairs: the label is the description
     -- (no trailing colon) and the value is the data, so the dialog can right-
     -- align every label and start every value at the same x (the stats screen's
     -- column trick). The pairs are also kept on the dialog (win_rows) so the
     -- headless harness can reconstruct the rendered text for assertions.
     local win_rows = {
-        { label = _("Score"),             value = tostring(self.score) },
-        { label = _("Time"),              value = MahjongLogic.formatElapsed(elapsed) },
-        { label = _("Pairs matched"),     value = tostring(pairs) },
-        { label = _("Overall best score"), value = string.format("%d%s", self.stats.best_score, best_score_marker) },
-        { label = _("Overall best time"), value = best_time_str .. best_time_marker },
-        { label = _("%s best score"):format(layout_name),
+        { label = t("hud.score"),         value = tostring(self.score) },
+        { label = t("game.time"),         value = MahjongLogic.formatElapsed(elapsed) },
+        { label = t("game.pairs_matched"), value = tostring(pairs) },
+        { label = t("game.overall_best_score"),
+          value = string.format("%d%s", self.stats.best_score, best_score_marker) },
+        { label = t("game.overall_best_time"), value = best_time_str .. best_time_marker },
+        { label = t("game.score_layout", layout_name),
           value = string.format("%d%s", layout_best_score or 0, layout_score_marker) },
-        { label = _("%s best time"):format(layout_name),
+        { label = t("game.time_layout", layout_name),
           value = layout_best_time_str .. layout_time_marker },
-        { label = _("Current streak"),    value = tostring(self.stats.current_streak) },
+        { label = t("game.current_streak"), value = tostring(self.stats.current_streak) },
         -- US-18: always report the per-game help counters, including clean
         -- wins, so the summary explicitly tells the player whether either was
         -- used.
-        { label = _("Hints used"),        value = tostring(self.hints_used or 0) },
-        { label = _("Shuffles"),          value = tostring(self.shuffles_used or 0) },
+        { label = t("game.hints_used"), value = tostring(self.hints_used or 0) },
+        { label = t("game.shuffles"), value = tostring(self.shuffles_used or 0) },
     }
     -- The summary is a floating centered card (mahjongwinsummary.lua): it
     -- right-aligns the labels to the widest one so every value starts at the
@@ -1247,8 +1274,8 @@ function Mahjong:showWinDialog()
         parent = self,
         text = headline,
         win_rows = win_rows,
-        ok_text = _("Play again"),
-        cancel_text = _("Close"),
+        ok_text = t("toolbar.play_again"),
+        cancel_text = t("toolbar.close"),
         ok_callback = function() self:showLayoutPicker() end,
         cancel_callback = function()
             UIManager:close(self, "full")
@@ -1506,8 +1533,8 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
         do_shuffle()
     else
         UIManager:show(ConfirmBox:new{
-            text        = _("Reshuffle remaining tiles? (-10 Score)"),
-            ok_text     = _("Shuffle"),
+            text        = t("game.reshuffle"),
+            ok_text     = t("toolbar.shuffle"),
             ok_callback = do_shuffle,
         })
     end
@@ -1535,7 +1562,7 @@ function Mahjong:armAutoSolve()
     if MahjongLogic.isWin(self.board) then return end
     local token = self._auto_solve_token + 1
     self._auto_solve_token = token
-    self:setFlash(_("Keep holding to auto-solve…"))
+    self:setFlash(t("game.auto_solve_arming"))
     UIManager:scheduleIn(AUTO_SOLVE_HOLD_SECONDS, function()
         if self._auto_solve_token == token then
             self:startAutoSolve()
@@ -1568,7 +1595,7 @@ function Mahjong:startAutoSolve()
     -- US-34: drop any lingering hint (overlays + pulse) before the solver
     -- takes over the board.
     self:clearHint()
-    self:setFlash(_("Auto-solving…"))
+    self:setFlash(t("game.auto_solving"))
     self:autoSolveStep()
 end
 

@@ -18,7 +18,8 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local TextWidget = require("ui/widget/textwidget")
 local IconWidget = require("ui/widget/iconwidget")
 local ButtonWidget = require("ui/widget/button")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
 
 local HelpWidget = InputContainer:extend{
@@ -32,14 +33,14 @@ local HelpWidget = InputContainer:extend{
 
 local function label(value, size, color)
     return TextWidget:new{
-        text = _(value), padding = 0,
+        text = t(value), padding = 0,
         face = Font:getFace("smallinfofont", Screen:scaleBySize(size or 15)),
         fgcolor = color or Blitbuffer.COLOR_BLACK,
     }
 end
 
 local function bullet(value)
-    return label("• " .. value, 15)
+    return label("• " .. t(value), 15)
 end
 
 local function icon(name, size)
@@ -54,7 +55,7 @@ local function icon_group(names, description)
         icons[#icons + 1] = HorizontalSpan:new{ width = Screen:scaleBySize(4) }
     end
     local group = { align = "left", HorizontalGroup:new(icons) }
-    for line in description:gmatch("[^\n]+") do
+    for line in t(description):gmatch("[^\n]+") do
         group[#group + 1] = label(line, 13)
     end
     return VerticalGroup:new(group)
@@ -135,7 +136,7 @@ end
 function HelpWidget:buildPage()
     local gap = Screen:scaleBySize(8)
     local title = TextWidget:new{
-        text = _("How to play"), padding = 0, bold = true, underline = true,
+        text = t("help.title"), padding = 0, bold = true, underline = true,
         face = Font:getFace("tfont", Screen:scaleBySize(21)),
     }
     local close = ButtonWidget:new{
@@ -148,7 +149,7 @@ function HelpWidget:buildPage()
     local function section_heading(value)
         return CenterContainer:new{
             TextWidget:new{
-                text = _(value), padding = 0, bold = true,
+                text = t(value), padding = 0, bold = true,
                 face = Font:getFace("tfont", Screen:scaleBySize(18)),
             },
             dimen = Geometry:new{ w = inner_w, h = Screen:scaleBySize(26) },
@@ -189,46 +190,35 @@ function HelpWidget:buildPage()
     if self.page == 1 then
         content = VerticalGroup:new{
             align = "left",
-            label("Remove all tiles to win. Select two matching tiles", 15),
-            label("that are free.", 15),
-            label("Free tiles have no tile covering them.", 15),
-            label("They also have a fully open right or left side,", 15),
-            label("with no tile covering any part of it.", 15),
+            label("help.page_one_1", 15), label("help.page_one_2", 15),
+            label("help.page_one_3", 15), label("help.page_one_4", 15),
+            label("help.page_one_5", 15),
             VerticalSpan:new{ width = gap },
             CenterContainer:new{
                 lifted_example_board(inner_w),
                 dimen = Geometry:new{ w = inner_w, h = Screen:scaleBySize(96) },
             },
-            label("Checkmarks are selectable. The raised tile covers the two middle tiles,", 12),
-            label("and the far-right tile blocks its neighbor's side, so its neighbor is X.", 12),
+            label("help.page_one_6", 12), label("help.page_one_7", 12),
             VerticalSpan:new{ width = gap },
-            section_heading("Tile Groups"),
-            icon_group({"c1", "d1", "b1"}, "Characters, dots and bamboo: match the same number\nand suit."),
-            icon_group({"east", "south", "west", "north"}, "Winds: match identical winds."),
-            icon_group({"red", "green", "white"}, "Dragons: match identical dragons."),
-            icon_group({"flower1", "flower2", "flower3", "flower4"}, "Flowers: any flower matches\nany flower."),
-            icon_group({"season1", "season2", "season3", "season4"}, "Seasons: match any season."),
+            section_heading("help.tile_groups"),
+            icon_group({"c1", "d1", "b1"}, "help.characters"),
+            icon_group({"east", "south", "west", "north"}, "help.winds"),
+            icon_group({"red", "green", "white"}, "help.dragons"),
+            icon_group({"flower1", "flower2", "flower3", "flower4"}, "help.flowers"),
+            icon_group({"season1", "season2", "season3", "season4"}, "help.seasons"),
         }
     else
         content = VerticalGroup:new{
             align = "left",
-            section_heading("Scoring"),
-            bullet("Each pair scores 10 points."),
-            bullet("A same-group chain bonus adds 5 points when"),
-            label("the score method is Chain.", 15),
-            bullet("Clear another pair within 5 seconds for a COMBO:"),
-            label("+10 points.", 15),
-            bullet("Continue clearing pairs within 5 seconds for a chain"),
-            label("combo: +5 more points each time.", 15),
-            bullet("Hint shows a possible pair and costs -5 points"),
-            label("once per hint session.", 15),
-            bullet("Shuffle rearranges the remaining tiles and costs -10 points."),
+            section_heading("help.scoring"),
+            bullet("help.each_pair"), bullet("help.chain_bonus"), label("help.chain_method", 15),
+            bullet("help.combo_1"), label("help.combo_2", 15), bullet("help.combo_3"),
+            label("help.combo_4", 15), bullet("help.hint_penalty"), label("help.hint_session", 15),
+            bullet("help.shuffle_penalty"),
             VerticalSpan:new{ width = gap },
-            section_heading("Features"),
-            bullet("Undo reverses your last pair, but does not refund"),
-            label("hint or shuffle penalties.", 15),
-            bullet("Pause stops the clock. Choose a layout when"),
-            label("starting a new game.", 15),
+            section_heading("help.features"),
+            bullet("help.undo_1"), label("help.undo_2", 15),
+            bullet("help.pause_1"), label("help.pause_2", 15),
         }
     end
     local panel_h = math.floor(self.full_height * 0.82) + Screen:scaleBySize(35)
@@ -242,7 +232,7 @@ function HelpWidget:buildPage()
         credits = CenterContainer:new{
             VerticalGroup:new{
                 align = "center",
-                label("Created by @Quad-Plex", 12),
+                label("help.created_by", 12),
                 label("https://github.com/Quad-Plex/komahjong-solitaire", 12),
             },
             dimen = Geometry:new{ w = inner_w, h = credits_h },

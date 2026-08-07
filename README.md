@@ -15,8 +15,8 @@ A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch
 
 ## Status
 
-All user stories through **US-33** are shipped (`US-01..US-31`, `US-22a`,
-`US-32`, `US-33`); `IMPLEMENTATION_PLAN.md` and the story files under
+All user stories through **US-37** are shipped (`US-01..US-31`, `US-22a`,
+`US-32`, `US-33`, `US-37`); `IMPLEMENTATION_PLAN.md` and the story files under
 `implementation-plan/` are the source of truth for design decisions and the
 per-story history.
 

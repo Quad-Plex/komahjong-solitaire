@@ -28,7 +28,8 @@ local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 
 local PauseWidget = InputContainer:extend{
     name = "mahjongpause",
@@ -46,18 +47,18 @@ function PauseWidget:init()
     self.covers_fullscreen = true
 
     local title = TextWidget:new{
-        text = _("Paused"),
+        text = t("pause.title"),
         padding = 0,
         face = Font:getFace("tfont", Screen:scaleBySize(20)),
     }
     local hint = TextWidget:new{
-        text = _("The game is paused."),
+        text = t("pause.body"),
         padding = 0,
         face = Font:getFace("smallinfofont", Screen:scaleBySize(16)),
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
     }
     local resume_btn = ButtonWidget:new{
-        text = _("Resume"),
+        text = t("pause.resume"),
         text_font_face = "cfont",
         text_font_size = 20,
         text_font_bold = true,

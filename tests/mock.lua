@@ -381,6 +381,11 @@ function M.newContext()
     -- Load a REAL plugin module as a preload chunk and require() it.
     -- Load in dependency order: mahjonglogic, mahjongboard, main.
     ctx.loadPlugin = function(name)
+        if not package.preload.mahjongi18n then
+            local i18n_chunk, i18n_err = loadfile(M.ROOT .. "/mahjong.koplugin/mahjongi18n.lua")
+            assert(i18n_chunk, "cannot load plugin module mahjongi18n: " .. tostring(i18n_err))
+            package.preload.mahjongi18n = i18n_chunk
+        end
         local path = M.ROOT .. "/mahjong.koplugin/" .. name .. ".lua"
         local chunk, err = loadfile(path)
         assert(chunk, "cannot load plugin module " .. name .. ": " .. tostring(err))

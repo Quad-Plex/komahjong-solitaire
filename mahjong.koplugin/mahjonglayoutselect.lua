@@ -46,7 +46,8 @@ local OverlapGroup = require("ui/widget/overlapgroup")
 local TextWidget = require("ui/widget/textwidget")
 local IconWidget = require("ui/widget/iconwidget")
 local ButtonWidget = require("ui/widget/button")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
 
 -- Tile face aspect (portrait) and bevel fraction — must match the board
@@ -69,6 +70,7 @@ local LayoutSelect = InputContainer:extend{
     onPick = nil,      -- function(layout_id) — deals a fresh game on the layout
     onClose = nil,     -- function() — close X / tap outside (owner resumes timer)
     onHelp = nil,      -- function() — show gameplay help above this picker
+    onSettings = nil,  -- function() — show settings above this picker
     wins_by_layout = nil, -- map layout_id -> human wins (sync badge, US-30)
     highscores_by_layout = nil, -- map layout_id -> best winning score (score chip)
     best_times_by_layout = nil, -- map layout_id -> fastest win seconds (time chip)
@@ -310,11 +312,11 @@ function LayoutSelect:init()
     local edge_pad = Screen:scaleBySize(16)
     local gap = Screen:scaleBySize(12)
 
-    -- Title row: help at left, "Choose a layout" centered, close X at right.
+    -- Title row: settings + help at left, title centered, close X at right.
     -- (the same grey-square style as the other dialogs). Tapping the X
     -- cancels (closes the picker without dealing).
     local title_widget = TextWidget:new{
-        text = _("Choose a Layout"),
+        text = t("picker.title"),
         padding = 0,
         face = Font:getFace("tfont", Screen:scaleBySize(22)),
     }
@@ -343,13 +345,26 @@ function LayoutSelect:init()
         padding = 0,
         callback = function() if self.onHelp then self.onHelp() end end,
     }
+    self._settings_btn = ButtonWidget:new{
+        icon = "appbar.settings",
+        width = close_size,
+        height = close_size,
+        icon_width = math.floor(close_size * 0.6),
+        icon_height = math.floor(close_size * 0.6),
+        bordersize = Screen:scaleBySize(1),
+        radius = Screen:scaleBySize(4),
+        padding = 0,
+        callback = function() if self.onSettings then self.onSettings() end end,
+    }
     local title_w = title_widget:getSize().w
     local title_row_w = self.full_width - 2 * edge_pad
     -- Keep the title centered in the full row, rather than centered in the
     -- space between the two buttons.
-    local title_space = math.max(0, math.floor((title_row_w - title_w) / 2) - close_size)
+    local title_space = math.max(0, math.floor((title_row_w - title_w) / 2) - close_size * 1.5)
     local title_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = edge_pad },
+        self._settings_btn,
+        HorizontalSpan:new{ width = Screen:scaleBySize(4) },
         self._help_btn,
         HorizontalSpan:new{ width = title_space },
         title_widget,
@@ -425,7 +440,7 @@ function LayoutSelect:init()
                     thumb_children[#thumb_children + 1] = tchip
                 end
                 local name = TextWidget:new{
-                    text = MahjongLogic.layoutName(id),
+                        text = t("layout." .. id),
                     padding = 0,
                     face = Font:getFace("smallinfofont", Screen:scaleBySize(16)),
                     fgcolor = Blitbuffer.COLOR_BLACK,

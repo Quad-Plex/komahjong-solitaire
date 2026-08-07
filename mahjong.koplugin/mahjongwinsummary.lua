@@ -42,7 +42,6 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
-local _ = require("gettext")
 
 local WinSummary = InputContainer:extend{
     name = "mahjongwinsummary",

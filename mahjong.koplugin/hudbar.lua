@@ -24,7 +24,8 @@ local VerticalSpan = require("ui/widget/verticalspan")
 local IconWidget = require("ui/widget/iconwidget")
 local TextWidget = require("ui/widget/textwidget")
 local ButtonWidget = require("ui/widget/button")
-local _ = require("gettext")
+local I18n = require("mahjongi18n")
+local t = I18n.t
 
 local BAR_BG = Blitbuffer.COLOR_WHITE
 local QUIT_BG = Blitbuffer.COLOR_LIGHT_GRAY
@@ -117,7 +118,7 @@ function HudBar:init()
     local h1 = title_widget:getSize().h
 
     -- Dummy chip to measure natural chip height (initial estimate)
-    local dummy_chip = select(1, buildChip("mahjong/hud_pairs", "Pairs", 100, 40))
+    local dummy_chip = select(1, buildChip("mahjong/hud_pairs", t("hud.pairs"), 100, 40))
     local h2 = dummy_chip:getSize().h
     self.HUD_H = h1 + h2 + Screen:scaleBySize(12)
 
@@ -146,9 +147,9 @@ function HudBar:init()
     local chip_w = math.floor(available_for_chips / 3)
 
     -- Build chips with precise chip_w and h2
-    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", _("Pairs"), chip_w, h2)
-    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", _("Free"), chip_w, h2)
-    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", _("Score"), chip_w, h2)
+    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", t("hud.pairs"), chip_w, h2)
+    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", t("hud.free"), chip_w, h2)
+    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", t("hud.score"), chip_w, h2)
     self._value_widgets = { pairs = val_pairs, free = val_free, score = val_score }
     self._chip_layouts = { lay_pairs, lay_free, lay_score }
 
