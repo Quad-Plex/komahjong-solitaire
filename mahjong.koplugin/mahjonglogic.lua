@@ -182,17 +182,40 @@ end
 -- `id` is the layout id (defaults to "turtle"). `rng` is nil (random from the
 -- clock), an integer seed, or a function returning [0,1).
 --
--- A random deal (rng == nil) is re-dealt until the board has at least one
--- matching free pair, so a fresh game never starts dead — without this, a
--- small fraction of deals (measured ~5% on Bridge) have no possible first
--- move and the player is forced to shuffle a board they never got to play.
+-- Mirrors the dead-board shuffle's best-of-N selection (DEAL_CANDIDATES = 15):
+-- a random deal (rng == nil) evaluates several candidate deals and keeps the
+-- one with the most matching free pairs, so a fresh game starts with a
+-- passable number of opening moves instead of merely at least one (without a
+-- minimum, a small fraction of deals — measured ~5% on Bridge — had only the
+-- bare minimum possible). A deal with no move at all is never accepted, so a
+-- fresh game never starts dead.
+--
 -- Seeded deals (the self-tests, and the deterministic deal checks) are left
--- byte-identical: only the nil-rng path re-deals.
+-- byte-identical: only the nil-rng path evaluates candidates.
 --
 -- Backward-compat: the pre-US-14 signature was newGame(rng) — a number/nil
 -- first argument is still treated as the rng for a Turtle deal, so every
 -- existing caller (and the self-tests) stays byte-identical. The explicit form
 -- is newGame("turtle", 42).
+--
+-- The candidate count matches the dead-board shuffle so the starting deal and
+-- the rescue reshuffle use the same "best-of-15" algorithm.
+local DEAL_CANDIDATES = 15
+MahjongLogic.DEAL_CANDIDATES = DEAL_CANDIDATES
+
+-- Deals one board from the shuffled deck onto `layout` (a buildLayout table)
+-- using `rng`.
+local function dealBoard(layout, rng)
+    local deck = MahjongLogic.createDeck()
+    MahjongLogic.shuffle(deck, rng)
+    local board = {}
+    for i = 1, #layout do
+        local p = layout[i]
+        board[MahjongLogic.posKey(p.x, p.y, p.layer)] = deck[i]
+    end
+    return board
+end
+
 function MahjongLogic.newGame(id, rng)
     if type(id) ~= "string" then
         -- old call shape: newGame(rng) or newGame()
@@ -207,17 +230,29 @@ function MahjongLogic.newGame(id, rng)
         local seed = os.time() * 1000 + math.random(1000)
         rng = MahjongLogic.newRng(seed)
     end
-    local board
+
+    if not is_random then
+        -- Seeded deal (self-tests, deterministic checks): byte-identical to the
+        -- historical single deal. Keep it byte-identical, never re-deal.
+        return dealBoard(layout, rng)
+    end
+
+    -- Random deal: pick the best of DEAL_CANDIDATES candidates, scoring each
+    -- by its number of matching free pairs. Repeat the round while the best
+    -- candidate has no move at all, so a fresh game always starts playable.
+    local best_board, best_moves
     repeat
-        local deck = MahjongLogic.createDeck()
-        MahjongLogic.shuffle(deck, rng)
-        board = {}
-        for i = 1, #layout do
-            local p = layout[i]
-            board[MahjongLogic.posKey(p.x, p.y, p.layer)] = deck[i]
+        best_board, best_moves = nil, -1
+        for _ = 1, DEAL_CANDIDATES do
+            local board = dealBoard(layout, rng)
+            local moves = MahjongLogic.countFreePairs(board, id)
+            if moves > best_moves then
+                best_moves = moves
+                best_board = board
+            end
         end
-    until not is_random or MahjongLogic.hasMoves(board, id)
-    return board
+    until best_moves > 0
+    return best_board
 end
 
 -- Number of tiles currently on a board.
