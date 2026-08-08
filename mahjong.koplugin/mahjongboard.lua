@@ -191,12 +191,32 @@ function Board:rebuildTiles()
                 overlap_offset = { px, py },
                 alpha = true,
             }
-            children[#children + 1] = w
             self.tile_widgets[MahjongLogic.posKey(p.x, p.y, p.layer)] = w
             by_layer[p.layer][#by_layer[p.layer] + 1] = {
                 x = p.x, y = p.y, layer = p.layer, kind = kind,
                 px = px, py = py, w = self.tw, h = self.th,
             }
+        end
+    end
+
+    -- Taipei's spec is grouped by its structural bands rather than paint order.
+    -- Its half-grid upper/lower bands can overlap the face/bevel of a tile below
+    -- them, so paint that layout along the screen's diagonal depth (x+y),
+    -- preserving the established spec order for other layouts. This makes an
+    -- upper-right half-overlap paint after the lower-left tile that it covers.
+    if self.layout_id == "taipei" then
+        for layer = 0, max_layer do
+            table.sort(by_layer[layer], function(a, b)
+                local da, db = a.x + a.y, b.x + b.y
+                if da ~= db then return da < db end
+                if a.y ~= b.y then return a.y < b.y end
+                return a.x < b.x
+            end)
+        end
+    end
+    for layer = 0, max_layer do
+        for _, t in ipairs(by_layer[layer]) do
+            children[#children + 1] = self.tile_widgets[MahjongLogic.posKey(t.x, t.y, t.layer)]
         end
     end
 
@@ -537,7 +557,8 @@ end
 function Board:hitTest(lx, ly)
     local max_layer = MahjongLogic.maxLayer(self.layout_id)
     for layer = max_layer, 0, -1 do
-        for _, t in ipairs(self.tiles_by_layer[layer] or {}) do
+        for i = #(self.tiles_by_layer[layer] or {}), 1, -1 do
+            local t = self.tiles_by_layer[layer][i]
             if lx >= t.px and lx < t.px + t.w
                 and ly >= t.py and ly < t.py + t.h then
                 return t

@@ -165,6 +165,21 @@ expect(drawn == 144, "board widget draws all 144 Taipei tiles (got " .. drawn ..
 expect(all_inside, "all Taipei tiles fit inside the widget area")
 expect(mapCount(bv.tile_widgets) == 144, "board widget built 144 tile widgets")
 
+local function tileIndex(x, y, layer)
+    for i, tile in ipairs(bv.tiles_by_layer[layer] or {}) do
+        if tile.x == x and tile.y == y then return i end
+    end
+    return nil
+end
+expect(tileIndex(1.5, 1.5, 0) < tileIndex(2.5, 1, 0),
+    "Taipei's upper-left diagonal overlap paints after the lower-left tile")
+expect(tileIndex(7.5, 1, 0) < tileIndex(8.5, 0.5, 0),
+    "Taipei's upper-right diagonal overlap paints after the lower-left tile")
+expect(tileIndex(1.5, 5.5, 0) < tileIndex(2.5, 5, 0),
+    "Taipei's lower-left diagonal overlap paints after the lower-left tile")
+expect(tileIndex(7.5, 5, 0) < tileIndex(8.5, 4.5, 0),
+    "Taipei's lower-right diagonal overlap paints after the lower-left tile")
+
 -- Hit-test: tapping the L6 peak and a L0 tower tile returns them.
 bv.dimen.x, bv.dimen.y = 0, 0
 local px, py = bv:tilePos(5, 3, 6)

@@ -386,7 +386,7 @@ end
 -- Flat projection (design decision 5): a tile at (x,y,L) is free if
 --   * no tile exists directly above it at (x,y,L+1), and
 --   * at least one horizontal side is open: no tile at (x-1,y,L) OR
---     no tile at (x+1,y,L).
+--     no tile at (x+1,y,L). Half-grid neighbours count as occupying that side.
 
 -- Kind at (x, y, layer), or nil if the cell is empty.
 function MahjongLogic.tileAt(board, x, y, layer)
