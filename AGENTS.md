@@ -83,7 +83,7 @@ Key facts:
 | Module | Purpose |
 |---|---|
 | `device` | `Device.screen`, `Screen:getWidth()/getHeight()`, `Screen:scaleBySize(px)` (e-ink DPI scaling) |
-| `ui/uimanager` | `UIManager:show(w)`, `UIManager:close(w)`, `UIManager:setDirty(w, "ui"/"full")`, `UIManager:scheduleIn(s, fn)`, `UIManager:nextTick(fn)` |
+| `ui/uimanager` | `UIManager:show(w)`, `UIManager:close(w)`, `UIManager:setDirty(w, "ui"/"full")`, `UIManager:scheduleIn(s, fn)`, `UIManager:nextTick(fn)`, `UIManager:tickAfterNext(fn)` |
 | `ui/geometry` | `Geometry:new{w=..,h=..}` dimen objects |
 | `ui/font`, `ui/size` | `Font:getFace("smallinfofont", size)`, `Size.padding.*`, `Size.radius.*` |
 | `ffi/blitbuffer` | `Blitbuffer.COLOR_WHITE`, `COLOR_LIGHT_GRAY`, `COLOR_DARK_GRAY`, etc. |
@@ -245,6 +245,61 @@ and stacks: `board` → log section → `status_bar` in a full-screen `VerticalG
 
 - After mutating visible state you must call `UIManager:setDirty(widget, "ui")` (or `"full"`
   for full-screen refresh on e-ink) or the change won't paint.
+
+### E-ink reactive refresh rules
+
+KOReader separates repainting a widget from refreshing the framebuffer. `setDirty` queues
+both; the actual `paintTo` and e-ink update happen later in `UIManager:_repaint`. Treat every
+input callback as a transaction that may be coalesced with the next callback.
+
+- Dirty the window-level owner (`self` in a top-level game), never only the nested board,
+  HUD, or icon widget. A nested target can enqueue a refresh region without causing its
+  parent to paint.
+- Prefer `"ui"` with an explicit `Geom` in **screen coordinates**. A regionless `"ui"`
+  request refreshes the whole screen and is the usual source of accidental large updates.
+  Use `"full"` only when a full-screen high-fidelity waveform is genuinely required.
+- Keep stable regions for widgets whose `dimen` is not populated until their first paint.
+  Derive them from the known layout geometry instead of passing a nil child `dimen`.
+- For a mutation affecting several tiles, build one region per connected local cluster,
+  with a small raster edge margin, but do not take the bounding box of distant changes.
+  Two tiles at opposite ends of a board must not produce a board-sized refresh. KOReader
+  merges touching regions, but explicit grouping is more reliable for e-ink drivers.
+- Batch overlay transitions. Clear old highlight widgets and install new ones with refresh
+  deferred, then enqueue one combined region covering both the old and new locations. This
+  prevents a stale highlight clear and a new highlight paint from racing in separate
+  regional updates.
+- Structural tile changes can need one coalesced retry after the first repaint. If rapid
+  pair removals can arrive before the previous e-ink update settles, accumulate their local
+  regions and re-request them once via `UIManager:tickAfterNext`. Guard the retry so a closed
+  or replaced board cannot dirty a new window.
+- Never rebuild a large widget tree while a modal is still on the window stack. KOReader's
+  `ConfirmBox` runs `ok_callback` before closing itself; defer a board rebuild with
+  `UIManager:tickAfterNext` so the dialog-clear repaint gets an intervening UI tick first.
+  Likewise, defer shuffle/dead-board dialogs after a pair clear until the cleared board has
+  painted. A plain `nextTick` may still run before that repaint drains.
+- Do not assume two refresh requests in one callback will paint two intermediate states.
+  The final framebuffer is what gets painted, so update model state and widget structure
+  consistently before the queued repaint. Use tokens or identity checks on delayed callbacks
+  so stale work cannot repaint over a new game.
+
+Recommended shape for a local update:
+
+```lua
+-- region is a screen-space Geom covering the changed connected area
+UIManager:setDirty(self.show_parent or "all", "ui", region)
+```
+
+Recommended shape for a modal-dependent update:
+
+```lua
+UIManager:tickAfterNext(function()
+    if self.board ~= board_snapshot then return end
+    rebuildBoard()
+end)
+```
+
+The practical goal is not zero refreshes. It is one correct `"ui"` refresh for each changed
+local area, with a delayed retry only for structural changes that can overlap rapid input.
 - For dialogs you've built, dirty the dialog; for the board, dirty the board or `"all"`.
 
 ## Testing and iteration workflow
