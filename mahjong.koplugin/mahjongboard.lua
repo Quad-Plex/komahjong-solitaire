@@ -443,6 +443,30 @@ function Board:requestRefresh(rects)
     })
 end
 
+-- A rapid second pair clear can arrive before the e-ink controller has fully
+-- settled the first local update. Re-request the affected regions once after
+-- an intervening repaint, coalescing multiple quick pair clears into one
+-- retry. This stays regional and is only used for structural tile changes.
+function Board:queueStructuralRefreshRetry(rects)
+    if not self.show_parent or not UIManager.tickAfterNext then return end
+    self._refresh_retry_rects = self._refresh_retry_rects or {}
+    for _, r in ipairs(rects or {}) do
+        self._refresh_retry_rects[#self._refresh_retry_rects + 1] = {
+            x = r.x, y = r.y, layer = r.layer,
+        }
+    end
+    if self._refresh_retry_scheduled then return end
+    self._refresh_retry_scheduled = true
+    UIManager:tickAfterNext(function()
+        self._refresh_retry_scheduled = false
+        local retry_rects = self._refresh_retry_rects
+        self._refresh_retry_rects = nil
+        if self.show_parent and self.show_parent.board_view == self and retry_rects then
+            self:requestRefresh(retry_rects)
+        end
+    end)
+end
+
 function Board:syncOverlapGroup(refresh_rects)
     if not self.overlap then return end
     -- Clear current children array (do NOT free them, they are in maps)
@@ -544,6 +568,7 @@ function Board:removePair(a, b)
         rects[#rects + 1] = r
     end
     self:syncOverlapGroup(rects)
+    self:queueStructuralRefreshRetry(rects)
     return ra and rb
 end
 

@@ -166,6 +166,22 @@ p4:requestRefresh({
 expect(#ctx.dirty_calls == 1,
     "touching local board changes share one refresh region")
 
+-- A live game retries structural pair regions after an intervening repaint;
+-- standalone boards deliberately do not schedule that owner-level fallback.
+local retry_parent = {}
+local p5 = Board:new{
+    board = proj3, width = 600, height = 400, show_parent = retry_parent,
+}
+retry_parent.board_view = p5
+ctx.scheduled = {}
+p5:removePair({ x = 5, y = 3, layer = 0 }, { x = 10, y = 7, layer = 0 })
+expect(#ctx.scheduled == 1,
+    "structural pair updates schedule one coalesced retry")
+ctx.runScheduled()
+ctx.runScheduled()
+expect(#ctx.dirty_calls > 2,
+    "the structural retry re-requests the affected regions")
+
 if failures == 0 then
     print("\nALL BOARD UPDATE/OVERLAY CHECKS PASSED")
 else
