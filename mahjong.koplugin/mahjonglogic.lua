@@ -182,24 +182,23 @@ end
 -- `id` is the layout id (defaults to "turtle"). `rng` is nil (random from the
 -- clock), an integer seed, or a function returning [0,1).
 --
--- Mirrors the dead-board shuffle's best-of-N selection (DEAL_CANDIDATES = 15):
--- a random deal (rng == nil) evaluates several candidate deals and keeps the
--- one with the most matching free pairs, so a fresh game starts with a
--- passable number of opening moves instead of merely at least one (without a
--- minimum, a small fraction of deals — measured ~5% on Bridge — had only the
--- bare minimum possible). A deal with no move at all is never accepted, so a
--- fresh game never starts dead.
+-- Random deals are constructed from a legal clear sequence. At each step a
+-- pair is assigned to two currently free positions, then those positions are
+-- removed from a working copy of the shape. This avoids the much more common
+-- failure mode where a deal has an opening move but gets trapped later (for
+-- example, equal tiles stacked on top of one another).
+-- A bounded fallback remains for unusual future layouts whose shape cannot be
+-- cleared two free positions at a time.
 --
 -- Seeded deals (the self-tests, and the deterministic deal checks) are left
--- byte-identical: only the nil-rng path evaluates candidates.
+-- byte-identical: only the nil-rng path uses this solvability-aware generator.
 --
 -- Backward-compat: the pre-US-14 signature was newGame(rng) — a number/nil
 -- first argument is still treated as the rng for a Turtle deal, so every
 -- existing caller (and the self-tests) stays byte-identical. The explicit form
 -- is newGame("turtle", 42).
 --
--- The candidate count matches the dead-board shuffle so the starting deal and
--- the rescue reshuffle use the same "best-of-15" algorithm.
+-- Retained for the fallback path and for the dead-board shuffle contract.
 local DEAL_CANDIDATES = 15
 MahjongLogic.DEAL_CANDIDATES = DEAL_CANDIDATES
 
@@ -212,6 +211,54 @@ local function dealBoard(layout, rng)
     for i = 1, #layout do
         local p = layout[i]
         board[MahjongLogic.posKey(p.x, p.y, p.layer)] = deck[i]
+    end
+    return board
+end
+
+local function dealPairs(rng)
+    local pairs = {}
+    for _, kind in ipairs(SUITED) do pairs[#pairs + 1] = { kind, kind } end
+    for _, kind in ipairs(WINDS) do pairs[#pairs + 1] = { kind, kind } end
+    for _, kind in ipairs(DRAGONS) do pairs[#pairs + 1] = { kind, kind } end
+    pairs[#pairs + 1] = { "flower1", "flower2" }
+    pairs[#pairs + 1] = { "flower3", "flower4" }
+    pairs[#pairs + 1] = { "season1", "season2" }
+    pairs[#pairs + 1] = { "season3", "season4" }
+    -- The four-copy kinds need two pairs each.
+    -- There are 34 four-copy kinds, hence 68 ordinary pairs plus four
+    -- wildcard-group pairs = 72 pairs / 144 tiles.
+    for i = 1, 34 do pairs[#pairs + 1] = { pairs[i][1], pairs[i][2] } end
+    return MahjongLogic.shuffle(pairs, rng)
+end
+
+-- Construct a deal together with an implicit solution. The working board starts
+-- fully occupied; each iteration chooses two currently free positions, gives
+-- them a matching pair, and removes them from the working board. Replaying the
+-- choices against the returned board therefore clears it completely.
+local function solvableDeal(layout, rng)
+    local board = {}
+    local working = {}
+    for _, p in ipairs(layout) do
+        working[MahjongLogic.posKey(p.x, p.y, p.layer)] = true
+    end
+    local pairs = dealPairs(rng)
+
+    for pair_index = 1, #pairs do
+        local pair = pairs[pair_index]
+        local free = {}
+        for _, p in ipairs(layout) do
+            local key = MahjongLogic.posKey(p.x, p.y, p.layer)
+            if working[key] and MahjongLogic.isFree(working, p.x, p.y, p.layer) then
+                free[#free + 1] = p
+            end
+        end
+        if #free < 2 then return nil end
+        MahjongLogic.shuffle(free, rng)
+        local a, b = free[1], free[2]
+        local ak = MahjongLogic.posKey(a.x, a.y, a.layer)
+        local bk = MahjongLogic.posKey(b.x, b.y, b.layer)
+        board[ak], board[bk] = pair[1], pair[2]
+        working[ak], working[bk] = nil, nil
     end
     return board
 end
@@ -237,9 +284,15 @@ function MahjongLogic.newGame(id, rng)
         return dealBoard(layout, rng)
     end
 
-    -- Random deal: pick the best of DEAL_CANDIDATES candidates, scoring each
-    -- by its number of matching free pairs. Repeat the round while the best
-    -- candidate has no move at all, so a fresh game always starts playable.
+    -- Random deals are solvability-aware rather than merely opening-move-aware.
+    -- Keep a fallback for a future layout whose geometry cannot be constructed
+    -- by the greedy reverse pass; it still preserves the old playable-deal
+    -- guarantee instead of failing to start a game.
+    for _ = 1, 200 do
+        local board = solvableDeal(layout, rng)
+        if board then return board end
+    end
+
     local best_board, best_moves
     repeat
         best_board, best_moves = nil, -1
@@ -247,8 +300,7 @@ function MahjongLogic.newGame(id, rng)
             local board = dealBoard(layout, rng)
             local moves = MahjongLogic.countFreePairs(board, id)
             if moves > best_moves then
-                best_moves = moves
-                best_board = board
+                best_moves, best_board = moves, board
             end
         end
     until best_moves > 0
