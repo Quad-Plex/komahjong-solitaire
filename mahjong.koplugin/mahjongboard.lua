@@ -200,20 +200,17 @@ function Board:rebuildTiles()
         end
     end
 
-    -- Taipei's spec is grouped by its structural bands rather than paint order.
-    -- Its half-grid upper/lower bands can overlap the face/bevel of a tile below
-    -- them, so paint that layout along the screen's diagonal depth (x+y),
-    -- preserving the established spec order for other layouts. This makes an
-    -- upper-right half-overlap paint after the lower-left tile that it covers.
-    if self.layout_id == "taipei" then
-        for layer = 0, max_layer do
-            table.sort(by_layer[layer], function(a, b)
-                local da, db = a.x + a.y, b.x + b.y
-                if da ~= db then return da < db end
-                if a.y ~= b.y then return a.y < b.y end
-                return a.x < b.x
-            end)
-        end
+    -- Layout specs are grouped by shape, not paint order. On half-grid layouts
+    -- a diagonal neighbor can overlap the other tile's face/bevel, so paint
+    -- every layer along the board's diagonal depth (x+y). This makes an
+    -- upper-right half-overlap paint after the lower-left tile it covers.
+    for layer = 0, max_layer do
+        table.sort(by_layer[layer], function(a, b)
+            local da, db = a.x + a.y, b.x + b.y
+            if da ~= db then return da < db end
+            if a.y ~= b.y then return a.y < b.y end
+            return a.x < b.x
+        end)
     end
     for layer = 0, max_layer do
         for _, t in ipairs(by_layer[layer]) do
@@ -402,10 +399,20 @@ function Board:syncOverlapGroup(refresh_rects)
     for i = #self.overlap, 1, -1 do
         self.overlap[i] = nil
     end
-    -- Add tiles in layer order
+    -- Add tiles in layer order and diagonal depth order.
     local max_layer = MahjongLogic.maxLayer(self.layout_id)
     for layer = 0, max_layer do
+        local tiles = {}
         for _, t in ipairs(self.tiles_by_layer[layer]) do
+            tiles[#tiles + 1] = t
+        end
+        table.sort(tiles, function(a, b)
+            local da, db = a.x + a.y, b.x + b.y
+            if da ~= db then return da < db end
+            if a.y ~= b.y then return a.y < b.y end
+            return a.x < b.x
+        end)
+        for _, t in ipairs(tiles) do
             local w = self.tile_widgets[MahjongLogic.posKey(t.x, t.y, t.layer)]
             if w then
                 self.overlap[#self.overlap + 1] = w
@@ -558,8 +565,18 @@ end
 function Board:hitTest(lx, ly)
     local max_layer = MahjongLogic.maxLayer(self.layout_id)
     for layer = max_layer, 0, -1 do
-        for i = #(self.tiles_by_layer[layer] or {}), 1, -1 do
-            local t = self.tiles_by_layer[layer][i]
+        local tiles = {}
+        for _, t in ipairs(self.tiles_by_layer[layer] or {}) do
+            tiles[#tiles + 1] = t
+        end
+        table.sort(tiles, function(a, b)
+            local da, db = a.x + a.y, b.x + b.y
+            if da ~= db then return da < db end
+            if a.y ~= b.y then return a.y < b.y end
+            return a.x < b.x
+        end)
+        for i = #tiles, 1, -1 do
+            local t = tiles[i]
             if lx >= t.px and lx < t.px + t.w
                 and ly >= t.py and ly < t.py + t.h then
                 return t

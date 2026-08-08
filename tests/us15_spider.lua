@@ -144,6 +144,15 @@ expect(drawn == 144, "board widget draws all 144 Spider tiles (got " .. drawn ..
 expect(all_inside, "all Spider tiles fit inside the widget area")
 expect(mapCount(bv.tile_widgets) == 144, "board widget built 144 tile widgets")
 
+local function tileIndex(x, y, layer)
+    for i, tile in ipairs(bv.tiles_by_layer[layer] or {}) do
+        if tile.x == x and tile.y == y then return i end
+    end
+    return nil
+end
+expect(tileIndex(10, 1.5, 0) < tileIndex(11, 1, 0),
+    "Spider's upper-right half-overlap paints after the lower-left tile")
+
 -- Hit-test: tapping the peak tile returns it.
 bv.dimen.x, bv.dimen.y = 0, 0
 local px, py = bv:tilePos(7.5, 4.5, 3)

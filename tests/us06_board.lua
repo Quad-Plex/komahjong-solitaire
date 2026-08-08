@@ -75,12 +75,23 @@ for l = 0, Logic.MAX_LAYER do
 end
 expect(all_inside, "all tiles fit inside the widget area")
 
--- Z-order: children are appended in buildLayout order (bottom layer first), so
--- lower layers paint first and upper layers land on top.
+-- Z-order: children are appended by layer and diagonal depth, so lower layers
+-- paint first and diagonal half-overlaps land on top.
 local children = b[1][1]
 local zi = 1
 local z_order_ok = true
+local ordered = {}
 for _, p in ipairs(Logic.buildLayout()) do
+    ordered[#ordered + 1] = p
+end
+table.sort(ordered, function(a, b)
+    if a.layer ~= b.layer then return a.layer < b.layer end
+    local da, db = a.x + a.y, b.x + b.y
+    if da ~= db then return da < db end
+    if a.y ~= b.y then return a.y < b.y end
+    return a.x < b.x
+end)
+for _, p in ipairs(ordered) do
     if Logic.tileAt(board, p.x, p.y, p.layer) then
         local px, py = b:tilePos(p.x, p.y, p.layer)
         local c = children[zi]
@@ -90,7 +101,7 @@ for _, p in ipairs(Logic.buildLayout()) do
         zi = zi + 1
     end
 end
-expect(zi - 1 == 144 and z_order_ok, "children appended in buildLayout order (bottom layer first)")
+expect(zi - 1 == 144 and z_order_ok, "children use diagonal depth order (bottom layer first)")
 
 -- Layer offset: each layer L is shifted up-left by L*bw / L*bh (the outward
 -- bevel thickness), so a raised tile's face is inset from the tile directly

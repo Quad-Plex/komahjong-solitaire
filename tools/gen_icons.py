@@ -77,7 +77,6 @@ Design goals (locked in by the 2.5D redesign + the v2 traditional-art pass):
 import argparse
 import math
 import os
-import xml.etree.ElementTree as ET
 
 # mahjong.koplugin/icons, resolved relative to this script (tools/).
 ICONS_DIR = os.path.normpath(os.path.join(
@@ -119,17 +118,14 @@ FACE_W, FACE_H = 100, 140
 # outward bevel bands. The symbols use the 3-TONE ink palette (above) for
 # maximum contrast on e-ink; the bevels keep their gray tones for the 3D
 # depth.
-FACE_BEVEL_RIGHT = '<rect x="100" y="0" width="10" height="154" fill="#78909c"/>'
-FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L100 154 L10 154 Z" fill="#546e7a"/>'
+FACE_BEVEL_RIGHT = '<path d="M100 0 L110 14 L110 154 L100 140 Z" fill="#78909c"/>'
+FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"/>'
 
-# Corner-diagonal bevels: when BOTH bevels are exposed (base variant) the two
-# side faces meet along a DIAGONAL line from the face's bottom-right corner
-# (100,140) to the widget's bottom-right corner (110,154). That diagonal is the
-# block's front-right vertical edge as seen from the bottom-right camera, so the
-# corner reads as one receding point (the implied rectangular box) instead of a
-# square L where the right face flatly covers the corner. The upper-left
-# triangle of the corner square belongs to the right face (medium #78909c), the
-# lower-right to the base/front face (dark #546e7a).
+# Corner-diagonal bevels: the right face is a parallelogram, with diagonals at
+# both its upper and lower edges. The upper diagonal closes the silhouette of a
+# single-tile tower; the lower diagonal meets the bottom face as one receding
+# point instead of a square L. The bottom face mirrors that diagonal on its left
+# edge so single-bevel variants still mesh with neighboring bottom bevels.
 #
 # The bottom bevel also carries a mirrored diagonal on its LEFT edge (0,140) to
 # (10,154): the board shifts each upper layer up-left by the bevel thickness, so
@@ -141,7 +137,7 @@ FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L100 154 L10 154 Z" fill="#546e7a"
 # exposed edge) keep the bevel band straight on the covered side: the "_nr"
 # bottom bevel's right edge is a seam against a same-layer neighbour's face,
 # while its left edge stays a receding corner like the base variant's.
-FACE_BEVEL_RIGHT_CORNER = '<path d="M100 0 L110 0 L110 154 L100 140 Z" fill="#78909c"/>'
+FACE_BEVEL_RIGHT_CORNER = '<path d="M100 0 L110 14 L110 154 L100 140 Z" fill="#78909c"/>'
 FACE_BEVEL_BOTTOM_CORNER = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"/>'
 
 # Face outline: thin medium-gray ring inside the white face box, ~1 viewBox
@@ -683,73 +679,15 @@ def flower_body(n):
 
 
 # ---------------------------------------------------------------------------
-# SEASONS (1..4) — Avatar's four elemental sigils, extracted from the source
-# SVG in the project root. The source is a four-panel sheet: top-left Fire,
-# top-right Water, bottom-left Earth, bottom-right Air. Keeping extraction here
-# makes the generated icons use the actual source paths rather than a redraw.
-AVATAR_SOURCE = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..",
-    "1670152831Avatar the last airbender all the four elements.svg"))
-AVATAR_PANEL = 3733.0
-AVATAR_MARGIN = 10.0
-AVATAR_STROKE = 90.0
-# The source panels are not optically centered: their sigils sit down and to
-# the right, especially the broad Air and Earth marks. These small corrections
-# center the rendered ink within the 100x140 face after normalization.
-AVATAR_OFFSETS = {
-    "fire": (-7.0, -10.5),
-    "water": (-6.25, -10.25),
-    "earth": (-7.0, -10.0),
-    "air": (-7.0, -9.25),
+# SEASONS (1..4) — compact, self-contained elemental sigils. These are kept as
+# ordinary SVG paths here so icon generation never depends on an artwork file
+# outside the repository.
+AVATAR_SIGILS = {
+    "fire": '<path d="M50 8 C34 28 60 36 39 57 C25 71 28 91 50 112 C72 91 75 71 61 57 C48 45 57 25 50 8 Z"/>',
+    "water": '<path d="M12 48 C27 34 42 34 50 48 C58 62 73 62 88 48 M12 76 C27 62 42 62 50 76 C58 90 73 90 88 76 M20 104 C32 94 43 94 50 104 C57 114 68 114 80 104"/>',
+    "earth": '<path d="M50 12 L83 31 L83 69 C83 91 69 108 50 126 C31 108 17 91 17 69 L17 31 Z M30 48 L70 48 L70 78 L30 78 Z"/>',
+    "air": '<path d="M16 38 C35 16 69 20 79 42 C88 62 72 79 53 75 C37 72 33 56 45 47 C56 39 70 46 69 57 M84 93 C65 115 31 111 21 89 C12 69 28 52 47 56 C63 59 67 75 55 84 C44 92 30 85 31 74"/>',
 }
-AVATAR_PANELS = {
-    "fire": (4900.0, 9583.0),
-    "water": (11700.0, 9583.0),
-    "earth": (4900.0, 16383.0),
-    "air": (11700.0, 16383.0),
-}
-_AVATAR_SIGILS = None
-
-
-def avatar_sigils():
-    """Extract the black sigil paths and normalize them to tile coordinates."""
-    global _AVATAR_SIGILS
-    if _AVATAR_SIGILS is not None:
-        return _AVATAR_SIGILS
-    if not os.path.exists(AVATAR_SOURCE):
-        raise RuntimeError("Avatar source SVG is missing: " + AVATAR_SOURCE)
-    root = ET.parse(AVATAR_SOURCE).getroot()
-    ns = "{http://www.w3.org/2000/svg}"
-    paths = [e.attrib["d"] for e in root.iter(ns + "path")
-             if e.attrib.get("class") == "fil3" and e.attrib.get("d")]
-    # The source has two Fire paths, three Water paths, two Earth paths, and
-    # one Air path, in panel order.
-    groups = {
-        "fire": paths[0:2], "water": paths[2:5],
-        "earth": paths[5:7], "air": paths[7:8],
-    }
-    # Leave a clear face-border margin. The source artwork was composed on
-    # colored panels and some sigils reach the panel edge; mapping the whole
-    # panel to the whole face lets those paths spill into the bevel band.
-    scale = (100.0 - 2 * AVATAR_MARGIN) / AVATAR_PANEL
-    result = {}
-    for name, source_paths in groups.items():
-        ox, oy = AVATAR_PANELS[name]
-        dx, dy = AVATAR_OFFSETS[name]
-        transform = "translate({:.5f},{:.5f}) scale({:.5f})".format(
-            AVATAR_MARGIN - ox * scale + dx,
-            AVATAR_MARGIN - oy * scale + dy,
-            scale)
-        result[name] = "".join(
-            '<path d="{}" fill="{}" stroke="{}" stroke-width="{}" '
-            'stroke-linejoin="round" stroke-linecap="round"/>'.format(
-                d, INK_BLACK, INK_BLACK, AVATAR_STROKE)
-            for d in source_paths
-        )
-        result[name] = '<g transform="{}">{}</g>'.format(
-            transform, result[name])
-    _AVATAR_SIGILS = result
-    return result
 
 
 def season_body(n):
@@ -757,7 +695,10 @@ def season_body(n):
     # The source sheet's water/air panel labels are reversed relative to the
     # visible sigils, so use the keys that produce the requested visual order.
     elements = ("air", "earth", "fire", "water")
-    return avatar_sigils()[elements[n - 1]] + index_pips(n)
+    sigil = AVATAR_SIGILS[elements[n - 1]]
+    ink = ('<g fill="{}" stroke="{}" stroke-width="2" '
+           'stroke-linejoin="round" stroke-linecap="round">{}</g>')
+    return ink.format(INK_BLACK, INK_BLACK, sigil) + index_pips(n)
 
 
 # Bevel variants per kind, in the order the board expects (see
