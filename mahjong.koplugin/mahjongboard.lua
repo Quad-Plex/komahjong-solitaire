@@ -392,20 +392,45 @@ end
 function Board:requestRefresh(rects)
     local target = self.show_parent or "all"
     if rects and #rects > 0 then
-        -- Do not collapse disjoint tile changes into one bounding box. A
-        -- matched pair can be at opposite ends of the layout; the old union
-        -- then caused nearly the entire board to be refreshed for two small
-        -- removals. Multiple regional requests are kept separate by
-        -- UIManager's refresh queue when they do not overlap.
+        -- Keep each connected local change together, but do not collapse a
+        -- distant matched pair into one board-sized bounding box. Explicitly
+        -- merging here is more reliable than relying on the refresh queue to
+        -- combine many overlapping tile requests in the same e-ink frame.
+        -- Include a pixel of surrounding space for SVG bevel/raster edges.
+        local margin = 1
+        local regions = {}
         for _, r in ipairs(rects) do
             local x, y = self:tilePos(r.x, r.y, r.layer)
-            local region = Geom:new{
-                x = (self.refresh_origin_x or 0) + x,
-                y = (self.refresh_origin_y or 0) + y,
-                w = self.tile_w,
-                h = self.tile_h,
+            local region = {
+                x = (self.refresh_origin_x or 0) + x - margin,
+                y = (self.refresh_origin_y or 0) + y - margin,
+                w = self.tile_w + 2 * margin,
+                h = self.tile_h + 2 * margin,
             }
-            UIManager:setDirty(target, "ui", region)
+            local merged = true
+            while merged do
+                merged = false
+                for i = #regions, 1, -1 do
+                    local other = regions[i]
+                    if region.x <= other.x + other.w
+                            and other.x <= region.x + region.w
+                            and region.y <= other.y + other.h
+                            and other.y <= region.y + region.h then
+                        local right = math.max(region.x + region.w, other.x + other.w)
+                        local bottom = math.max(region.y + region.h, other.y + other.h)
+                        region.x = math.min(region.x, other.x)
+                        region.y = math.min(region.y, other.y)
+                        region.w = right - region.x
+                        region.h = bottom - region.y
+                        table.remove(regions, i)
+                        merged = true
+                    end
+                end
+            end
+            regions[#regions + 1] = region
+        end
+        for _, region in ipairs(regions) do
+            UIManager:setDirty(target, "ui", Geom:new(region))
         end
         return
     end
@@ -532,10 +557,10 @@ end
 -- Draws `icon` ("select" or "hint" from the mahjong/ icon set) over the tile
 -- at (x, y, layer), replacing any existing overlay on that tile. Returns true
 -- if the tile exists. Repaints the board.
-function Board:setOverlay(x, y, layer, icon)
+function Board:setOverlay(x, y, layer, icon, defer_refresh)
     local key = MahjongLogic.posKey(x, y, layer)
     if not self.tile_widgets[key] then return false end
-    self:clearOverlay(x, y, layer)
+    self:clearOverlay(x, y, layer, true)
     local px, py = self:tilePos(x, y, layer)
     local ov = IconWidget:new{
         icon = "mahjong/" .. icon,
@@ -546,13 +571,15 @@ function Board:setOverlay(x, y, layer, icon)
     }
     self.overlays[key] = ov
     self.overlap[#self.overlap + 1] = ov
-    self:requestRefresh({ { x = x, y = y, layer = layer } })
+    if not defer_refresh then
+        self:requestRefresh({ { x = x, y = y, layer = layer } })
+    end
     return true
 end
 
 -- Removes the overlay on the tile at (x, y, layer), if any. Returns true if
 -- one existed. Repaints the board.
-function Board:clearOverlay(x, y, layer)
+function Board:clearOverlay(x, y, layer, defer_refresh)
     local key = MahjongLogic.posKey(x, y, layer)
     local ov = self.overlays[key]
     if not ov then return false end
@@ -564,7 +591,9 @@ function Board:clearOverlay(x, y, layer)
         end
     end
     ov:free()
-    self:requestRefresh({ { x = x, y = y, layer = layer } })
+    if not defer_refresh then
+        self:requestRefresh({ { x = x, y = y, layer = layer } })
+    end
     return true
 end
 

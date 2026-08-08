@@ -154,9 +154,17 @@ p4:requestRefresh({
     { x = 10, y = 7, layer = 0 },
 })
 expect(#ctx.dirty_calls == 2, "disjoint board changes enqueue separate refresh regions")
-expect(ctx.dirty_calls[1].region.w == p4.tile_w
-        and ctx.dirty_calls[2].region.w == p4.tile_w,
-    "separate board refreshes keep tile-sized regions")
+expect(ctx.dirty_calls[1].region.w > p4.tile_w
+        and ctx.dirty_calls[2].region.w > p4.tile_w,
+    "separate board refreshes include a small edge margin")
+
+ctx.dirty_calls = {}
+p4:requestRefresh({
+    { x = 5, y = 3, layer = 0 },
+    { x = 4, y = 3, layer = 0 },
+})
+expect(#ctx.dirty_calls == 1,
+    "touching local board changes share one refresh region")
 
 if failures == 0 then
     print("\nALL BOARD UPDATE/OVERLAY CHECKS PASSED")

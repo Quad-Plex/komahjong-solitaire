@@ -1488,8 +1488,13 @@ function Mahjong:clearHint()
     self._hint_pulse_token = self._hint_pulse_token + 1
     if self._last_hint and self.board_view then
         local h = self._last_hint
-        self.board_view:clearOverlay(h.a.x, h.a.y, h.a.layer)
-        self.board_view:clearOverlay(h.b.x, h.b.y, h.b.layer)
+        local refresh_rects = {
+            { x = h.a.x, y = h.a.y, layer = h.a.layer },
+            { x = h.b.x, y = h.b.y, layer = h.b.layer },
+        }
+        self.board_view:clearOverlay(h.a.x, h.a.y, h.a.layer, true)
+        self.board_view:clearOverlay(h.b.x, h.b.y, h.b.layer, true)
+        self.board_view:requestRefresh(refresh_rects)
     end
     self._last_hint = nil
 end
@@ -1501,13 +1506,17 @@ end
 -- then stays highlighted at bold until the player acts (clearHint). Guarded by
 -- a monotonic token plus _last_hint, so a restart (new hint press, resume) or
 -- a clear can never leave a stale tick repainting.
-function Mahjong:startHintPulse(pair)
+function Mahjong:startHintPulse(pair, refresh_rects)
     self._hint_pulse_token = self._hint_pulse_token + 1
     local token = self._hint_pulse_token
     local board_view = self.board_view
     if not board_view then return end
-    board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint_bold")
-    board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint_bold")
+    local initial_rects = refresh_rects or {}
+    board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, "hint_bold", true)
+    board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, "hint_bold", true)
+    initial_rects[#initial_rects + 1] = { x = pair.a.x, y = pair.a.y, layer = pair.a.layer }
+    initial_rects[#initial_rects + 1] = { x = pair.b.x, y = pair.b.y, layer = pair.b.layer }
+    board_view:requestRefresh(initial_rects)
     local step = 0
     local tick
     tick = function()
@@ -1515,8 +1524,12 @@ function Mahjong:startHintPulse(pair)
         if self._hint_pulse_token ~= token then return end
         if not self._last_hint or not self.board_view then return end
         local icon = (step % 2 == 1) and "hint" or "hint_bold"
-        self.board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, icon)
-        self.board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, icon)
+        self.board_view:setOverlay(pair.a.x, pair.a.y, pair.a.layer, icon, true)
+        self.board_view:setOverlay(pair.b.x, pair.b.y, pair.b.layer, icon, true)
+        self.board_view:requestRefresh({
+            { x = pair.a.x, y = pair.a.y, layer = pair.a.layer },
+            { x = pair.b.x, y = pair.b.y, layer = pair.b.layer },
+        })
         if step < HINT_PULSE_TICKS then
             UIManager:scheduleIn(HINT_PULSE_STEP_SECONDS, tick)
         end
@@ -1541,13 +1554,23 @@ function Mahjong:showHint()
     local was_session = self._last_hint ~= nil
     -- Drop the previous hint's overlays first so cycling presses never leave a
     -- stale highlight behind (clearOverlay is a no-op if the tile is gone).
+    local transition_rects = {}
     if self._last_hint then
-        board_view:clearOverlay(self._last_hint.a.x, self._last_hint.a.y, self._last_hint.a.layer)
-        board_view:clearOverlay(self._last_hint.b.x, self._last_hint.b.y, self._last_hint.b.layer)
+        transition_rects[#transition_rects + 1] = {
+            x = self._last_hint.a.x, y = self._last_hint.a.y, layer = self._last_hint.a.layer,
+        }
+        transition_rects[#transition_rects + 1] = {
+            x = self._last_hint.b.x, y = self._last_hint.b.y, layer = self._last_hint.b.layer,
+        }
+        board_view:clearOverlay(self._last_hint.a.x, self._last_hint.a.y, self._last_hint.a.layer, true)
+        board_view:clearOverlay(self._last_hint.b.x, self._last_hint.b.y, self._last_hint.b.layer, true)
     end
     local pairs = MahjongLogic.matchingFreePairs(self.board)
     if #pairs == 0 then
         self._last_hint = nil
+        if #transition_rects > 0 then
+            board_view:requestRefresh(transition_rects)
+        end
         -- In theory checkGameState already caught this, but user can tap Hint
         -- on a dead board before the shuffle prompt is accepted.
         self:handleNoMoves()
@@ -1595,7 +1618,7 @@ function Mahjong:showHint()
     -- overlay and runs the brief normal/bold flicker that draws the eye; the
     -- highlight then stays until the player acts (any tile tap, a cleared
     -- pair, undo, or the auto-solver starting all call clearHint).
-    self:startHintPulse(pair)
+    self:startHintPulse(pair, transition_rects)
 end
 
 -- Reshuffles the tiles remaining on the board in place. `charge` is nil/true on
