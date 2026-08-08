@@ -20,6 +20,8 @@
 --     check wrongly sent these to the loss dialog).
 --   * the no-moves shuffle evaluates 15 candidates asynchronously and commits
 --     the candidate with the most available matching free pairs.
+--   * an ordinary confirmed shuffle defers its board rebuild until after the
+--     ConfirmBox has closed, avoiding a covered-window repaint race.
 --
 -- The geometric closure check is skipped: on these grids "out of grid =
 -- open side" guarantees every position is eventually freeable, so
@@ -444,6 +446,22 @@ expect(Logic.hasMoves(mj_best.board), "dead-board shuffle commits the candidate 
 expect(mj_best.shuffles_used == 1, "best-of-15 shuffle charges one penalty")
 Logic.shuffleBoard = original_shuffle
 um.scheduleIn = original_schedule
+
+-- ---- Confirmed ordinary shuffle rebuilds after the dialog closes -------------
+
+local mj_confirm = Mahjong:new()
+mj_confirm.board = Logic.newGame("turtle", 42)
+mj_confirm.layout = "turtle"
+mj_confirm:buildUILayout()
+mj_confirm:shuffleBoard()
+local ordinary_dlg = ctx.last_confirm
+local scheduled_before = #ctx.scheduled
+ordinary_dlg.ok_callback()
+expect(#ctx.scheduled > scheduled_before,
+    "confirmed ordinary shuffle defers its board rebuild")
+ctx.runScheduled()
+expect(mj_confirm.board_view and #mj_confirm.board_view.overlap == 144,
+    "deferred ordinary shuffle leaves a complete rendered board")
 
 if failures == 0 then
     print("\nALL US-32 DEADLOCK CHECKS PASSED")

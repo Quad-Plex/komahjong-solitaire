@@ -1646,7 +1646,13 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
         UIManager:show(ConfirmBox:new{
             text        = t("game.reshuffle"),
             ok_text     = t("toolbar.shuffle"),
-            ok_callback = do_shuffle,
+            -- ConfirmBox invokes ok_callback before it removes itself from
+            -- the window stack. Rebuilding all tile widgets while the modal
+            -- is still on top can make the repaint run against the covered
+            -- stack, leaving a partially rendered board. Let the dialog close
+            -- first, then rebuild and request the board refresh on the next
+            -- UI tick.
+            ok_callback = function() UIManager:nextTick(do_shuffle) end,
         })
     end
 end
