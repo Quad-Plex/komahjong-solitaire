@@ -606,14 +606,55 @@ function Mahjong:startGameWithLayout(id)
         -- UI refresh is enough and avoids a high-fidelity full-screen flash.
         UIManager:show(self, "ui", self.dimensions)
     else
-        -- The child tree was rebuilt completely, but this still does not need
-        -- the expensive full eink waveform used for large images.
+        -- The child tree was rebuilt completely. A restart is a whole-canvas
+        -- change (a cleared, "empty" board becomes 144 tiles again), which a
+        -- regional refresh does not ink cleanly: the EPDC's partial update can
+        -- wash the frame out to an almost-empty board (the "Play again shows
+        -- a blank board" report). Defer a single high-fidelity full-screen
+        -- refresh to after the modal's clear repaint has drained, and re-drive
+        -- the window with the new tree immediately too.
         UIManager:setDirty(self, "ui", self.dimensions)
+        self:scheduleFullScreenRefresh()
     end
     -- Save-after-every-move model: a New Game immediately replaces the old
     -- saved state (which was cleared), so a close/reopen resumes the fresh
     -- board rather than resurrecting the previous game.
     self:saveGameState()
+end
+
+-- US-45: one high-fidelity full-screen refresh after a same-layout restart
+-- (the win/dead-board dialog's "Play again" -> startGameWithLayout while the
+-- game window is already shown).
+--
+-- The two asymmetrical halves of a restart make a regional refresh lie:
+-- the board the EPDC last drew for this window is EMPTY (the dialog served as
+-- a won board), and the new tree is a full 144-tile canvas. A regional "ui"
+-- partial over that delta comes up as an almost-empty board. Deleting it with
+-- a "full" (GC16) refresh of the whole window after the window is actually
+-- painted back to a well-formed state.
+--
+-- It is deferred (not issued inline in startGameWithLayout) for an ordering
+-- reason: the "Play again" callback runs while the win dialog is still on the
+-- window stack (KOReader fires the dialog's ok_callback before closing it), so
+-- an immediate refresh is driven from a window whose paint KOReader has not
+-- yet completed for the closing dialog repaint. One tick later the dialog is
+-- gone and the new canvas has repainted, at which point a single full flash
+-- inks the fresh board crisply.
+--
+-- Guarded by a board identity so a closed/replaced game (or a second restart
+-- arriving before the tick) can never fire a stale refresh into a new window.
+function Mahjong:scheduleFullScreenRefresh()
+    if not UIManager.tickAfterNext then return end
+    if self._full_screen_refresh_scheduled then return end
+    self._full_screen_refresh_scheduled = true
+    local board = self.board
+    UIManager:tickAfterNext(function()
+        self._full_screen_refresh_scheduled = false
+        if self.board ~= board or not self.board_view then return end
+        -- Full-screen high-veracity waveform over the whole window: this is the
+        -- expensive e-ink flash the picker/close paths already use on purpose.
+        UIManager:setDirty(self, "full", self.dimensions)
+    end)
 end
 
 -- US-10: persistence -------------------------------------------------------
@@ -781,6 +822,9 @@ function Mahjong:refreshTimerDisplay()
     -- Use the known feedback-band region even before KOReader has painted the
     -- child and populated timer_text.dimen.
     UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
+    -- Bake the chrome before the refresh drains so the EPDC reads current
+    -- pixels (never a stale/blank toolbar row — see bakeLowerChrome).
+    self:bakeLowerChrome()
 end
 
 -- Interaction entry point: repaints the timer region ONLY in "move" mode.
@@ -792,6 +836,7 @@ function Mahjong:updateTimerDisplay()
     self:updateTimerText()
     if self:timerMode() == "move" then
         UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
+        self:bakeLowerChrome()
     end
 end
 
@@ -972,6 +1017,21 @@ function Mahjong:buildUILayout()
         x = 0, y = status_h + board_h + flash_h,
         w = self.full_width, h = toolbar_h + bottom_gap,
     }
+    -- The banner (flash band + timer) sits directly above the toolbar and
+    -- shares an edge with it, so KOReader's open-range refresh merge
+    -- (uimanager.lua `_refresh`: rects sharing an edge are combined) would
+    -- collapse any banner+toolbar pair, and often the board's tile rects too,
+    -- into ONE ioctl per batch. When that merged rect is driven while the
+    -- board's own structural update settles, the EPDC can half-apply it and
+    -- leave the action-button row outside the rect — i.e. the "band repainted,
+    -- buttons blank" artifact. Give the whole lower chrome (banner + toolbar)
+    -- ONE explicit rect so a refresh can never stop short of the toolbar row.
+    self.lower_band_region = Geometry:new{
+        x = 0,
+        y = self.flash_region.y,
+        w = self.full_width,
+        h = self.full_height - self.flash_region.y,
+    }
 
     self.board_view = MahjongBoard:new{
         board = self.board,
@@ -1137,6 +1197,10 @@ function Mahjong:buildUILayout()
         pause_cell,
         HorizontalSpan:new{ width = toolbar_gap },
     }
+    -- Keep the raw toolbar so the lower-chrome bake can repaint it
+    -- immediately (see bakeLowerChrome below) instead of waiting for the
+    -- dirty queue.
+    self.toolbar_widget = toolbar
 
     local main_vgroup = VerticalGroup:new{
         align = "center",
@@ -1927,6 +1991,7 @@ function Mahjong:flashMessage(text, pulse)
     if pulse and self.flash_text then
         self.flash_text.bold = true
         UIManager:setDirty(self, "ui", self.flash_region)
+        self:bakeLowerChrome()
         local elapsed = 0
         local tick
         tick = function()
@@ -1962,6 +2027,9 @@ function Mahjong:setFlash(text)
             self.flash_band_icon.hide = false
         end
         UIManager:setDirty(self, "ui", self.flash_region)
+        -- Draw the new band content now so the refresh can't sample stale
+        -- pixels (see bakeLowerChrome).
+        self:bakeLowerChrome()
     end
 end
 
@@ -1978,7 +2046,69 @@ function Mahjong:clearFlash()
             self.flash_band_icon.hide = true
         end
         UIManager:setDirty(self, "ui", self.flash_region)
+        self:bakeLowerChrome()
     end
+end
+
+-- Lower-chrome refresh plumbing (US-43) -----------------------------------------
+--
+-- The banner (flash text + timer) and the action-button toolbar share an edge,
+-- so KOReader's `_refresh` merges (open-range) any pair of their regional
+-- refreshes into ONE ioctl per batch, often merged yet again with the board's
+-- tile rect just above the banner. When the EPDC starts driving that combined
+-- rect while the board's structural update is still settling, it can ink the
+-- upper part of the strip but skip the toolbar row — observed as "the whole
+-- lower part refreshed, but the action buttons came out blank" until the next
+-- full repaint.
+--
+-- Mitigations (mirroring the stock ReaderFooter, e.g. readerfooter.lua
+-- `_updateFooterText` → `UIManager:widgetRepaint` then a lambda-setDirty, and
+-- the board's own `queueStructuralRefreshRetry`):
+--   * buildUILayout gives the whole lower chrome ONE explicit rect
+--     (`lower_band_region`), so no refresh can end short of the toolbar row;
+--   * `bakeLowerChrome` paints the banner + toolbar sub-trees into the
+--     framebuffer right before a refresh, so the EPDC never reads pixels that
+--     predate the change (stale chrome is exactly a blank-looking button);
+--   * `settleLowerChrome` re-drives the strip once, a tick later, as a pure
+--     refresh (no repaint — the fb is already painted) to heal a half-applied
+--     dribble from same-batch racing.
+
+function Mahjong:lowerChromeRegion()
+    return self.lower_band_region or self.toolbar_region or self.flash_region
+end
+
+-- Paint the banner + toolbar sub-trees into the framebuffer right now, before
+-- the queued refresh drains. Stock ReaderFooter does the same
+-- (`widgetRepaint(self.view.footer, 0, 0)` before its regional setDirty); it
+-- guarantees that whatever region the EPDC samples already holds the NEW
+-- pixels. No-op on the headless harness (no widgetRepaint stub).
+function Mahjong:bakeLowerChrome()
+    if not UIManager.widgetRepaint then return end
+    if not self.toolbar_region or not self.flash_region then return end
+    if self.flash_band then
+        UIManager:widgetRepaint(self.flash_band, 0, self.flash_region.y)
+    end
+    if self.toolbar_widget then
+        UIManager:widgetRepaint(self.toolbar_widget, 0, self.toolbar_region.y)
+    end
+end
+
+-- One deferred, pure-refresh re-request of the lower chrome (no repaint: the
+-- framebuffer is already current). Used after toolbar structural changes
+-- (counter pills) so a same-batch merge that the EPDC half-applied gets a
+-- second stab at the strip on the next tick. Single-shot guarded so closed
+-- or rebuilt games never schedule twice.
+function Mahjong:settleLowerChrome()
+    if not UIManager.tickAfterNext then return end
+    local pending = self._chrome_settle
+    self._chrome_settle = true
+    if pending then return end
+    UIManager:tickAfterNext(function()
+        self._chrome_settle = false
+        -- A closed/replaced game must never drive a refresh into a new window.
+        if not self.toolbar_widget or not self.board_view then return end
+        UIManager:setDirty(nil, "ui", self:lowerChromeRegion())
+    end)
 end
 
 -- The HUD bar reflects the pairs left, the number of currently-matching free
@@ -1990,18 +2120,39 @@ function Mahjong:updateStatus()
     self.status_bar:setStats(pairs, free, self.score)
     -- Keep the toolbar Hint / Shuffle count pills in sync (they mirror the
     -- persisted hints_used / shuffles_used counters the win summary reports).
+    local toolbar_structural = false
     if self.hint_counter_badge then
-        self.hint_counter_badge:setText(tostring(self.hints_used or 0))
+        local txt = tostring(self.hints_used or 0)
+        toolbar_structural = toolbar_structural or self.hint_counter_badge.text ~= txt
+        self.hint_counter_badge:setText(txt)
     end
     if self.shuffle_counter_badge then
-        self.shuffle_counter_badge:setText(tostring(self.shuffles_used or 0))
+        local txt = tostring(self.shuffles_used or 0)
+        toolbar_structural = toolbar_structural or self.shuffle_counter_badge.text ~= txt
+        self.shuffle_counter_badge:setText(txt)
     end
     -- status_bar is a subwidget, so flag the window-level widget, but keep the
     -- refresh regional. A regionless request here refreshes the entire game
     -- window after every pair removal.
     UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)
+    -- Keep the toolbar's own refresh tight (regional, not the whole lower
+    -- strip): when the banner (flash/timer) refreshes in the same batch,
+    -- KOReader's open-range merge folds the two edge-adjacent rects — and the
+    -- board's tile rect just above the banner — into one ioctl anyway. That
+    -- big merged rect is where the "band repainted, buttons blank" report
+    -- comes from: the EPDC half-applies it and the action-button row ends up
+    -- out of the final drive. Bake the chrome into the framebuffer NOW (stock
+    -- ReaderFooter idiom) so whichever rect the EPDC samples holds the
+    -- just-built toolbar content, and re-drive the strip on a later tick when
+    -- it genuinely changed.
     if self.toolbar_region then
         UIManager:setDirty(self, "ui", self.toolbar_region)
+        self:bakeLowerChrome()
+    end
+    -- A count pill changed (a genuine toolbar structural change): re-drive the
+    -- strip once on a later tick, pure-refresh, to heal a half-applied merge.
+    if toolbar_structural then
+        self:settleLowerChrome()
     end
 end
 
