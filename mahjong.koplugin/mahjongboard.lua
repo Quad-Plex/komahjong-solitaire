@@ -342,36 +342,37 @@ end
 
 -- Synchronizes the OverlapGroup children with tiles_by_layer and overlays,
 -- maintaining correct z-order (layers 0-4 then overlays). Repaints.
--- Board is nested inside the full-screen game window, so "all" is still
--- needed to flag the parent for repaint. The region keeps the e-ink refresh
--- limited to the tiles affected by this mutation.
+-- Board is nested inside the full-screen game window. Target that window when
+-- available so unrelated windows are not repainted; retain the "all" fallback
+-- for standalone boards and the headless tests. The region keeps the e-ink
+-- refresh limited to the tiles affected by this mutation.
 function Board:requestRefresh(rects)
-    local region
+    local target = self.show_parent or "all"
     if rects and #rects > 0 then
-        local min_x, min_y = math.huge, math.huge
-        local max_x, max_y = -math.huge, -math.huge
+        -- Do not collapse disjoint tile changes into one bounding box. A
+        -- matched pair can be at opposite ends of the layout; the old union
+        -- then caused nearly the entire board to be refreshed for two small
+        -- removals. Multiple regional requests are kept separate by
+        -- UIManager's refresh queue when they do not overlap.
         for _, r in ipairs(rects) do
             local x, y = self:tilePos(r.x, r.y, r.layer)
-            min_x = math.min(min_x, x)
-            min_y = math.min(min_y, y)
-            max_x = math.max(max_x, x + self.tile_w)
-            max_y = math.max(max_y, y + self.tile_h)
+            local region = Geom:new{
+                x = (self.refresh_origin_x or 0) + x,
+                y = (self.refresh_origin_y or 0) + y,
+                w = self.tile_w,
+                h = self.tile_h,
+            }
+            UIManager:setDirty(target, "ui", region)
         end
-        region = Geom:new{
-            x = (self.refresh_origin_x or 0) + min_x,
-            y = (self.refresh_origin_y or 0) + min_y,
-            w = max_x - min_x,
-            h = max_y - min_y,
-        }
-    else
-        region = Geom:new{
-            x = self.refresh_origin_x or 0,
-            y = self.refresh_origin_y or 0,
-            w = self.width,
-            h = self.height,
-        }
+        return
     end
-    UIManager:setDirty("all", "ui", region)
+
+    UIManager:setDirty(target, "ui", Geom:new{
+        x = self.refresh_origin_x or 0,
+        y = self.refresh_origin_y or 0,
+        w = self.width,
+        h = self.height,
+    })
 end
 
 function Board:syncOverlapGroup(refresh_rects)

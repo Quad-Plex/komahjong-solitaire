@@ -462,7 +462,10 @@ function Mahjong:startGame()
         self:updateStatus()
         self:updateTimerDisplay()
         self:startTimer()
-        UIManager:show(self)
+        -- Queue the first paint as well as the framebuffer update. Without a
+        -- refresh mode, a restored game can remain invisible until unrelated
+        -- input happens to trigger another refresh.
+        UIManager:show(self, "ui", self.dimensions)
         -- US-33: a tainted save resumes the solver — there is no avoiding it
         -- once triggered. The solver shuffles dead boards itself, so the
         -- hasMoves check below is skipped for it.
@@ -577,9 +580,15 @@ function Mahjong:startGameWithLayout(id)
         already_shown = true
     end
     if not already_shown then
-        UIManager:show(self)
+        -- A show without a refresh mode paints the new window but does not
+        -- enqueue a framebuffer refresh. This matters when the picker was the
+        -- only window on the stack. The game is mixed content, so a regional
+        -- UI refresh is enough and avoids a high-fidelity full-screen flash.
+        UIManager:show(self, "ui", self.dimensions)
     else
-        UIManager:setDirty(self, "full")
+        -- The child tree was rebuilt completely, but this still does not need
+        -- the expensive full eink waveform used for large images.
+        UIManager:setDirty(self, "ui", self.dimensions)
     end
     -- Save-after-every-move model: a New Game immediately replaces the old
     -- saved state (which was cleared), so a close/reopen resumes the fresh
@@ -713,7 +722,9 @@ function Mahjong:updateTimerDisplay()
     if not self.timer_text then return end
     self.timer_text:setText(MahjongLogic.formatElapsed(self:getElapsed()))
     if self.timer_text.resetLayout then self.timer_text:resetLayout() end
-    UIManager:setDirty(self, "ui", self.timer_text.dimen)
+    -- Use the known feedback-band region even before KOReader has painted the
+    -- child and populated timer_text.dimen.
+    UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
 end
 
 -- Settings dialog (US-10) ---------------------------------------------------
@@ -746,7 +757,7 @@ function Mahjong:openSettings()
             elseif language_changed and self.board then
                 self:buildUILayout()
                 self:updateStatus()
-                UIManager:setDirty(self, "full")
+                UIManager:setDirty(self, "ui", self.dimensions)
             end
             self:refreshScoreMethod()
             self:updateStatus()
@@ -826,6 +837,12 @@ function Mahjong:buildUILayout()
     self.dimensions = Geometry:new{ w = self.full_width, h = self.full_height }
     self.status_bar = self:createStatusBar()
     local status_h = self.status_bar:getSize().h
+    -- Keep stable screen-space regions for non-board updates. Child `dimen`
+    -- values are not guaranteed to exist until the first paint; passing nil to
+    -- UIManager:setDirty would otherwise request a regionless refresh.
+    self.status_region = Geometry:new{
+        x = 0, y = 0, w = self.full_width, h = status_h,
+    }
 
     -- Toolbar is 48px tall (rounded bordered buttons) with a small hint label
     -- under each icon, small gaps between the buttons, edge gaps so the outer
@@ -865,12 +882,18 @@ function Mahjong:buildUILayout()
     local flash_h = flash_text_h + flash_pad_top + flash_pad_bottom
     local board_h = math.max(Screen:scaleBySize(80),
         self.full_height - status_h - flash_h - toolbar_h - bottom_gap)
+    self.flash_region = Geometry:new{
+        x = 0, y = status_h + board_h, w = self.full_width, h = flash_h,
+    }
 
     self.board_view = MahjongBoard:new{
         board = self.board,
         layout_id = self.layout,
         width = self.full_width,
         height = board_h,
+        -- UIManager only repaints window-level widgets, so board mutations
+        -- must target this owning game window.
+        show_parent = self,
         refresh_origin_x = 0,
         refresh_origin_y = status_h,
         onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
@@ -928,6 +951,11 @@ function Mahjong:buildUILayout()
     }
     local timer_slot_w = timer_probe:getSize().w
     timer_probe:free()
+    local timer_x = self.full_width - timer_slot_w - band_edge_pad - Screen:scaleBySize(4)
+    self.timer_region = Geometry:new{
+        x = timer_x, y = self.flash_region.y,
+        w = timer_slot_w + band_edge_pad + Screen:scaleBySize(4), h = flash_h,
+    }
     self.timer_text = TextWidget:new{
         text = MahjongLogic.formatElapsed(0),
         padding = 0,
@@ -937,7 +965,7 @@ function Mahjong:buildUILayout()
         -- the board's tile widgets). Right-aligned to the band edge with the
         -- same margin the warning icon uses on the left.
         overlap_offset = {
-            self.full_width - timer_slot_w - band_edge_pad - Screen:scaleBySize(4),
+            timer_x,
             0,
         },
     }
@@ -1055,7 +1083,10 @@ function Mahjong:createStatusBar()
                 text        = t("game.exit_confirm"),
                 ok_text     = t("toolbar.exit"),
                 ok_callback = function()
-                    UIManager:close(self, "full")
+                    -- Returning to the file manager only needs the normal UI
+                    -- waveform; avoid a high-fidelity full-screen flash for a
+                    -- routine exit.
+                    UIManager:close(self, "ui", self.dimensions)
                 end,
             })
         end,
@@ -1212,7 +1243,7 @@ function Mahjong:handleNoMoves()
             ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
             cancel_text = t("toolbar.close"),
             cancel_callback = function()
-                UIManager:close(self, "full")
+                    UIManager:close(self, "ui", self.dimensions)
             end,
         }))
     end
@@ -1747,7 +1778,7 @@ function Mahjong:flashMessage(text, pulse)
     local seq = self._flash_seq
     if pulse and self.flash_text then
         self.flash_text.bold = true
-        UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
+        UIManager:setDirty(self, "ui", self.flash_region)
         local elapsed = 0
         local tick
         tick = function()
@@ -1755,7 +1786,7 @@ function Mahjong:flashMessage(text, pulse)
             elapsed = elapsed + COMBO_PULSE_STEP_SECONDS
             if elapsed >= FLASH_TIMEOUT then return end
             self.flash_text.bold = not self.flash_text.bold
-            UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
+            UIManager:setDirty(self, "ui", self.flash_region)
             UIManager:scheduleIn(COMBO_PULSE_STEP_SECONDS, tick)
         end
         UIManager:scheduleIn(COMBO_PULSE_STEP_SECONDS, tick)
@@ -1782,7 +1813,7 @@ function Mahjong:setFlash(text)
             -- `visible` field is ignored by KOReader widgets).
             self.flash_band_icon.hide = false
         end
-        UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
+        UIManager:setDirty(self, "ui", self.flash_region)
     end
 end
 
@@ -1798,7 +1829,7 @@ function Mahjong:clearFlash()
         if self.flash_band_icon then
             self.flash_band_icon.hide = true
         end
-        UIManager:setDirty(self, "ui", self.flash_band and self.flash_band.dimen)
+        UIManager:setDirty(self, "ui", self.flash_region)
     end
 end
 
@@ -1820,16 +1851,7 @@ function Mahjong:updateStatus()
     -- status_bar is a subwidget, so flag the window-level widget, but keep the
     -- refresh regional. A regionless request here refreshes the entire game
     -- window after every pair removal.
-    if self.status_bar.dimen then
-        UIManager:setDirty(self, "ui", self.status_bar.dimen)
-    else
-        UIManager:setDirty(self, "ui")
-    end
-    for _, badge in ipairs({ self.hint_counter_badge, self.shuffle_counter_badge }) do
-        if badge and badge.dimen then
-            UIManager:setDirty(self, "ui", badge.dimen)
-        end
-    end
+    UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)
 end
 
 function Mahjong:onCloseWidget()

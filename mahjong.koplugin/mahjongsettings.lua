@@ -246,7 +246,7 @@ function SettingsWidget:init()
     hints_btn.callback = function()
         self.changes.hints = not (self.changes.hints or false)
         setButtonText(hints_btn, hints_btn.refresh())
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.hints = hints_btn
 
@@ -256,7 +256,7 @@ function SettingsWidget:init()
     language_btn.callback = function()
         self.changes.language = self.changes.language == "de" and "en" or "de"
         setButtonText(language_btn, language_btn.refresh())
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.language = language_btn
 
@@ -273,7 +273,7 @@ function SettingsWidget:init()
         idx = idx % #SCORE_OPTIONS + 1
         self.changes.score_method = SCORE_OPTIONS[idx]
         setButtonText(score_btn, score_btn.refresh())
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.score_method = score_btn
 
@@ -295,7 +295,7 @@ function SettingsWidget:init()
         self.changes.timer_update = TIMER_MODES[idx]
         setButtonText(timer_mode_btn, timer_mode_btn.refresh())
         setIntervalEnabled()
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.timer_update = timer_mode_btn
 
@@ -323,7 +323,7 @@ function SettingsWidget:init()
         idx = idx % #TIMER_INTERVALS + 1
         self.changes.timer_interval = TIMER_INTERVALS[idx]
         setButtonText(timer_interval_btn, timer_interval_btn.refresh())
-        UIManager:setDirty(self, "ui")
+        UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.timer_interval = timer_interval_btn
     self._set_interval_enabled = setIntervalEnabled -- reused by resetToDefaults
@@ -468,13 +468,13 @@ function SettingsWidget:save()
         p:setSetting("timer_interval", self.changes.timer_interval)
     end
     if self.onApply then self.onApply(self.changes) end
-    UIManager:close(self)
+    UIManager:close(self, "ui", self._panel_geom)
 end
 
 -- Discards the changes and closes (a tap outside the panel or the close X).
 function SettingsWidget:cancel()
     if self.onCancel then self.onCancel() end
-    UIManager:close(self)
+    UIManager:close(self, "ui", self._panel_geom)
 end
 
 -- A tap outside the floating panel dismisses the dialog (discarding changes).
@@ -504,7 +504,7 @@ function SettingsWidget:resetToDefaults()
     setButtonText(self._rows.timer_update, self._rows.timer_update.refresh())
     setButtonText(self._rows.timer_interval, self._rows.timer_interval.refresh())
     if self._set_interval_enabled then self._set_interval_enabled() end
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty(self, "ui", self._panel_geom)
 end
 
 return SettingsWidget

@@ -376,7 +376,7 @@ end
 -- it can resume the timer loop that openStats paused.
 function StatsWidget:closeDialog()
     if self.onClose then self.onClose() end
-    UIManager:close(self)
+    UIManager:close(self, "ui", self._panel_geom)
 end
 
 -- A tap outside the floating panel dismisses the dialog. `ges` is the second
@@ -404,7 +404,7 @@ function StatsWidget:resetStats()
                 if p.saveStats then p:saveStats() end
             end
             self:updateValues()
-            UIManager:setDirty(self, "ui")
+            UIManager:setDirty(self, "ui", self._panel_geom)
         end,
     })
 end

@@ -616,7 +616,9 @@ function LayoutSelect:_pressCard(r)
     if not r or not r.card then return end
     r.card.background = Blitbuffer.COLOR_LIGHT_GRAY
     r.card.color = Blitbuffer.COLOR_BLACK
-    UIManager:setDirty(self, "ui")
+    UIManager:setDirty(self, "ui", Geometry:new{
+        x = r.x, y = r.y, w = r.w, h = r.h,
+    })
 end
 
 -- US-30: runs the actual deal for a tapped card. The deal is deferred by

@@ -225,7 +225,7 @@ function WinSummary:_finish(ok)
     self._done = true
     local cb = ok and self.ok_callback or self.cancel_callback
     if cb then cb() end
-    UIManager:close(self)
+    UIManager:close(self, "ui", self._panel_geom)
 end
 
 return WinSummary

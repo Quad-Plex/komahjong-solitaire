@@ -143,7 +143,7 @@ function PauseWidget:resume()
     if self._resumed then return end
     self._resumed = true
     if self.onResume then self.onResume() end
-    UIManager:close(self)
+    UIManager:close(self, "ui", self._panel_geom)
 end
 
 -- If the framework closes the overlay without resume() (e.g. a back gesture),
