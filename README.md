@@ -60,6 +60,10 @@ Features:
 - **Win summary + stats (US-12/13):** a win dialog plus a lifetime-stats screen
   (games won, average time per win, and the rest of the `MahjongStats` record)
   with a confirm-gated reset.
+- **Localization:** English and German are supported. On first launch, the
+  plugin detects KOReader's locale and selects German for German locales;
+  English is used for English and all other locales. The language can then be
+  changed from Mahjong's Settings.
 
 ## Scoring rules
 

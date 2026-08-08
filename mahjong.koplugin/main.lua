@@ -19,6 +19,7 @@ local Font = require("ui/font")
 local LuaSettings = require("luasettings")
 local lfs = require("libs/libkoreader-lfs")
 local util = require("util")
+local GetText = require("gettext")
 local I18n = require("mahjongi18n")
 local t = I18n.t
 local MahjongLogic = require("mahjonglogic")
@@ -350,7 +351,15 @@ function Mahjong:init()
     self.covers_fullscreen = true
     -- US-10: one LuaSettings file for both the game state and the settings.
     self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/mahjong.lua")
-    I18n.setLanguage(self.settings:readSetting("language", SETTINGS_DEFAULTS.language))
+    local saved_language = self.settings:readSetting("language", nil)
+    if saved_language == nil then
+        -- Respect KOReader's locale only for the initial default. Once the
+        -- user has chosen a language, that explicit preference wins.
+        saved_language = I18n.languageForLocale(GetText.current_lang)
+        self.settings:saveSetting("language", saved_language)
+        self.settings:flush()
+    end
+    I18n.setLanguage(saved_language or SETTINGS_DEFAULTS.language)
     Dispatcher:registerAction("mahjong", {
         category = "none",
         event = "MahjongStart",

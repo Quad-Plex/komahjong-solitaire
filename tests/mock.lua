@@ -339,7 +339,15 @@ function M.newContext()
         ["util"] = {
             makePath = function() end,
         },
-        ["gettext"] = function(s) return s end,
+        ["gettext"] = (function()
+            local gettext = setmetatable({ current_lang = "en_US" }, {
+                __call = function(_, s) return s end,
+            })
+            ctx.setKoreaderLanguage = function(language)
+                gettext.current_lang = language
+            end
+            return gettext
+        end)(),
     }
 
     for name, mod in pairs(ctx.mocks) do

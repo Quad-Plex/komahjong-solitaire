@@ -152,6 +152,19 @@ function I18n.isSupported(value)
     return type(value) == "string" and CATALOG[value] ~= nil
 end
 
+-- KOReader's gettext module stores its active locale in current_lang.  Only
+-- German is selected automatically; every other locale intentionally uses
+-- the plugin's English catalog.
+function I18n.languageForLocale(locale)
+    if type(locale) == "string" then
+        local normalized = locale:lower()
+        if normalized == "de" or normalized:match("^de[_-]") then
+            return "de"
+        end
+    end
+    return "en"
+end
+
 function I18n.setLanguage(value)
     if not I18n.isSupported(value) then value = "en" end
     language = value

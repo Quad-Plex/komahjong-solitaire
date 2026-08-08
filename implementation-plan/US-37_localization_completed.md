@@ -49,10 +49,13 @@ persisted enum values language-neutral.
 
 ### 2. Language lifecycle and persistence
 
-- Add a `language` setting to `SETTINGS_DEFAULTS`, defaulting to `en` so
-  existing installations retain their current visible language.
-- Read and validate it during plugin initialization; invalid or absent values
-  become `en` without touching unrelated saved data.
+- Add a `language` setting to `SETTINGS_DEFAULTS`, defaulting to `en`.
+- On first launch, when the setting is absent, inspect KOReader's active
+  gettext locale (`current_lang`): German locales (`de`, `de_DE`, `de-DE`,
+  and equivalent variants) select `de`; English and all other locales select
+  `en`. Persist that initial choice so it is not re-detected on later starts.
+- Read and validate an existing setting during plugin initialization; invalid
+  values fall back to `en` without touching unrelated saved data.
 - Add `Mahjong:setLanguage(language)` as the owner-level operation. It validates
   the locale, updates `mahjongi18n`, persists the setting, and rebuilds the
   currently visible UI surface.
@@ -133,8 +136,9 @@ fallback and never break the picker.
 
 ## Acceptance criteria
 
-- A fresh install opens in English and an existing installation with no
-  language key continues to open in English.
+- A fresh install on a German KOReader opens in German; English and all other
+  KOReader locales open in English. An explicit saved language preference
+  always takes precedence over KOReader's locale.
 - Selecting `Deutsch` in Settings and saving translates every visible game,
   picker, help, stats, pause, and win-summary string to German.
 - Selecting `English` restores English, and the choice survives plugin/KOReader

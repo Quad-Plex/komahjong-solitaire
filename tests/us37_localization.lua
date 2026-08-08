@@ -18,6 +18,10 @@ expect(I18n.t("game.combo", 10) == "KOMBO +10", "German catalog formats placehol
 I18n.setLanguage("invalid")
 expect(I18n.getLanguage() == "en", "invalid language falls back to English")
 
+expect(I18n.languageForLocale("de_DE") == "de", "German KOReader locale is detected")
+expect(I18n.languageForLocale("de-DE") == "de", "German locale with a hyphen is detected")
+expect(I18n.languageForLocale("fr_FR") == "en", "non-German locales fall back to English")
+
 local mj = Mahjong:new()
 local menu = {}
 mj:addToMainMenu(menu)

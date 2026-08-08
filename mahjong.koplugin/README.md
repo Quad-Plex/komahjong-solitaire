@@ -22,6 +22,9 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 - **Pause:** Freeze the game clock behind a tap-consuming overlay.
 - **Persistence:** Game state and settings are saved and restored on relaunch; lifetime stats (wins, times) survive across sessions.
 - **Win summary + stats:** A win dialog and a lifetime-stats screen, with a confirm-gated reset.
+- **Localization:** English and German are available in Mahjong's Settings.
+  On first launch, German KOReader locales select German automatically; English
+  is the fallback for English and all other KOReader locales.
 
 ## Installation
 
