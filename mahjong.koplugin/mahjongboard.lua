@@ -467,6 +467,14 @@ function Board:queueStructuralRefreshRetry(rects)
     end)
 end
 
+-- True while a structural pair refresh still has a deferred retry scheduled
+-- (queueStructuralRefreshRetry). The game's periodic timer tick calls this so
+-- it can defer its own regional repaint by one interval instead of enqueuing a
+-- second region into the same framebuffer batch as the board mutation.
+function Board:has_pending_refresh_retry()
+    return self._refresh_retry_scheduled == true
+end
+
 function Board:syncOverlapGroup(refresh_rects)
     if not self.overlap then return end
     -- Clear current children array (do NOT free them, they are in maps)

@@ -662,13 +662,25 @@ end
 -- Cosmetic only (no score bonus): the mm:ss display in the feedback band.
 -- Elapsed seconds ALWAYS accrue (getElapsed diffs against os.time) and are
 -- saved with the game state so the clock survives a close/reopen. The
--- SETTING only controls when the DISPLAY repaints:
+-- SETTING only controls when the DISPLAY repaints, and it is EXCLUSIVE —
+-- one source of repaints per mode, never both:
 --   * "interval" (default): a polling loop (the kochess pollingLoop pattern)
 --     repaints every timer_interval seconds (default 5 — 1 Hz is overkill for
---     e-ink). The loop is the ONLY thing that refreshes an idle board.
---   * "move": no polling loop; the display is refreshed from the interaction
---     handlers (select/deselect/match/undo/shuffle/new game) so an idle board
---     never forces an e-ink refresh.
+--     e-ink). The loop is the ONLY thing that repaints the mm:ss; an
+--     interaction only updates the text string (so the next periodic tick
+--     shows the true value) without enqueuing its own regional repaint into
+--     the same framebuffer batch as a board mutation.
+--   * "move": no polling loop; the display is repainted from the interaction
+--     handlers (select/deselect/match/undo/shuffle) so an idle board never
+--     forces an e-ink refresh.
+-- The exclusivity also fixes a half-refreshed board: in the old code the
+-- interaction callbacks repainted the timer region unconditionally, so a
+-- periodic "interval" repaint and a pair clear could enqueue two regional
+-- refreshes in the same batch — the timer refill raced the pair's structural
+-- refresh retry and left the board partially rendered on e-ink. Separating
+-- the text update from the regional repaint (and deferring the periodic tick
+-- while a structural tile refresh is pending) gives each mode exactly one
+-- regional refresh source.
 -- Each start bumps a run-id token; stopTimer() invalidates the pending tick,
 -- so a stale timer can never fire after close/new-game.
 
@@ -713,7 +725,17 @@ function Mahjong:startTimer()
     local tick
     tick = function()
         if self._timer_running and self._timer_run_id == run_id then
-            self:updateTimerDisplay()
+            -- US-41: when a pair was just cleared its structural tile refresh
+            -- (and any coalesced retry) is still pending in the refresh queue.
+            -- Defer this periodic repaint by one interval so the timer refill
+            -- cannot be enqueued into the same framebuffer batch as the board
+            -- mutation — that race left the board half-rendered on e-ink.
+            if self.board_view and self.board_view.has_pending_refresh_retry
+                    and self.board_view:has_pending_refresh_retry() then
+                UIManager:scheduleIn(interval, tick)
+                return
+            end
+            self:refreshTimerDisplay()
             UIManager:scheduleIn(interval, tick)
         end
     end
@@ -738,13 +760,39 @@ function Mahjong:resetTimer()
     self:startTimer()
 end
 
-function Mahjong:updateTimerDisplay()
+-- Pure text update: sets the mm:ss string without enqueuing any repaint.
+-- Used by interaction handlers in "interval" mode, so the widget's text is
+-- always current for the next periodic repaint without the interaction
+-- racing a regional refresh into the same batch as the board mutation.
+function Mahjong:updateTimerText()
     if not self.timer_text then return end
     self.timer_text:setText(MahjongLogic.formatElapsed(self:getElapsed()))
     if self.timer_text.resetLayout then self.timer_text:resetLayout() end
+end
+
+-- Text update + a regional repaint of the timer slot. This is the ONLY
+-- regional refresh source per timer mode: the periodic polling loop in
+-- "interval" mode, or the interaction handlers in "move" mode (via
+-- updateTimerDisplay). Keeping one source per mode is what prevents the
+-- timer refill from racing a structural board refresh.
+function Mahjong:refreshTimerDisplay()
+    if not self.timer_text then return end
+    self:updateTimerText()
     -- Use the known feedback-band region even before KOReader has painted the
     -- child and populated timer_text.dimen.
     UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
+end
+
+-- Interaction entry point: repaints the timer region ONLY in "move" mode.
+-- In "interval" mode the periodic loop is the sole repaint source, so an
+-- interaction updates the text (see updateTimerText) but enqueues no timer
+-- refresh — it must not piggyback a regional refresh onto the same batch as
+-- a pair clear / undo / shuffle mutation.
+function Mahjong:updateTimerDisplay()
+    self:updateTimerText()
+    if self:timerMode() == "move" then
+        UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
+    end
 end
 
 -- Settings dialog (US-10) ---------------------------------------------------
