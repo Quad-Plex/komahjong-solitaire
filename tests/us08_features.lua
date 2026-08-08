@@ -236,6 +236,8 @@ mj_dead:buildUILayout()
 ctx.last_confirm = nil
 mj_dead:handleTileTap(2, 2, 0)
 mj_dead:handleTileTap(4, 2, 0)
+ctx.runScheduled()
+ctx.runScheduled()
 expect(ctx.last_confirm ~= nil
         and tostring(ctx.last_confirm.text):find("can't help", 1, true) ~= nil,
     "dead board shows the loss dialog (not the shuffle prompt)")

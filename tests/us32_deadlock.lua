@@ -460,6 +460,7 @@ ordinary_dlg.ok_callback()
 expect(#ctx.scheduled > scheduled_before,
     "confirmed ordinary shuffle defers its board rebuild")
 ctx.runScheduled()
+ctx.runScheduled()
 expect(mj_confirm.board_view and #mj_confirm.board_view.overlap == 144,
     "deferred ordinary shuffle leaves a complete rendered board")
 

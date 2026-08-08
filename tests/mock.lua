@@ -128,6 +128,17 @@ function M.newContext()
         nextTick = function(_, fn)
             ctx.scheduled[#ctx.scheduled + 1] = { seconds = 0, fn = fn }
         end,
+        -- Match KOReader's tickAfterNext: the wrapper runs on one tick and
+        -- schedules the actual callback for the following tick, leaving an
+        -- intervening repaint opportunity.
+        tickAfterNext = function(_, fn)
+            ctx.scheduled[#ctx.scheduled + 1] = {
+                seconds = 0,
+                fn = function()
+                    ctx.scheduled[#ctx.scheduled + 1] = { seconds = 0, fn = fn }
+                end,
+            }
+        end,
     }
 
     local frame_container = widget_base:extend{}

@@ -897,6 +897,12 @@ function Mahjong:buildUILayout()
         refresh_origin_x = 0,
         refresh_origin_y = status_h,
         onTileTap = function(x, y, layer) self:handleTileTap(x, y, layer) end,
+        onEmptyTap = function()
+            -- US-33: an empty-area board tap is still an input — during a
+            -- solve it must be a silent no-op just like a tile tap.
+            if self._auto_solve_active then return end
+            self:clearSelection()
+        end,
     }
 
     local board_area = FrameContainer:new{
@@ -1292,9 +1298,25 @@ end
 function Mahjong:checkGameState()
     if MahjongLogic.isWin(self.board) then
         self:showWinDialog()
-    elseif not MahjongLogic.hasMoves(self.board, self.layout) then
-        self:handleNoMoves()
+        return
     end
+    if MahjongLogic.hasMoves(self.board, self.layout) then return end
+
+    -- applyMatch has changed the framebuffer contents and queued the affected
+    -- tile regions. Do not put a shuffle/dead-board modal over those regions
+    -- before the repaint has drained: its dimmer/card can otherwise combine
+    -- with stale tile pixels and leave garbled content in the center. Two
+    -- ticks gives KOReader one complete repaint of the cleared board first.
+    local board = self.board
+    UIManager:tickAfterNext(function()
+        -- A New Game/close may have replaced or discarded this board while the
+        -- repaint was pending. Never show a stale result over the new state.
+        if self.board ~= board or not self.board_view then return end
+        if not MahjongLogic.isWin(self.board)
+                and not MahjongLogic.hasMoves(self.board, self.layout) then
+            self:handleNoMoves()
+        end
+    end)
 end
 
 -- US-12: the win screen is a summary — score, elapsed time, pairs matched,
@@ -1518,6 +1540,15 @@ function Mahjong:showHint()
     end
     local pair = pairs[idx % #pairs + 1]
     self._last_hint = pair
+    -- A hint points at the next move, so it must never feed the fast-clear
+    -- combo: reset the combo window and chain counter here, so the pair the
+    -- player clears after the hint earns no combo and any running chain
+    -- restarts. Without this, Hint + immediate tap would farm COMBO points on
+    -- autopilot. (The chain bonus in pairPoints is unaffected — that is about
+    -- consecutive same-group matches, which a hint genuinely helps the player
+    -- keep track of rather than skip ahead of.)
+    self.last_match_elapsed = nil
+    self.combo_chain = 0
     -- US-18: a hint that is ACTUALLY shown costs HINT_PENALTY (the dead-board
     -- shuffle offer above is not a hint and charges nothing). The penalty is
     -- applied at use time, not part of the pair history, so undo restores only
@@ -1650,9 +1681,10 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
             -- the window stack. Rebuilding all tile widgets while the modal
             -- is still on top can make the repaint run against the covered
             -- stack, leaving a partially rendered board. Let the dialog close
-            -- first, then rebuild and request the board refresh on the next
-            -- UI tick.
-            ok_callback = function() UIManager:nextTick(do_shuffle) end,
+            -- first, then rebuild and request the board refresh after an
+            -- intervening repaint. tickAfterNext is important here: a plain
+            -- nextTick can still run before the dialog-clear repaint drains.
+            ok_callback = function() UIManager:tickAfterNext(do_shuffle) end,
         })
     end
 end

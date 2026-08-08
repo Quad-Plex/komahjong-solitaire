@@ -83,7 +83,8 @@ local Board = InputContainer:extend{
     width = 0,
     height = 0,
     layout_id = "turtle",  -- US-14: which registered layout this board renders
-    onTileTap = nil,
+    onTileTap = nil,   -- fired with (x, y, layer) when a tap hits a tile
+    onEmptyTap = nil,  -- fired (no args) when a tap lands on empty board space
     grid = nil,
     tw = 0,          -- face width in px (also the grid pitch)
     th = 0,          -- face height in px
@@ -575,6 +576,14 @@ function Board:onTapSelect(_, ges)
     local hit = self:hitTest(ges.pos.x - self.dimen.x, ges.pos.y - self.dimen.y)
     if hit then
         if self.onTileTap then self.onTileTap(hit.x, hit.y, hit.layer) end
+        return true
+    end
+    -- A tap on empty board space (beside the stack) is the player's "deselect"
+    -- gesture: forward it so the game can clear any selection. Return nil only
+    -- when there is no handler, so an unhandled board still yields to the
+    -- event dispatch above (legacy behavior).
+    if self.onEmptyTap then
+        self.onEmptyTap()
         return true
     end
     return false

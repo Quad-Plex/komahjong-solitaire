@@ -209,6 +209,10 @@ ctx.last_confirm = nil
 mj_dead:handleTileTap(2, 2, 0)
 mj_dead:handleTileTap(4, 2, 0)
 expect(Logic.tileCount(mj_dead.board) == 2, "pair removed from the dead-board game")
+expect(ctx.last_confirm == nil,
+    "dead-board dialog waits for the cleared-board repaint")
+ctx.runScheduled()
+ctx.runScheduled()
 expect(ctx.last_confirm ~= nil
         and ctx.summaryText(ctx.last_confirm):find("can't help", 1, true) ~= nil,
     "dead board with odd parity shows the loss dialog (not the shuffle prompt)")

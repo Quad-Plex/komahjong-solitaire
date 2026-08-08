@@ -476,7 +476,12 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    run-id token; `stopTimer` freezes `elapsed_base`. No timer score bonus.
 9. **Scoring:** base 10 per pair (`SCORE_PER_PAIR`), +5 chain bonus (`CHAIN_BONUS`) when the new
    pair is in the same `matchGroup` as the previous match; flowers chain with flowers, seasons
-   with seasons. `score_method="basic"` disables the chain. **US-18 penalties:** a hint shown
+   with seasons. `score_method="basic"` disables the chain. **A hint breaks the fast-clear
+   combo:** `showHint` resets `last_match_elapsed` and `combo_chain` when a hint is shown, so
+   the pair cleared after a hint earns NO combo and any running combo chain restarts at 0 — this
+   blocks "hint then immediately tap the shown pair" from farming escalating COMBO points. The
+   same-group `CHAIN_BONUS` is intentionally unaffected (that reward is about consecutive
+   groups, which a hint helps track rather than skip). **US-18 penalties:** a hint shown
    costs `HINT_PENALTY` (5) and a user-initiated shuffle costs `SHUFFLE_PENALTY` (10), applied at
    use time via `MahjongLogic.applyPenalty(score, amount)` (floors at 0); the bounded auto-repeat
    re-shuffles and the auto-solver's mid-solve shuffles never re-charge. **US-20:** the hint
