@@ -99,10 +99,17 @@ function PauseWidget:init()
         w = panel_size.w,
         h = panel_size.h,
     }
-    self[1] = CenterContainer:new{
+    local center = CenterContainer:new{
         dimen = Geometry:new{ w = self.full_width, h = self.full_height },
         panel,
     }
+    -- The real CenterContainer exposes getSize(); keep the explicit fallback
+    -- for KOReader builds/mocks whose constructor is a light wrapper.
+    center.getSize = center.getSize or function()
+        return center.dimen
+    end
+
+    self[1] = center
 
     -- Full-screen tap gesture: it CONSUMES every tap (the handler returns true
     -- and does nothing), so no input reaches the board, toolbar, or HUD while
@@ -126,6 +133,12 @@ function PauseWidget:onShow()
     UIManager:setDirty(self, function()
         return "ui", self._panel_geom
     end)
+    -- The owner replaces the board faces before showing this modal. Refresh
+    -- the complete game window so the transparent area around the card cannot
+    -- retain the old tile framebuffer.
+    if self.parent then
+        UIManager:setDirty(self.parent, "full", self.parent.dimensions)
+    end
     return true
 end
 
@@ -143,7 +156,9 @@ function PauseWidget:resume()
     if self._resumed then return end
     self._resumed = true
     if self.onResume then self.onResume() end
-    UIManager:close(self, "ui", self._panel_geom)
+    -- Resume restores every board widget, so uncovering the game needs a full
+    -- refresh rather than only repainting the pause card rectangle.
+    UIManager:close(self, "full")
 end
 
 -- If the framework closes the overlay without resume() (e.g. a back gesture),

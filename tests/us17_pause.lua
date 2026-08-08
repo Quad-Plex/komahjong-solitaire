@@ -6,7 +6,7 @@
 --   * the bottom toolbar carries a Pause button that wires pauseGame;
 --   * pauseGame stops the timer (freezes elapsed: two getElapsed() reads are
 --     stable) and shows the overlay on the window stack;
---   * the overlay is a full-screen transparent modal whose tap gesture consumes
+--   * the overlay is a full-screen modal with a board blackout whose tap gesture consumes
 --     taps (it never closes on a stray tap, and a board tap can't get through);
 --   * Resume (the overlay's button) closes the overlay and restarts the clock;
 --   * Pause is IGNORED while the auto-solver runs (US-33): the solve is
@@ -65,6 +65,7 @@ expect(type(mj.pause_button.callback) == "function",
 -- ---- pauseGame freezes the clock and shows the overlay ------------------------
 
 local elapsed_before = mj:getElapsed()
+local live_tile_icon = mj.board_view.tile_widgets[pk(2, 2, 0)].icon
 mj.pause_button.callback() -- tap Pause
 expect(mj._timer_running == false, "pause stops the timer")
 expect(mj:getElapsed() == mj:getElapsed(), "two getElapsed() reads are stable while paused")
@@ -72,6 +73,18 @@ expect(mj:getElapsed() == mj.elapsed_base,
     "paused elapsed equals the frozen elapsed_base")
 expect(mj:getElapsed() >= elapsed_before,
     "the frozen elapsed is at least what it was before pausing")
+local paused_widget_count = 0
+for _ in pairs(mj.board_view.tile_widgets) do paused_widget_count = paused_widget_count + 1 end
+expect(mj.board_view.paused == true and paused_widget_count == 144,
+    "pausing switches the board view to the complete empty-tile layout")
+local empty_faces = 0
+for _, widget in pairs(mj.board_view.tile_widgets) do
+    if widget.icon == "mahjong/empty" or widget.icon == "mahjong/empty_n"
+            or widget.icon == "mahjong/empty_nr" or widget.icon == "mahjong/empty_nb" then
+        empty_faces = empty_faces + 1
+    end
+end
+expect(empty_faces == 144, "every paused tile face uses empty artwork")
 
 local top = ctx.window_stack[#ctx.window_stack]
 expect(top ~= nil and top.widget ~= nil and top.widget.name == "mahjongpause",
@@ -82,7 +95,7 @@ expect(mj._pause_dlg == dlg, "the main widget tracks the open pause overlay")
 -- ---- The overlay blocks taps ---------------------------------------------------
 
 expect(dlg.covers_fullscreen == true, "the pause overlay is a full-screen modal")
-expect(dlg.background == nil, "the pause overlay is transparent (floating)")
+expect(dlg.background == nil, "the pause overlay itself has no flat background")
 expect(type(dlg[1]) == "table" and type(dlg[1].dimen) == "table",
     "the overlay's single child is a centering container")
 local panel = dlg[1][1]
@@ -116,6 +129,9 @@ expect(gone, "Resume closes the pause overlay")
 expect(mj._pause_dlg == nil, "the main widget clears the pause reference")
 expect(mj._timer_running == true, "Resume restarts the clock")
 expect(mj:getElapsed() >= frozen, "the clock accrues again after Resume")
+expect(mj.board_view.paused == false
+        and mj.board_view.tile_widgets[pk(2, 2, 0)].icon == live_tile_icon,
+    "Resume restores the live tile artwork")
 
 -- ---- Pause is IGNORED while a running auto-solver owns the board (US-33) ---------
 

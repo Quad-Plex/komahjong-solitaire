@@ -98,11 +98,17 @@ local Board = InputContainer:extend{
     tile_widgets = nil,   -- posKey -> IconWidget (for O(1) incremental removal)
     overlap = nil,        -- the painted OverlapGroup (self[1][1])
     overlays = nil,       -- posKey -> IconWidget overlay (select/hint), painted on top
+    paused = false,        -- render empty faces while the pause modal is open
+    empty_board = nil,     -- full-layout placeholder used for empty bevel variants
 }
 
 function Board:init()
     self.dimen = Geom:new{ x = 0, y = 0, w = self.width, h = self.height }
     self.grid = MahjongLogic.gridBounds(self.layout_id)
+    self.empty_board = {}
+    for _, p in ipairs(MahjongLogic.buildLayout(self.layout_id)) do
+        self.empty_board[MahjongLogic.posKey(p.x, p.y, p.layer)] = "empty"
+    end
     self.ges_events.TapSelect = {
         GestureRange:new{
             ges = "tap",
@@ -182,11 +188,18 @@ function Board:rebuildTiles()
     local children = {}
 
     for _, p in ipairs(MahjongLogic.buildLayout(self.layout_id)) do
-        local kind = MahjongLogic.tileAt(self.board, p.x, p.y, p.layer)
+        local kind = self.paused and "empty"
+            or MahjongLogic.tileAt(self.board, p.x, p.y, p.layer)
         if kind then
             local px, py = self:tilePos(p.x, p.y, p.layer)
+            local icon_kind
+            if self.paused then
+                icon_kind = MahjongLogic.iconForTile(self.empty_board, p.x, p.y, p.layer)
+            else
+                icon_kind = MahjongLogic.iconForTile(self.board, p.x, p.y, p.layer)
+            end
             local w = IconWidget:new{
-                icon = "mahjong/" .. MahjongLogic.iconForTile(self.board, p.x, p.y, p.layer),
+                icon = "mahjong/" .. icon_kind,
                 width = self.tile_w,
                 height = self.tile_h,
                 overlap_offset = { px, py },
@@ -239,6 +252,17 @@ end
 
 -- Refreshes the board from the current game state (US-07+ hooks here).
 function Board:updateBoard()
+    self:rebuildTiles()
+    self:requestRefresh()
+end
+
+-- Swap the rendered faces without touching the logic board. The pause modal
+-- blocks input, while this keeps the exact live geometry and z-order visible
+-- as an empty board silhouette.
+function Board:setPaused(paused)
+    paused = paused == true
+    if self.paused == paused then return end
+    self.paused = paused
     self:rebuildTiles()
     self:requestRefresh()
 end
@@ -339,7 +363,8 @@ function Board:refreshTileIcon(x, y, layer)
     local w = self.tile_widgets[key]
     if not w then return end
 
-    local icon = MahjongLogic.iconForTile(self.board, x, y, layer)
+    local icon_board = self.paused and self.empty_board or self.board
+    local icon = MahjongLogic.iconForTile(icon_board, x, y, layer)
     if not icon then return end
     local new_icon = "mahjong/" .. icon
     if w.icon == new_icon then return end

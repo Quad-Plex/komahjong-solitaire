@@ -157,6 +157,11 @@ end
 local function createCountBadge(value)
     return TextWidget:new{
         text = tostring(value),
+        -- Reserve a stable slot; changing TextWidget text frees its cached
+        -- size, which otherwise makes this tiny overlay unreliable on device.
+        width = Screen:scaleBySize(18),
+        height = Screen:scaleBySize(16),
+        align = "right",
         padding = 0,
         face = Font:getFace("smallinfofont", Screen:scaleBySize(12)),
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
@@ -205,31 +210,37 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
     local badge = nil
     if counter ~= nil then
         badge = createCountBadge(counter)
-        -- Real device: the button's frame is a FrameContainer whose content is
-        -- the centered icon. Splice an OverlapGroup in so the count number
-        -- layers above the icon, anchored at the frame's bottom-right corner
-        -- (inside it). Headless the frame is a plain stub, so this branch is
-        -- skipped there.
-        local frame = button_opts.frame
-        if frame and frame[1] then
-            local inner = frame[1]
-            local iw = (inner.dimen and inner.dimen.w) or w
-            local ih = (inner.dimen and inner.dimen.h) or h
-            local bsz = badge:getSize()
-            local corner = Screen:scaleBySize(2)
-            -- overlap_offset must be an ARRAY {px, py} on the child itself.
-            -- The 3px extra on y nudges the number a touch lower in the corner.
-            badge.overlap_offset = { iw - bsz.w - corner, ih - bsz.h - corner + Screen:scaleBySize(3) }
-            frame[1] = OverlapGroup:new{
-                inner,
-                badge,
-            }
-        end
+        -- Keep the badge as a sibling of the Button frame. KOReader's button
+        -- feedback inverts the entire frame rectangle; a badge inside that
+        -- frame becomes white and appears to disappear after a press.
+        local bsz = badge:getSize()
+        local button_size = button_opts:getSize()
+        local corner = Screen:scaleBySize(2)
+        badge.overlap_offset = {
+            button_size.w - bsz.w - corner,
+            button_size.h - bsz.h - corner + Screen:scaleBySize(3),
+        }
         button_opts.badge = badge
+    end
+    local button_layer = button_opts
+    if badge then
+        button_layer = OverlapGroup:new{
+            dimen = Geometry:new{ w = button_opts:getSize().w, h = button_opts:getSize().h },
+            button_opts,
+            badge,
+        }
+        -- Preserve the button's structural metadata on the visual layer for
+        -- callers that inspect toolbar cells rather than the live Button
+        -- reference returned below.
+        button_layer.bordersize = button_opts.bordersize
+        button_layer.radius = button_opts.radius
+        button_layer.padding = button_opts.padding
+        button_layer.icon = button_opts.icon
+        button_layer.callback = button_opts.callback
     end
     local cell
     if hide_label then
-        cell = VerticalGroup:new{ align = "center", button_opts }
+        cell = VerticalGroup:new{ align = "center", button_layer }
     else
         local label_widget = TextWidget:new{
             text = label,
@@ -239,7 +250,7 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
         }
         cell = VerticalGroup:new{
             align = "center",
-            button_opts,
+            button_layer,
             label_widget,
         }
     end
@@ -816,12 +827,27 @@ function Mahjong:pauseGame()
     -- overlay below consumes every tap, so no tile can be selected or moved
     -- while paused. Resume restarts via the overlay's onResume hook.
     self:stopTimer()
+    if self.board_view and self.board_view.setPaused then
+        self.board_view:setPaused(true)
+    end
+    -- Paint the replacement faces before putting the transparent modal on top;
+    -- otherwise the modal can be shown from the old framebuffer even though
+    -- the parent window is marked dirty.
+    if UIManager.forceRePaint then
+        UIManager:forceRePaint()
+    end
     local dlg = PauseWidget:new{
         full_width = self.full_width,
         full_height = self.full_height,
         parent = self,
         onResume = function()
             self._pause_dlg = nil
+            if self.board_view and self.board_view.setPaused then
+                self.board_view:setPaused(false)
+            end
+            if UIManager.forceRePaint then
+                UIManager:forceRePaint()
+            end
             self:startTimer()
             self:updateTimerDisplay()
         end,
@@ -884,6 +910,10 @@ function Mahjong:buildUILayout()
         self.full_height - status_h - flash_h - toolbar_h - bottom_gap)
     self.flash_region = Geometry:new{
         x = 0, y = status_h + board_h, w = self.full_width, h = flash_h,
+    }
+    self.toolbar_region = Geometry:new{
+        x = 0, y = status_h + board_h + flash_h,
+        w = self.full_width, h = toolbar_h + bottom_gap,
     }
 
     self.board_view = MahjongBoard:new{
@@ -1890,6 +1920,9 @@ function Mahjong:updateStatus()
     -- refresh regional. A regionless request here refreshes the entire game
     -- window after every pair removal.
     UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)
+    if self.toolbar_region then
+        UIManager:setDirty(self, "ui", self.toolbar_region)
+    end
 end
 
 function Mahjong:onCloseWidget()
