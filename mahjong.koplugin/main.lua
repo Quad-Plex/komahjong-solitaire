@@ -1529,22 +1529,81 @@ function Mahjong:showWinDialog()
     -- matched, and the per-game help counters — plus the current winning
     -- streak, placed last (below the shuffle and hint counters). The global
     -- best records (overall / per-layout best score and time, which the
-    -- headline above still celebrates) are NOT listed here, so the card stays
-    -- focused on what was achieved in this session. A "New best!" marker is
-    -- still shown next to the "score"/"time" values when that win breaks the
-    -- overall or this-layout record for it.
-    local score_marker = (new_best_score or new_layout_score) and " " .. t("game.new_best") or ""
-    local time_marker = (new_best_time or new_layout_time) and " " .. t("game.new_best") or ""
+    -- headline above still celebrates) are NOT listed here as their own rows,
+    -- so the card stays focused on what was achieved in this session.
+    --
+    -- US-12: the score/time rows still reach for the best, though — a win that
+    -- breaks the overall or this-layout record gets a "(New best!)" text marker
+    -- next to its value; a win that does NOT break a record instead shows the
+    -- current best on that layout as a trophy icon + the best figure, so the
+    -- player can compare this run against the best on the layout just played.
+    -- The marker is carried as a text string (`marker`, for the harness) and a
+    -- parallel widget (`marker_widget`) that the dialog renders after the value;
+    -- the harness appends `marker` to `value`. A first win is always a new best
+    -- (recordWin/recordLayoutWin raise the best from 0/nil), so the trophy branch
+    -- only fires when a prior best already exists.
+    local layout = self.layout
+    local layout_best_score = self.stats.layout_highscores[layout]
+    local layout_best_time = self.stats.layout_best_times[layout]
+    local score_is_new_best = new_best_score or new_layout_score
+    local time_is_new_best = new_best_time or new_layout_time
+    local value_face = Font:getFace("cfont", Screen:scaleBySize(20))
+
+    -- Builds the trophy+old-best marker widget for a row that did not beat the
+    -- record: "(", a trophy icon, the best figure, ")" — bold/parenthesized to
+    -- visually set the marker off from this run's own value, so the player can
+    -- compare at a glance. The icon matches the value text height so the bracket
+    -- pair sits on one visual line with the figure.
+    local function trophy_marker(best_str)
+        local icon_size = Screen:scaleBySize(20)
+        local gap = Screen:scaleBySize(4)
+        return HorizontalGroup:new{
+            TextWidget:new{ text = "(", padding = 0, face = value_face, bold = true },
+            IconWidget:new{ icon = "mahjong/trophy", width = icon_size, height = icon_size },
+            HorizontalSpan:new{ width = gap },
+            TextWidget:new{ text = best_str, padding = 0, face = value_face, bold = true },
+            TextWidget:new{ text = ")", padding = 0, face = value_face, bold = true },
+        }
+    end
+    -- Returns (marker_text, marker_widget) for a value row: "(New best!)" + a
+    -- TextWidget when the row broke the record, a trophy icon + best figure when
+    -- it did not (best_str is the prior best as a string), or nil/nil when there
+    -- is no best to show.
+    local function marker_for(is_new_best, best_str)
+        if is_new_best then
+            return t("game.new_best"), TextWidget:new{
+                text = t("game.new_best"), padding = 0, face = value_face, bold = true,
+            }
+        end
+        if best_str then
+            return "(🏆 " .. best_str .. ")", trophy_marker(best_str)
+        end
+        return nil, nil
+    end
+
+    local score_best_str
+    if not score_is_new_best and layout_best_score then
+        score_best_str = tostring(layout_best_score)
+    end
+    local time_best_str
+    if not time_is_new_best and layout_best_time then
+        time_best_str = MahjongLogic.formatElapsed(layout_best_time)
+    end
+    local score_marker, score_marker_widget = marker_for(score_is_new_best, score_best_str)
+    local time_marker, time_marker_widget = marker_for(time_is_new_best, time_best_str)
+
     local win_rows = {
-        { label = t("hud.score"),           value = tostring(self.score) .. score_marker },
-        { label = t("game.time"),           value = MahjongLogic.formatElapsed(elapsed) .. time_marker },
+        { label = t("hud.score"),           value = tostring(self.score),
+          marker = score_marker, marker_widget = score_marker_widget },
+        { label = t("game.time"),           value = MahjongLogic.formatElapsed(elapsed),
+          marker = time_marker, marker_widget = time_marker_widget },
         { label = t("game.pairs_matched"),  value = tostring(pairs) },
         -- US-18: always report the per-game help counters, including clean
         -- wins, so the summary explicitly tells the player whether either was
         -- used.
         { label = t("game.hints_used"), value = tostring(self.hints_used or 0) },
         { label = t("game.shuffles"),   value = tostring(self.shuffles_used or 0) },
-        -- The winning streak (consecutive wins) is shown after the help
+        -- The winning streak (consecutive wins) is shown after the hint
         -- counters, as the last row of the session summary.
         { label = t("game.current_streak"), value = tostring(self.stats.current_streak) },
     }

@@ -153,6 +153,12 @@ expect(win_text:find("Score: 35 (New best!)", 1, true) ~= nil,
     "a first win marks the score row with New best!")
 expect(win_text:find("Time: 00:45 (New best!)", 1, true) ~= nil,
     "a first win marks the time row with New best!")
+-- A new-best marker is rendered as a TextWidget ("(New best!)"), distinct from the
+-- trophy marker shown when no record is broken.
+local win_summary_first = ctx.last_confirm
+local nb_score = win_summary_first.win_rows and win_summary_first.win_rows[1].marker_widget
+expect(nb_score ~= nil and nb_score.text == "(New best!)",
+    "the score row's new-best marker is a TextWidget (not a trophy)")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil, "the summary shows the pairs matched")
 expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
@@ -250,6 +256,43 @@ expect(mj1.stats.games_won == 2 and mj1.stats.current_streak == 2,
     "a worse win still counts and extends the streak")
 expect(mj1.stats.best_score == 35 and mj1.stats.best_time == 45,
     "a worse win keeps the existing records")
+-- US-12: a win that breaks no record shows the current best (this layout's best)
+-- next to the score/time as a trophy, so the player can compare against the
+-- record instead of seeing an empty marker space.
+expect(win_text:find("🏆", 1, true) ~= nil,
+    "a win that breaks no record shows a trophy comparing the result to the best")
+expect(win_text:find("(🏆 35)", 1, true) ~= nil,
+    "the score row shows the layout best in a bracketed trophy (score tied, not beaten)")
+expect(win_text:find("(🏆 00:45)", 1, true) ~= nil,
+    "the time row shows the layout best time in a bracketed trophy (slower than the best)")
+-- The trophy is a real IconWidget (mahjong/trophy) bracketed with "(" / ")".
+-- Scan the marker group's children rather than assuming index, since the
+-- bracket TextWidgets wrap the icon.
+local function has_icon(widget, icon)
+    if type(widget) ~= "table" then return false end
+    for _, c in ipairs(widget) do
+        if type(c) == "table" and c.icon == icon then return true end
+    end
+    return false
+end
+local function has_text(widget, txt)
+    if type(widget) ~= "table" then return false end
+    for _, c in ipairs(widget) do
+        if type(c) == "table" and c.text == txt then return true end
+    end
+    return false
+end
+local win_summary_worse = ctx.last_confirm
+local trophy_score_row = win_summary_worse.win_rows and win_summary_worse.win_rows[1].marker_widget
+expect(type(trophy_score_row) == "table"
+    and has_icon(trophy_score_row, "mahjong/trophy")
+    and has_text(trophy_score_row, "(") and has_text(trophy_score_row, ")"),
+    "the score row's trophy marker brackets the IconWidget (mahjong/trophy)")
+local trophy_time_row = win_summary_worse.win_rows and win_summary_worse.win_rows[2].marker_widget
+expect(type(trophy_time_row) == "table"
+    and has_icon(trophy_time_row, "mahjong/trophy")
+    and has_text(trophy_time_row, "(") and has_text(trophy_time_row, ")"),
+    "the time row's trophy marker brackets the IconWidget (mahjong/trophy)")
 
 -- ---- A better third win marks the records again -------------------------------
 
@@ -339,6 +382,13 @@ expect(mj2.game_won == false, "an auto-solve win does not set the game_won flag"
 win_text = ctx.summaryText(ctx.last_confirm)
 expect(win_text:find("New best!", 1, true) == nil,
     "an auto-solve win never marks a New best!")
+-- US-12: an auto-solve win doesn't record a new best, so its score/time rows
+-- instead show the prior best (this layout's) as a trophy — exactly the
+-- "did not beat the record, compare to the best" case.
+expect(win_text:find("(🏆 65)", 1, true) ~= nil,
+    "an auto-solve win shows the prior layout best score as a trophy")
+expect(win_text:find("(🏆 00:30)", 1, true) ~= nil,
+    "an auto-solve win shows the prior layout best time as a trophy")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil,
     "the auto-solve win dialog still shows the pair count")
 expect(win_text:find("Hints used: 1", 1, true) ~= nil,

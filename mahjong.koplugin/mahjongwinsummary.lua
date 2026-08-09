@@ -86,18 +86,31 @@ function WinSummary:init()
     end
     local label_gap = Screen:scaleBySize(12)
     local row_gap = Screen:scaleBySize(4)
+    local marker_gap = Screen:scaleBySize(4)
+    -- The value column's width must account for the marker text too (the
+    -- "(New best!)" / trophy+best that rides after a value), so the card is
+    -- wide enough to hold a fully-marked row without clipping.
     local max_value_w = 0
     for _, r in ipairs(win_rows) do
-        max_value_w = math.max(max_value_w, measureText(r.value, value_face))
+        local full = r.value .. (r.marker and (" " .. r.marker) or "")
+        max_value_w = math.max(max_value_w, measureText(full, value_face))
     end
     local row_widgets = {}
     for i, r in ipairs(win_rows) do
-        row_widgets[#row_widgets + 1] = HorizontalGroup:new{
+        local row_children = {
             HorizontalSpan:new{ width = max_label_w - measureText(r.label, label_face) },
             TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
             HorizontalSpan:new{ width = label_gap },
             TextWidget:new{ text = r.value, padding = 0, face = value_face, bold = true },
         }
+        -- A score/time row may carry a marker widget (a "(New best!)" TextWidget
+        -- or a trophy+old-best group); render it just right of the value, after
+        -- a small gap, so the marker rides on the same value column.
+        if r.marker_widget then
+            row_children[#row_children + 1] = HorizontalSpan:new{ width = marker_gap }
+            row_children[#row_children + 1] = r.marker_widget
+        end
+        row_widgets[#row_widgets + 1] = HorizontalGroup:new(row_children)
         if i < #win_rows then
             row_widgets[#row_widgets + 1] = VerticalSpan:new{ width = row_gap }
         end

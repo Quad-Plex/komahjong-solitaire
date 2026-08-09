@@ -386,13 +386,15 @@ function M.newContext()
 
     -- Reconstructs a ConfirmBox's rendered summary text as a plain string for
     -- assertions: its `text` (headline) plus, for every row in its `win_rows`
-    -- (label, value) pairs, "label: value". The win dialog sets `win_rows`
-    -- (US-12) so the aligned widget rows can be checked as substrings without
-    -- walking layout internals.
+    -- (label, value) pairs, "label: value". A row may also carry a `marker`
+    -- string (the headless text of a "(New best!)" or trophy+old-best marker the
+    -- dialog renders as a widget); it is appended after the value so the harness
+    -- can assert on the best-comparison shown when no record is broken.
     ctx.summaryText = function(confirm)
         local lines = { tostring(confirm.text) }
         for _, r in ipairs(confirm.win_rows or {}) do
             lines[#lines + 1] = r.label .. ": " .. r.value
+                .. (r.marker and (" " .. r.marker) or "")
         end
         return table.concat(lines, "\n")
     end
