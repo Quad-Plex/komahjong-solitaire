@@ -73,6 +73,8 @@ local LayoutSelect = InputContainer:extend{
     onClose = nil,     -- function() — close X / tap outside (owner resumes timer)
     onHelp = nil,      -- function() — show gameplay help above this picker
     onSettings = nil,  -- function() — show settings above this picker
+    onStats = nil,     -- function() — show the stats card above this picker
+    game_in_background = false, -- true = an active (un-won) game sits below the picker
     wins_by_layout = nil, -- map layout_id -> human wins (sync badge, US-30)
     highscores_by_layout = nil, -- map layout_id -> best winning score (score chip)
     best_times_by_layout = nil, -- map layout_id -> fastest win seconds (time chip)
@@ -319,9 +321,11 @@ function LayoutSelect:init()
     local gap = math.min(Screen:scaleBySize(12),
         math.max(Screen:scaleBySize(2), math.floor(self.full_width * 0.03)))
 
-    -- Title row: settings + help at left, title centered, close X at right.
-    -- (the same grey-square style as the other dialogs). Tapping the X
-    -- cancels (closes the picker without dealing).
+    -- Title row: settings + stats + help at left, title centered, close X /
+    -- return arrow at right. (the same grey-square style as the other dialogs).
+    -- Tapping the close X cancels (closes the picker without dealing); when an
+    -- active game sits below the picker the X renders as a return arrow (the
+    -- owner's onClose resumes that game).
     local compact = MahjongUI.isNarrow(self.full_width)
     local title_widget = TextWidget:new{
         text = t("picker.title"),
@@ -331,7 +335,7 @@ function LayoutSelect:init()
     local title_h = title_widget:getSize().h
     local close_size = title_h + Screen:scaleBySize(8)
     self._close_btn = ButtonWidget:new{
-        icon = "mahjong/close",
+        icon = self.game_in_background and "chevron.left" or "mahjong/close",
         width = close_size,
         height = close_size,
         icon_width = math.floor(close_size * 0.6),
@@ -364,15 +368,27 @@ function LayoutSelect:init()
         padding = 0,
         callback = function() if self.onSettings then self.onSettings() end end,
     }
+    self._stats_btn = ButtonWidget:new{
+        icon = "mahjong/stats",
+        width = close_size,
+        height = close_size,
+        icon_width = math.floor(close_size * 0.6),
+        icon_height = math.floor(close_size * 0.6),
+        bordersize = Screen:scaleBySize(1),
+        radius = Screen:scaleBySize(4),
+        padding = 0,
+        callback = function() if self.onStats then self.onStats() end end,
+    }
     local title_w = title_widget:getSize().w
     local title_row_w = self.full_width
     -- Keep the title centered in the full row, rather than centered in the
-    -- space between the buttons. The left side carries two buttons (settings +
-    -- help) while the right carries only the close X, so the two flexible
-    -- spans must be asymmetric: right_space bumps left_space by a button
-    -- (close_size + the 4px gap) so the title sits exactly at the row center.
+    -- space between the buttons. The left side carries three buttons (settings
+    -- + stats + help) while the right carries only the close X / return arrow,
+    -- so the two flexible spans must be asymmetric: left_space bumps the flex
+    -- by a button (close_size + the 4px gap) so the title sits exactly at the
+    -- row center regardless of how many buttons the left side holds.
     local btn_gap = Screen:scaleBySize(4)
-    local left_btns = 2 * close_size + btn_gap
+    local left_btns = 3 * close_size + 2 * btn_gap
     local right_btn = close_size
     local flex = math.max(0, title_row_w - 2 * edge_pad
         - left_btns - right_btn - title_w)
@@ -381,6 +397,8 @@ function LayoutSelect:init()
     local title_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = edge_pad },
         self._settings_btn,
+        HorizontalSpan:new{ width = btn_gap },
+        self._stats_btn,
         HorizontalSpan:new{ width = btn_gap },
         self._help_btn,
         HorizontalSpan:new{ width = left_space },

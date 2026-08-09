@@ -51,6 +51,9 @@ local StatsWidget = InputContainer:extend{
     full_height = Screen:getHeight(),
     parent = nil,      -- the Mahjong instance (reads `stats`, saves after reset)
     onClose = nil,     -- hook so the owner can resume the paused timer loop
+    show_map = true,   -- false = no layout selected (no game behind): the card
+                       --   shows only the Global column (opened from the layout
+                       --   picker on first launch / the Play-again path)
     _values = nil,     -- value widgets: global rows under their bare keys
                        --   (played/won/win_rate/best_score/best_time/avg_time/
                        --   current_streak/longest_streak), the <layout> column
@@ -144,6 +147,7 @@ function StatsWidget:init()
 
     local stats = self:statsRecord()
     local layout_id = self:layoutId()
+    local show_map = self.show_map ~= false
     local vs = valueStrings(stats)
     local map_vs = layoutValueStrings(stats, layout_id)
 
@@ -191,11 +195,12 @@ function StatsWidget:init()
         if mw > max_value_w then max_value_w = mw end
     end
     local column_w = max_label_w + label_gap + max_value_w
-    local content_w = column_w * 2 + col_gap
+    -- With no layout selected (show_map=false) the card is a single Global
+    -- column, so the two-column math collapses to one column width.
+    local content_w = show_map and (column_w * 2 + col_gap) or column_w
     local panel_padding = math.min(Screen:scaleBySize(24),
         math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05)))
     local max_panel_w = math.max(1, self.full_width - 2 * Screen:scaleBySize(8))
-    local stacked = content_w + 2 * panel_padding > max_panel_w
 
     self._values = {}
 
@@ -238,7 +243,10 @@ function StatsWidget:init()
     end
 
     local global_col = buildColumn(t("stats.global"), vs, "")
-    local map_col = buildColumn(t("layout." .. layout_id), map_vs, "map_")
+    local map_col
+    if show_map then
+        map_col = buildColumn(t("layout." .. layout_id), map_vs, "map_")
+    end
 
     -- Reset button (bottom): clears the whole record (global + per-layout
     -- maps) back to defaults, after a ConfirmBox so an accidental tap cannot
@@ -261,7 +269,7 @@ function StatsWidget:init()
 
     local gap = math.min(Screen:scaleBySize(14),
         math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.025)))
-    local panel_content_w = math.max(stacked and column_w or content_w, reset_w)
+    local panel_content_w = math.max(content_w, reset_w)
     local pad_side = math.max(0, math.floor((panel_content_w - reset_w) / 2))
     local reset_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = pad_side },
@@ -302,19 +310,21 @@ function StatsWidget:init()
     -- Floating panel: a white rounded card centered over the game. The outer
     -- widget stays transparent, so the board shows through around the card.
     local top_pad = math.max(Screen:scaleBySize(8), math.floor(self.full_height * 0.04))
+    -- The two columns ALWAYS render side by side: a vertical stacked layout
+    -- (Global above <layout>) made the card a very tall panel that overflowed
+    -- the screen. The columns share the same width, so a side-by-side row is
+    -- no taller than the settings dialog's rows and fits any canvas whose
+    -- width holds two columns (the responsive gap/padding clamps below keep
+    -- the columns from crowding on narrow screens).
     local columns_layout
-    if stacked then
-        columns_layout = VerticalGroup:new{
-            global_col,
-            VerticalSpan:new{ height = col_gap },
-            map_col,
-        }
-    else
+    if show_map then
         columns_layout = HorizontalGroup:new{
             global_col,
             HorizontalSpan:new{ width = col_gap },
             map_col,
         }
+    else
+        columns_layout = global_col
     end
     local panel = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,

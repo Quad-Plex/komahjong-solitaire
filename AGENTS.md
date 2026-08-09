@@ -621,7 +621,19 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     game when the board underneath is WON (the Play-again flow): an empty board must never be
     returned to, so `onClose` does `UIManager:close(self, "full")` there (merges with the
     picker's own close refresh instead of double-flashing); mid-game `onClose` resumes the
-    timer, first-launch `onClose` does nothing.
+    timer, first-launch `onClose` does nothing. The picker's title row carries
+    **three left buttons** — settings (`appbar.settings`), stats (`mahjong/stats`)
+    and help (`?`) — keeping the title centered over the full row width (the
+    asymmetric flex spans place it at exactly the row center for any button
+    count). When an active (un-won) game sits below the picker, `showLayoutPicker`
+    hands it `game_in_background = true` and the close button renders as
+    `chevron.left` (a return arrow — closing it resumes that game via `onClose`);
+    with no game behind it stays the `mahjong/close` X. The picker's stats button
+    calls `openStats`, which passes `show_map = self.board ~= nil and
+    not MahjongLogic.isWin(self.board)` so `mahjongstatswidget` hides its Map
+    (per-layout) column when no game is running; `openStats`'s `onClose` uses the
+    `picker_was_open` guard (like `openSettings`) and NEVER resumes the timer
+    while the opaque picker is still up.
  15. **US-30 picker polish:** (a) card names are `COLOR_BLACK` (were gray);
     (b) the thumbnail is centered by the tower's **face center of mass** —
     `layoutThumbnail` averages every tile's face center (the per-layer up-left

@@ -527,6 +527,11 @@ function Mahjong:showLayoutPicker()
         onPick = function(id) self:startGameWithLayout(id) end,
         onHelp = function() self:showHelp() end,
         onSettings = function() self:openSettings() end,
+        onStats = function() self:openStats() end,
+        -- An active (un-won) board under the picker means the title-row close
+        -- button renders as a return arrow (see mahjonglayoutselect.lua) and
+        -- the stats card keeps its Map column for the running game.
+        game_in_background = self.board ~= nil and not MahjongLogic.isWin(self.board),
         onClose = function()
             self._picker_dlg = nil
             if self.board and not MahjongLogic.isWin(self.board) then
@@ -902,15 +907,24 @@ function Mahjong:openStats()
     -- Freeze the clock and stop the polling loop while the card is up (the
     -- same reason openSettings does): a periodic full-screen refresh (US-11
     -- "interval" mode) would flash every tick behind the panel. Any close
-    -- (tap-outside or the panel's X) resumes via onClose.
+    -- (tap-outside or the panel's X) resumes via onClose — except when the
+    -- stats card was opened from the layout picker: the picker is opaque and
+    -- paused the timer itself, so the timer must STAY paused until the picker
+    -- is picked or closed (the openSettings picker_was_open pattern).
+    local picker_was_open = self._picker_dlg ~= nil
     self:stopTimer()
     local dlg = StatsWidget:new{
         full_width = self.full_width,
         full_height = self.full_height,
         parent = self,
+        -- The <layout> (Map) column only makes sense while a game is running
+        -- (no layout is selected on first launch / the Play-again path).
+        show_map = self.board ~= nil and not MahjongLogic.isWin(self.board),
         onClose = function()
-            self:startTimer()
-            self:updateTimerDisplay()
+            if not picker_was_open then
+                self:startTimer()
+                self:updateTimerDisplay()
+            end
         end,
     }
     dlg:show()
