@@ -1432,10 +1432,7 @@ function Mahjong:setSelection(x, y, layer, kind, extra_rects)
     -- the new-highlight paint (AGENTS.md: batch overlay transitions).
     local old = self.selected
     self.selected = { x = x, y = y, layer = layer, kind = kind }
-    self.board_view:setSelectionOverlay(old, { x = x, y = y, layer = layer })
-    if extra_rects and #extra_rects > 0 then
-        self.board_view:requestRefresh(extra_rects)
-    end
+    self.board_view:setSelectionOverlay(old, { x = x, y = y, layer = layer }, extra_rects)
     self:updateTimerDisplay()
 end
 

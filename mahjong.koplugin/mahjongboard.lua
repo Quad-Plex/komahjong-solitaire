@@ -415,22 +415,15 @@ function Board:requestRefresh(rects)
             local min_y = self.refresh_origin_y or 0
             local max_x = min_x + self.width
             local max_y = min_y + self.height
-            local left = math.max(min_x, min_x + x - margin)
-            local top = math.max(min_y, min_y + y - margin)
-            local region_right = math.min(max_x, min_x + x + self.tile_w + margin)
-            local region_bottom = math.min(max_y, min_y + y + self.tile_h + margin)
+            local left = math.max(min_x, min_x + x - m)
+            local top = math.max(min_y, min_y + y - m)
+            local region_right = math.min(max_x, min_x + x + self.tile_w + m)
+            local region_bottom = math.min(max_y, min_y + y + self.tile_h + m)
             local region = {
-<<<<<<< Updated upstream
                 x = left,
                 y = top,
                 w = math.max(0, region_right - left),
                 h = math.max(0, region_bottom - top),
-=======
-                x = (self.refresh_origin_x or 0) + x - m,
-                y = (self.refresh_origin_y or 0) + y - m,
-                w = self.tile_w + 2 * m,
-                h = self.tile_h + 2 * m,
->>>>>>> Stashed changes
             }
             local merged = true
             while merged do
@@ -651,7 +644,7 @@ end
 -- paint as two separate regional updates (AGENTS.md: batch overlay
 -- transitions, refresh deferred, one combined pass). Keeps at most one
 -- selection highlight on the board at a time.
-function Board:setSelectionOverlay(old, new)
+function Board:setSelectionOverlay(old, new, extra_rects)
     local rects = {}
     if old then
         self:clearOverlay(old.x, old.y, old.layer, true)
@@ -662,6 +655,9 @@ function Board:setSelectionOverlay(old, new)
         if placed then
             rects[#rects + 1] = { x = new.x, y = new.y, layer = new.layer }
         end
+    end
+    for _, r in ipairs(extra_rects or {}) do
+        rects[#rects + 1] = r
     end
     if #rects > 0 then
         self:requestRefresh(rects)
