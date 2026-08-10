@@ -848,12 +848,21 @@ end
 -- In "interval" mode the periodic loop is the sole repaint source, so an
 -- interaction updates the text (see updateTimerText) but enqueues no timer
 -- refresh — it must not piggyback a regional refresh onto the same batch as
--- a pair clear / undo / shuffle mutation.
+-- a pair clear / undo / shuffle mutation. US-47: inside a pair-clear callback
+-- (applyMatch sets _defer_chrome_refresh) the move-mode repaint itself moves
+-- to a single next-tick pass so it cannot merge with the board's tile rect.
 function Mahjong:updateTimerDisplay()
     self:updateTimerText()
     if self:timerMode() == "move" then
-        UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
-        self:bakeLowerChrome()
+        local do_refresh = function()
+            UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
+            self:bakeLowerChrome()
+        end
+        if self._defer_chrome_refresh then
+            self:deferChromeRefresh(do_refresh)
+        else
+            do_refresh()
+        end
     end
 end
 
@@ -1304,12 +1313,18 @@ function Mahjong:handleTileTap(x, y, layer)
     end
     -- US-34: the hint is persistent, so any tile tap dismisses it (the player
     -- is now acting; a tap on empty/blocked space clears it too — re-hinting
-    -- is one press away).
-    self:clearHint()
+    -- is one press away). US-47: the dismissal is folded into THIS tap's own
+    -- refresh (the select or the match) instead of firing a separate
+    -- regional update, so the hint-clear cannot race the tap's action.
+    local hint_rects = self:clearHintBatched()
     local kind = MahjongLogic.tileAt(self.board, x, y, layer)
-    if not kind then return end
+    if not kind then
+        if #hint_rects > 0 then self.board_view:requestRefresh(hint_rects) end
+        return
+    end
     if not MahjongLogic.isFree(self.board, x, y, layer) then
         self:flashMessage(t("game.blocked"))
+        if #hint_rects > 0 then self.board_view:requestRefresh(hint_rects) end
         return
     end
 
@@ -1318,19 +1333,20 @@ function Mahjong:handleTileTap(x, y, layer)
         -- Tapping the selected tile again deselects it.
         if sel.x == x and sel.y == y and sel.layer == layer then
             self:clearSelection()
+            if #hint_rects > 0 then self.board_view:requestRefresh(hint_rects) end
             return
         end
         -- A matching free tile removes both.
         local a = { x = sel.x, y = sel.y, layer = sel.layer }
         local b = { x = x, y = y, layer = layer }
-        if self:applyMatch(a, b) then
+        if self:applyMatch(a, b, hint_rects) then
             self:checkGameState()
             return
         end
     end
 
     -- First tap, or switching from a different tile.
-    self:setSelection(x, y, layer, kind)
+    self:setSelection(x, y, layer, kind, hint_rects)
 end
 
 -- Applies a matched pair to the game: removes it from the logic board and the
@@ -1339,17 +1355,23 @@ end
 -- persists. Returns true when the pair was applied. `a`/`b` are { x, y, layer }
 -- tables. Shared by the tap path (handleTileTap) and the auto-solver (US-19)
 -- so an auto-solved game scores and saves exactly like a hand-played one.
-function Mahjong:applyMatch(a, b)
+-- `extra_rects` (optional) are already-deferred overlay locations (e.g. a
+-- hint dismissed by the tap) folded into the SAME refresh/retry pass as the
+-- pair removal (US-47).
+function Mahjong:applyMatch(a, b, extra_rects)
     local ok, ka, kb = MahjongLogic.removePair(self.board, a, b)
     if not ok then return false end
     self.selected = nil
-    -- US-20: clearing a pair ends the current hint session — the next hint
-    -- press starts a new one and pays HINT_PENALTY once again. (Auto-solve
-    -- steps call applyMatch too, so a solved board also resets the session.)
-    -- US-34: clearHint also drops the persistent hint highlight/pulse (a hint
-    -- is guidance, and the player just acted).
-    self:clearHint()
-    self.board_view:removePair(a, b)
+    -- US-47: clear the persistent hint's overlays WITHOUT enqueueing their own
+    -- refresh and fold those locations (plus any already dismissed by the tap)
+    -- into removePair's single combined pass, so the hint-clear and the
+    -- tile-clear can never race as two separate regional updates in one
+    -- callback.
+    local batched_rects = self:clearHintBatched()
+    for _, r in ipairs(extra_rects or {}) do
+        batched_rects[#batched_rects + 1] = r
+    end
+    self.board_view:removePair(a, b, batched_rects)
     local prev_last = self.last_match_kind
     local prev_match_elapsed = self.last_match_elapsed
     local now_elapsed = self:getElapsed()
@@ -1382,6 +1404,14 @@ function Mahjong:applyMatch(a, b)
     table.insert(self.history, {
         a = a, b = b, ka = ka, kb = kb, score = points, prev_last = prev_last,
     })
+    -- US-47: the pair removal just happened. Move the chrome repaints (HUD /
+    -- toolbar / move-mode timer / combo band) OUT of this framebuffer batch:
+    -- KOReader's open-range merge would otherwise fold the board's tile rect
+    -- and the full-width band into ONE ioctl that a half-applying EPDC can
+    -- garble (leftover pixels after a fast clear). The widget TEXT (score,
+    -- badge counts, mm:ss, band message) is updated immediately below; only
+    -- the enqueued repaints defer to a single next-tick pass.
+    self._defer_chrome_refresh = true
     self:updateStatus()
     self:updateTimerDisplay()
     if combo then
@@ -1390,14 +1420,22 @@ function Mahjong:applyMatch(a, b)
         local label = combo_chain == 1 and t("game.combo") or t("game.combo_chain")
         self:flashMessage(string.format(label, combo_points), true)
     end
+    self._defer_chrome_refresh = false
     self:saveGameState()
     return true
 end
 
-function Mahjong:setSelection(x, y, layer, kind)
-    self:clearSelection()
+function Mahjong:setSelection(x, y, layer, kind, extra_rects)
+    -- US-47: switch the highlight through ONE batched transition (clear the
+    -- old overlay + paint the new) instead of clearOverlay then setOverlay
+    -- firing two regional updates that could race the old-highlight clear and
+    -- the new-highlight paint (AGENTS.md: batch overlay transitions).
+    local old = self.selected
     self.selected = { x = x, y = y, layer = layer, kind = kind }
-    self.board_view:setOverlay(x, y, layer, "select")
+    self.board_view:setSelectionOverlay(old, { x = x, y = y, layer = layer })
+    if extra_rects and #extra_rects > 0 then
+        self.board_view:requestRefresh(extra_rects)
+    end
     self:updateTimerDisplay()
 end
 
@@ -1738,6 +1776,27 @@ function Mahjong:clearHint()
         self.board_view:requestRefresh(refresh_rects)
     end
     self._last_hint = nil
+end
+
+-- US-47: clears the hint overlays WITHOUT enqueueing their own refresh, and
+-- appends the two hint locations to `out_rects` (when provided) so the caller
+-- can fold them into ONE combined refresh with its own change. Dismissing a
+-- persistent hint to immediately act (tap a tile, clear a pair) must not fire
+-- the hint-clear and the action as two racing regional updates in one
+-- callback. Returns the rects table (when no `out_rects` is given, a fresh
+-- one is used and returned), which is EMPTY when no hint was up.
+function Mahjong:clearHintBatched(out_rects)
+    self._hint_pulse_token = self._hint_pulse_token + 1
+    local rects = out_rects or {}
+    if self._last_hint and self.board_view then
+        local h = self._last_hint
+        rects[#rects + 1] = { x = h.a.x, y = h.a.y, layer = h.a.layer }
+        rects[#rects + 1] = { x = h.b.x, y = h.b.y, layer = h.b.layer }
+        self.board_view:clearOverlay(h.a.x, h.a.y, h.a.layer, true)
+        self.board_view:clearOverlay(h.b.x, h.b.y, h.b.layer, true)
+    end
+    self._last_hint = nil
+    return rects
 end
 
 -- US-34: brief boldness pulse for a persistent hint. Draws the bold overlay
@@ -2110,8 +2169,17 @@ function Mahjong:flashMessage(text, pulse)
     local seq = self._flash_seq
     if pulse and self.flash_text then
         self.flash_text.bold = true
-        UIManager:setDirty(self, "ui", self.flash_region)
-        self:bakeLowerChrome()
+        local do_pulse = function()
+            UIManager:setDirty(self, "ui", self.flash_region)
+            self:bakeLowerChrome()
+        end
+        -- US-47: the combo flash inside applyMatch must not join the pair-clear
+        -- batch either (see deferChromeRefresh).
+        if self._defer_chrome_refresh then
+            self:deferChromeRefresh(do_pulse)
+        else
+            do_pulse()
+        end
         local elapsed = 0
         local tick
         tick = function()
@@ -2146,10 +2214,20 @@ function Mahjong:setFlash(text)
             -- `visible` field is ignored by KOReader widgets).
             self.flash_band_icon.hide = false
         end
-        UIManager:setDirty(self, "ui", self.flash_region)
-        -- Draw the new band content now so the refresh can't sample stale
-        -- pixels (see bakeLowerChrome).
-        self:bakeLowerChrome()
+        -- US-47: inside a pair-clear callback (applyMatch's combo flash) the
+        -- band's setDirty defers to a single next-tick pass so the full-width
+        -- band rect cannot merge with the board's just-cleared tile rect into
+        -- one EPDC ioctl. The text is set above (immediately); only the
+        -- repaint moves out of the batch.
+        local do_refresh = function()
+            UIManager:setDirty(self, "ui", self.flash_region)
+            self:bakeLowerChrome()
+        end
+        if self._defer_chrome_refresh then
+            self:deferChromeRefresh(do_refresh)
+        else
+            do_refresh()
+        end
     end
 end
 
@@ -2231,6 +2309,43 @@ function Mahjong:settleLowerChrome()
     end)
 end
 
+-- US-47: defer a chrome repaint (HUD / toolbar / move-mode timer / flash band)
+-- OUT of a pair-clear's framebuffer batch. The board's structural tile refresh
+-- (removePair) and the full-width chrome rects are edge-adjacent, so leaving
+-- them in one callback lets KOReader's open-range merge fold them into a
+-- single EPDC ioctl that a partial waveform can half-apply — observed as
+-- leftover/garbled pixels where a pair was just cleared quickly. All calls
+-- within one callback coalesce into ONE next-tick pass (applyMatch sets
+-- _defer_chrome_refresh around its chrome updates; the widget TEXT is updated
+-- immediately by the callers, only the enqueued repaint defers). Guarded by
+-- board identity so a stale deferred pass can never refresh a replaced board.
+function Mahjong:deferChromeRefresh(fn)
+    if not UIManager.tickAfterNext then
+        if fn then fn() end
+        return
+    end
+    local board = self.board
+    local fns = self._deferred_chrome_fns
+    if not fns then
+        fns = {}
+        self._deferred_chrome_fns = fns
+    end
+    fns[#fns + 1] = fn
+    if #fns ~= 1 then return end -- a pass is already scheduled; just append
+    UIManager:tickAfterNext(function()
+        local pending = self._deferred_chrome_fns
+        self._deferred_chrome_fns = nil
+        if self.board ~= board then return end
+        for i = 1, #pending do
+            local deferred = pending[i]
+            if deferred then deferred() end
+        end
+        -- Paint the chrome sub-trees into the framebuffer BEFORE the refreshed
+        -- rects drain, so the EPDC samples current pixels (stock idiom).
+        self:bakeLowerChrome()
+    end)
+end
+
 -- The HUD bar reflects the pairs left, the number of currently-matching free
 -- pairs (legal moves available to tap), and the score — each in its own chip.
 function Mahjong:updateStatus()
@@ -2253,21 +2368,30 @@ function Mahjong:updateStatus()
     end
     -- status_bar is a subwidget, so flag the window-level widget, but keep the
     -- refresh regional. A regionless request here refreshes the entire game
-    -- window after every pair removal.
-    UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)
-    -- Keep the toolbar's own refresh tight (regional, not the whole lower
-    -- strip): when the banner (flash/timer) refreshes in the same batch,
-    -- KOReader's open-range merge folds the two edge-adjacent rects — and the
-    -- board's tile rect just above the banner — into one ioctl anyway. That
-    -- big merged rect is where the "band repainted, buttons blank" report
-    -- comes from: the EPDC half-applies it and the action-button row ends up
-    -- out of the final drive. Bake the chrome into the framebuffer NOW (stock
-    -- ReaderFooter idiom) so whichever rect the EPDC samples holds the
-    -- just-built toolbar content, and re-drive the strip on a later tick when
-    -- it genuinely changed.
-    if self.toolbar_region then
-        UIManager:setDirty(self, "ui", self.toolbar_region)
-        self:bakeLowerChrome()
+    -- window after every pair removal. Keep the toolbar's own refresh tight
+    -- (regional, not the whole lower strip): when the banner (flash/timer)
+    -- refreshes in the same batch, KOReader's open-range merge folds the two
+    -- edge-adjacent rects — and the board's tile rect just above the banner —
+    -- into one ioctl anyway. That big merged rect is where the "band repainted,
+    -- buttons blank" report comes from: the EPDC half-applies it and the
+    -- action-button row ends up out of the final drive. US-47: inside a
+    -- pair-clear callback (applyMatch sets _defer_chrome_refresh) both the
+    -- status and toolbar repaints defer to a single next-tick pass so the board
+    -- mutation's batch stays board-only. Bake the chrome into the framebuffer
+    -- NOW (stock ReaderFooter idiom) so whichever rect the EPDC samples holds
+    -- the just-built toolbar content, and re-drive the strip on a later tick
+    -- when it genuinely changed.
+    local do_refresh = function()
+        UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)
+        if self.toolbar_region then
+            UIManager:setDirty(self, "ui", self.toolbar_region)
+            self:bakeLowerChrome()
+        end
+    end
+    if self._defer_chrome_refresh then
+        self:deferChromeRefresh(do_refresh)
+    else
+        do_refresh()
     end
     -- A count pill changed (a genuine toolbar structural change): re-drive the
     -- strip once on a later tick, pure-refresh, to heal a half-applied merge.

@@ -397,9 +397,15 @@ function Board:requestRefresh(rects)
         -- merging here is more reliable than relying on the refresh queue to
         -- combine many overlapping tile requests in the same e-ink frame.
         -- Include a pixel of surrounding space for SVG bevel/raster edges.
-        local margin = 1
+        -- US-47: half-grid tiles (fractional x/y on the deep layouts, e.g.
+        -- Taipei) can land a pixel off the integer raster after the floor in
+        -- tilePos, so a cleared tile there can leave a one-pixel stale sliver
+        -- at its edge. Widen the region for fractional anchors to guarantee
+        -- that sub-pixel settle is included in the drive.
         local regions = {}
         for _, r in ipairs(rects) do
+            local m = 1
+            if r.x % 1 ~= 0 or r.y % 1 ~= 0 then m = 2 end
             local x, y = self:tilePos(r.x, r.y, r.layer)
             -- Keep the anti-aliasing margin inside the board canvas. A tile on
             -- the board edge must not touch the status/feedback bands: KOReader
@@ -414,10 +420,17 @@ function Board:requestRefresh(rects)
             local region_right = math.min(max_x, min_x + x + self.tile_w + margin)
             local region_bottom = math.min(max_y, min_y + y + self.tile_h + margin)
             local region = {
+<<<<<<< Updated upstream
                 x = left,
                 y = top,
                 w = math.max(0, region_right - left),
                 h = math.max(0, region_bottom - top),
+=======
+                x = (self.refresh_origin_x or 0) + x - m,
+                y = (self.refresh_origin_y or 0) + y - m,
+                w = self.tile_w + 2 * m,
+                h = self.tile_h + 2 * m,
+>>>>>>> Stashed changes
             }
             local merged = true
             while merged do
@@ -578,13 +591,22 @@ end
 -- would find the second tile's still-present widget with a nil kind and crash
 -- on "mahjong/" .. nil. Batching the drops keeps every refreshTileIcon call on
 -- a tile that is genuinely on the board.
-function Board:removePair(a, b)
+--
+-- `extra_rects` (optional) are additional { x, y, layer } locations folded
+-- into the SAME refresh/retry pass as the pair removal — used to batch a
+-- dismissed-hint overlay clear together with the pair it accompanies (US-47),
+-- so the hint-clear and the tile-clear cannot race as two separate regional
+-- updates.
+function Board:removePair(a, b, extra_rects)
     local ra = self:dropTileWidget(a.x, a.y, a.layer)
     local rb = self:dropTileWidget(b.x, b.y, b.layer)
     if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
     if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
     local rects = refreshRectsForTile(a.x, a.y, a.layer)
     for _, r in ipairs(refreshRectsForTile(b.x, b.y, b.layer)) do
+        rects[#rects + 1] = r
+    end
+    for _, r in ipairs(extra_rects or {}) do
         rects[#rects + 1] = r
     end
     self:syncOverlapGroup(rects)
@@ -620,6 +642,30 @@ function Board:setOverlay(x, y, layer, icon, defer_refresh)
         self:requestRefresh({ { x = x, y = y, layer = layer } })
     end
     return true
+end
+
+-- US-47: batched selection-overlay transition. Clears the overlay at `old`
+-- (when set) and draws the `select` highlight over `new` (when set) with the
+-- refreshes coalesced into one requestRefresh spanning both locations — a
+-- selection switch must not race the old-highlight clear and the new-highlight
+-- paint as two separate regional updates (AGENTS.md: batch overlay
+-- transitions, refresh deferred, one combined pass). Keeps at most one
+-- selection highlight on the board at a time.
+function Board:setSelectionOverlay(old, new)
+    local rects = {}
+    if old then
+        self:clearOverlay(old.x, old.y, old.layer, true)
+        rects[#rects + 1] = { x = old.x, y = old.y, layer = old.layer }
+    end
+    if new then
+        local placed = self:setOverlay(new.x, new.y, new.layer, "select", true)
+        if placed then
+            rects[#rects + 1] = { x = new.x, y = new.y, layer = new.layer }
+        end
+    end
+    if #rects > 0 then
+        self:requestRefresh(rects)
+    end
 end
 
 -- Removes the overlay on the tile at (x, y, layer), if any. Returns true if

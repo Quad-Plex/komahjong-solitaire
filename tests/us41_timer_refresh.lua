@@ -118,8 +118,14 @@ expect(timerRegionDirty(mj_m),
 
 ctx.dirty_calls = {}
 mj_m:handleTileTap(bm.x, bm.y, bm.layer)
+expect(not timerRegionDirty(mj_m),
+    "move: match defers the timer repaint out of the pair-clear batch (US-47)")
+-- Flush the structural retry + the coalesced deferred chrome pass (each a
+-- two-tick tickAfterNext wrapper), then the move-mode timer repaint lands.
+ctx.runScheduled()
+ctx.runScheduled()
 expect(timerRegionDirty(mj_m),
-    "move: match enqueues a timer-region repaint")
+    "move: the deferred match repaint enqueues the timer-region repaint")
 
 -- ---- interval tick defers while a structural refresh retry is pending ---------
 
