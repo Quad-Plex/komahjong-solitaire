@@ -24,6 +24,10 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 - **Failure recognition:** Provably-dead boards (e.g. two identical tiles stacked) trigger a loss dialog instead of an endless shuffle loop.
 - **Pause:** Freeze the game clock behind a tap-consuming overlay.
 - **Persistence:** Game state and settings are saved and restored on relaunch; lifetime stats (wins, times) survive across sessions.
+- **Selection behavior:** The Settings dialog controls whether tapping empty
+  board space clears the selected tile. `Deselect on empty` is enabled by
+  default; disabling it preserves the selection until it is matched or
+  replaced by another viable tile.
 - **Win summary + stats:** A win dialog and a lifetime-stats screen, with a confirm-gated reset.
 - **Localization:** English and German are available in Mahjong's Settings.
   On first launch, German KOReader locales select German automatically; English

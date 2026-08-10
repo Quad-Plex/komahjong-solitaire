@@ -54,7 +54,8 @@ captured from `example_app/casualkochess.koplugin`.
    (classic rule) — keep this rule, it makes Flower/Season pairs always matchable.
 7. **Input:** single taps only (e-ink). Tap a free tile to select it; tap a second free tile of
    the same kind to remove the pair. Tap a selected tile again to deselect. Invalid selection
-   just re-selects.
+   just re-selects. Tapping empty board space follows the persisted `deselect_on_empty`
+   setting (enabled by default): it either clears the selection or leaves it in place.
 8. **Rendering:** the board is an `InputContainer` that paints `IconWidget`s (the tile SVGs)
     absolutely positioned via an `OverlapGroup`'s `overlap_offset` — each tile at its real
     `(x, y, layer)` position on the shared grid. It hit-tests taps itself (topmost tile at the
@@ -67,7 +68,7 @@ captured from `example_app/casualkochess.koplugin`.
     delayed modal callbacks are board-identity guarded and invalidated on replacement or close.
 9. **Persistence:** `LuaSettings` in the KOReader settings dir; game state (tile deck, removed
    pairs, score) serialized to a table, saved on close, restored on start. Also persist a small
-   settings table (hints on/off, new-game confirmation, etc.).
+   settings table (`hints`, `deselect_on_empty`, score method, layout, and timer options).
 10. **No heavy background work needed** (no engine/AI) — the only timers are cosmetic (elapsed
     time). Coroutines are unnecessary; keep the UI loop simple.
 

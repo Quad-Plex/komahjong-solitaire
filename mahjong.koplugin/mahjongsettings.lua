@@ -52,6 +52,7 @@ local MahjongUI = require("mahjongui")
 local DEFAULTS = {
     language = "en",
     hints = true,
+    deselect_on_empty = true,
     score_method = "chain",
     layout = "turtle",
     timer_update = "interval",
@@ -69,7 +70,7 @@ local SettingsWidget = InputContainer:extend{
     onApply = nil,
     onCancel = nil,   -- optional hook so the owner can react to a discard
     changes = nil,    -- current (unsaved) values
-    _rows = nil,      -- { hints=btn, score_method=btn, timer_update=btn,
+    _rows = nil,      -- { hints=btn, deselect_on_empty=btn, score_method=btn, timer_update=btn,
                       --   timer_interval=btn }
     _panel_geom = nil, -- absolute screen rect of the floating panel (tap-outside test)
 }
@@ -133,6 +134,7 @@ function SettingsWidget:init()
     end
     self.changes = {
         hints = getv("hints", defaults.hints),
+        deselect_on_empty = getv("deselect_on_empty", defaults.deselect_on_empty),
         language = getv("language", defaults.language),
         score_method = getv("score_method", defaults.score_method),
         layout = getv("layout", defaults.layout),
@@ -200,7 +202,8 @@ function SettingsWidget:init()
     -- starts at the same x (the label lengths differ, which previously left
     -- the buttons staggered). (The Layout row was dropped from the dialog;
     -- the layout setting itself is still round-tripped via `changes`.)
-    local row_labels = { t("settings.hints"), t("settings.language"), t("hud.score"),
+    local row_labels = { t("settings.hints"), t("settings.deselect_on_empty"),
+                         t("settings.language"), t("hud.score"),
                          t("settings.timer_update"), t("settings.timer_interval") }
     local max_label_w = 0
     for _, l in ipairs(row_labels) do
@@ -249,6 +252,21 @@ function SettingsWidget:init()
         UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.hints = hints_btn
+
+    -- Empty-space deselection toggle ---------------------------------------
+    local deselect_on_empty_btn
+    deselect_on_empty_btn = makeButton(
+        self.changes.deselect_on_empty and t("settings.on") or t("settings.off"),
+        control_w, Screen:scaleBySize(32),
+        function()
+            return self.changes.deselect_on_empty and t("settings.on") or t("settings.off")
+        end)
+    deselect_on_empty_btn.callback = function()
+        self.changes.deselect_on_empty = not (self.changes.deselect_on_empty or false)
+        setButtonText(deselect_on_empty_btn, deselect_on_empty_btn.refresh())
+        UIManager:setDirty(self, "ui", self._panel_geom)
+    end
+    self._rows.deselect_on_empty = deselect_on_empty_btn
 
     local language_btn
     language_btn = makeButton(languageText(self.changes.language), control_w, Screen:scaleBySize(32),
@@ -395,6 +413,8 @@ function SettingsWidget:init()
             VerticalSpan:new{ width = gap },
             row(t("settings.hints"), hints_btn),
             VerticalSpan:new{ width = gap },
+            row(t("settings.deselect_on_empty"), deselect_on_empty_btn),
+            VerticalSpan:new{ width = gap },
             row(t("hud.score"), score_btn),
             VerticalSpan:new{ width = gap },
             row(t("settings.timer_update"), timer_mode_btn),
@@ -461,6 +481,7 @@ function SettingsWidget:save()
     local p = self.parent
     if p and p.setSetting then
         p:setSetting("hints", self.changes.hints)
+        p:setSetting("deselect_on_empty", self.changes.deselect_on_empty)
         p:setSetting("language", self.changes.language)
         p:setSetting("score_method", self.changes.score_method)
         p:setSetting("layout", self.changes.layout)
@@ -493,12 +514,14 @@ end
 function SettingsWidget:resetToDefaults()
     local defaults = self.settings_defaults or DEFAULTS
     self.changes.hints = defaults.hints
+    self.changes.deselect_on_empty = defaults.deselect_on_empty
     self.changes.language = defaults.language
     self.changes.score_method = defaults.score_method
     self.changes.layout = defaults.layout
     self.changes.timer_update = defaults.timer_update
     self.changes.timer_interval = defaults.timer_interval
     setButtonText(self._rows.hints, self._rows.hints.refresh())
+    setButtonText(self._rows.deselect_on_empty, self._rows.deselect_on_empty.refresh())
     setButtonText(self._rows.language, self._rows.language.refresh())
     setButtonText(self._rows.score_method, self._rows.score_method.refresh())
     setButtonText(self._rows.timer_update, self._rows.timer_update.refresh())

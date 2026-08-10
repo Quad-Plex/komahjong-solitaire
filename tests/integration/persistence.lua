@@ -230,17 +230,21 @@ expect(store.game == nil, "a won board is not left in the saved state")
 -- Baseline the settings file for a self-contained dialog walk: wipe the keys
 -- written by the earlier defaults section so the dialog starts from defaults.
 store.hints = nil
+store.deselect_on_empty = nil
 store.score_method = nil
 
 local mj6 = Mahjong:new()
 mj6.board = Logic.newGame(13)
 mj6:buildUILayout()
 expect(mj6:getSetting("hints", true) == true, "pre-dialog hints is the default true")
+expect(mj6:getSetting("deselect_on_empty", true) == true,
+    "pre-dialog deselect-on-empty is enabled by default")
 
 mj6:openSettings()
 local dlg = ctx.window_stack[#ctx.window_stack].widget
 expect(dlg ~= nil and dlg.name == "mahjongsettings", "openSettings shows the settings dialog")
-expect(dlg._rows ~= nil and dlg._rows.hints and dlg._rows.score_method,
+expect(dlg._rows ~= nil and dlg._rows.hints and dlg._rows.deselect_on_empty
+        and dlg._rows.score_method,
     "dialog exposes the setting rows")
 expect(dlg._rows.hints.text == "On", "hints row starts at the persisted value (On)")
 
@@ -256,6 +260,19 @@ for _, e in ipairs(ctx.window_stack) do
     if e.widget == dlg then dlg_still_open = true end
 end
 expect(not dlg_still_open, "Save closes the settings dialog")
+
+-- Empty-space deselection is independently persisted.
+mj6:openSettings()
+dlg = ctx.window_stack[#ctx.window_stack].widget
+dlg._rows.deselect_on_empty.callback()
+expect(dlg.changes.deselect_on_empty == false and dlg._rows.deselect_on_empty.text == "Off",
+    "toggling deselect-on-empty flips its unsaved value")
+expect(store.deselect_on_empty == true,
+    "deselect-on-empty remains at its saved value before Save")
+dlg:save()
+expect(store.deselect_on_empty == false
+        and mj6:getSetting("deselect_on_empty", true) == false,
+    "Save persists deselect-on-empty disabled")
 
 -- Cancel discards the (unsaved) changes.
 mj6:openSettings()
@@ -333,8 +350,8 @@ local vgroup = dlg_panel[1]
 expect(type(vgroup) == "table" and type(vgroup[3]) == "table",
     "the settings card holds a vertical row list")
 local row_indices = {
-    [3] = "hints", [5] = "score_method",
-    [7] = "timer_update", [9] = "timer_interval",
+    [3] = "hints", [5] = "deselect_on_empty", [7] = "score_method",
+    [9] = "timer_update", [11] = "timer_interval",
 }
 local btn_w = dlg._rows.hints.width
 local all_same_w = true
@@ -348,8 +365,8 @@ for i, key in pairs(row_indices) do
             and type(r[3]) == "table" and r[4] == dlg._rows[key],
         "settings row " .. key .. " is [pad, label, gap, button]")
 end
-expect(vgroup[3][2].text == "Hints" and vgroup[5][2].text == "Score"
-        and vgroup[9][2].text == "Timer interval",
+expect(vgroup[3][2].text == "Hints" and vgroup[5][2].text == "Deselect on empty"
+        and vgroup[7][2].text == "Score" and vgroup[11][2].text == "Timer interval",
     "row labels are the second element of each row")
 expect(vgroup[13] == nil or type(vgroup[13]) ~= "table" or vgroup[13][2] == nil
         or vgroup[13][2].text ~= "Layout",

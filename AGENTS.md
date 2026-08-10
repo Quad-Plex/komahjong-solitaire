@@ -540,8 +540,10 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     `{ax,ay,al,bx,by,bl,ka,kb,score,prev_last}`), validated hard on load (count sum must be 144,
     kinds valid, positions in the saved layout, history disjoint, layout id registered). A **v1**
     save (no `layout` field) restores as Turtle. An unknown saved `layout` id is corrupt →
-    fresh. Settings = their own keys (`hints`, `score_method`, `layout`,
-    `timer_update`, `timer_interval`). A **won (empty) board is NOT saved** —
+    fresh. Settings = their own keys (`hints`, `deselect_on_empty`, `score_method`,
+    `layout`, `timer_update`, `timer_interval`). `deselect_on_empty` defaults to
+    true; when false, an empty-board tap leaves the selected tile highlighted
+    until it is matched or replaced by another viable tile. A **won (empty) board is NOT saved** —
     the key is cleared. Corrupt state silently starts fresh.
 8. **Timer:** elapsed seconds always accrue (`getElapsed()` diffs `os.time()`); the mode only
    controls when the mm:ss **repaints** — `timer_update="interval"` (default, poll every

@@ -112,9 +112,11 @@ local HINT_PULSE_TICKS = 6
 -- default) or "move" (only repaint on board interaction, so an idle board
 -- never forces an e-ink refresh). timer_interval: seconds between periodic
 -- repaints (cosmetic; a 1 Hz e-ink repaint is overkill, 5 s is the default).
+-- deselect_on_empty: tapping empty board space clears the current selection.
 local SETTINGS_DEFAULTS = {
     language = "en",
     hints = true,               -- show hints on the toolbar / allow the Hint button
+    deselect_on_empty = true,   -- empty board taps clear the current selection
     score_method = "chain",     -- "chain" or "basic"
     layout = "turtle",
     timer_update = "interval",  -- "interval" or "move"
@@ -1106,6 +1108,10 @@ function Mahjong:buildUILayout()
             -- solve it must be a silent no-op just like a tile tap.
             if self._auto_solve_active then return end
             local hint_rects = self:clearHintBatched()
+            if not self:getSetting("deselect_on_empty", SETTINGS_DEFAULTS.deselect_on_empty) then
+                if #hint_rects > 0 then self.board_view:requestRefresh(hint_rects) end
+                return
+            end
             local selected = self.selected
             self.selected = nil
             if selected then

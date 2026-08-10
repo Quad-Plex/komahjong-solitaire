@@ -9,6 +9,7 @@
 --   * a tap on EMPTY board space (beside the stack) deselects the currently
 --     selected tile and drops its overlay;
 --   * an empty-area tap with nothing selected is a harmless no-op.
+--   * disabling the setting preserves a selected tile on an empty-area tap.
 
 local mock = require("mock")
 local ctx = mock.newContext()
@@ -116,6 +117,20 @@ local packed = { nil, { pos = { x = ex, y = ey } }, n = 2 }
 expect(bv["onTapSelect"](bv, unpack(packed, 1, packed.n)) == true
         and mj2.selected == nil,
     "empty-area tap via the real dispatch path still deselects")
+
+-- The setting-off behavior preserves the old selection until another viable
+-- tile is tapped or the selected tile is matched.
+local mj3 = Mahjong:new()
+mj3:setSetting("deselect_on_empty", false)
+mj3.board = boardWith{ {2,2,0,"b1"}, {4,2,0,"b1"} }
+mj3:buildUILayout()
+local bv3 = mj3.board_view
+bv3.dimen.x, bv3.dimen.y = 0, 0
+mj3:handleTileTap(2, 2, 0)
+local ex3, ey3 = findEmptyPoint(bv3)
+bv3:onTapSelect(nil, { pos = { x = ex3, y = ey3 } })
+expect(mj3.selected ~= nil and mj3.selected.x == 2 and mapCount(bv3.overlays) == 1,
+    "with deselect-on-empty off, empty board space preserves the selection")
 
 if failures == 0 then
     print("\nALL COMBO/HINT + EMPTY-TAP CHECKS PASSED")

@@ -62,7 +62,10 @@ Features:
   mm:ss repaints (`interval` poll vs. on-interaction).
 - **Persistence:** game state and settings live in one `LuaSettings` file;
   a won board is not saved, corrupt/tainted saves start fresh (a save tainted
-  by a mid-solve close auto-resumes the solver).
+  by a mid-solve close auto-resumes the solver). Settings include the
+  `deselect_on_empty` toggle: when enabled, tapping empty board space clears
+  the selected tile; when disabled, the selection remains until it is matched
+  or replaced by another viable tile.
 - **Win summary + stats (US-12/13):** a win dialog plus a lifetime-stats screen
   (games won, average time per win, and the rest of the `MahjongStats` record)
   with a confirm-gated reset.
