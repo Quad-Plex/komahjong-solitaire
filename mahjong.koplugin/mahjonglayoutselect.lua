@@ -105,6 +105,7 @@ local LayoutSelect = InputContainer:extend{
     best_times_by_layout = nil, -- map layout_id -> fastest win seconds (time chip)
     _card_rects = nil, -- { { id=, x=, y=, w=, h=, card= } } in widget-local coords
     _pending_pick = nil, -- layout id of a tapped-but-not-yet-dealt card (US-30)
+    _page_buttons_visible = true,
     page = 1,
     page_count = 1,
 }
@@ -592,12 +593,24 @@ function LayoutSelect:init()
         face = Font:getFace("smallinfofont", Screen:scaleBySize(15)),
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
+    local page_button_gap = Screen:scaleBySize(14)
+    self._page_indicator = indicator
+    self._page_footer_group = HorizontalGroup:new{
+        self._page_buttons_visible and left or HorizontalSpan:new{ width = left:getSize().w },
+        HorizontalSpan:new{ width = page_button_gap },
+        self._page_buttons_visible and indicator or HorizontalSpan:new{ width = indicator:getSize().w },
+        HorizontalSpan:new{ width = page_button_gap },
+        self._page_buttons_visible and right or HorizontalSpan:new{ width = right:getSize().w },
+    }
     local footer = CenterContainer:new{
-        HorizontalGroup:new{
-            left, HorizontalSpan:new{ width = Screen:scaleBySize(14) },
-            indicator, HorizontalSpan:new{ width = Screen:scaleBySize(14) }, right,
-        },
+        self._page_footer_group,
         dimen = Geometry:new{ w = self.full_width, h = footer_h },
+    }
+    self._page_footer_region = Geometry:new{
+        x = 0,
+        y = grid_top + grid_h + footer_gap,
+        w = self.full_width,
+        h = footer_h,
     }
     local grid = VerticalGroup:new{ unpack(grid_rows) }
     local content = VerticalGroup:new{
@@ -643,6 +656,19 @@ end
 
 function LayoutSelect:show()
     UIManager:show(self)
+end
+
+function LayoutSelect:setPageButtonsVisible(visible)
+    self._page_buttons_visible = visible ~= false
+    if self._page_footer_group then
+        self._page_footer_group[1] = self._page_buttons_visible and self._page_left
+            or HorizontalSpan:new{ width = self._page_left:getSize().w }
+        self._page_footer_group[3] = self._page_buttons_visible and self._page_indicator
+            or HorizontalSpan:new{ width = self._page_indicator:getSize().w }
+        self._page_footer_group[5] = self._page_buttons_visible and self._page_right
+            or HorizontalSpan:new{ width = self._page_right:getSize().w }
+    end
+    UIManager:setDirty(self, "ui")
 end
 
 -- The picker is an opaque full-screen widget, so it must enqueue its own

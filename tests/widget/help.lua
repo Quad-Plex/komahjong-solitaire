@@ -29,6 +29,12 @@ if picker and picker._help_btn then picker._help_btn.callback() end
 local help = ctx.window_stack[#ctx.window_stack].widget
 expect(help and help.name == "mahjonghelp", "question button opens the help page")
 expect(#ctx.window_stack == 2, "help is modal above the picker")
+expect(help._page_navigation_cover ~= nil,
+    "help covers the layout picker's page-navigation footer")
+expect(picker._page_footer_group[1] ~= picker._page_left
+        and picker._page_footer_group[3] ~= picker._page_indicator
+        and picker._page_footer_group[5] ~= picker._page_right,
+    "picker page buttons are hidden while help is open")
 
 local saw_icon = {}
 local saw_auto_solve = false
@@ -96,6 +102,10 @@ end
 help:closeDialog()
 expect(ctx.window_stack[#ctx.window_stack].widget == picker,
     "closing help returns to the layout picker")
+expect(picker._page_footer_group[1] == picker._page_left
+        and picker._page_footer_group[3] == picker._page_indicator
+        and picker._page_footer_group[5] == picker._page_right,
+    "picker page buttons reappear after help closes")
 expect(mj._help_dlg == nil, "closing help clears the owner reference")
 
 if failures > 0 then

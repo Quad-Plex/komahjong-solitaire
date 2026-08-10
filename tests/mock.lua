@@ -242,7 +242,13 @@ function M.newContext()
             end,
         },
         ["ui/widget/container/centercontainer"] = {
-            new = function(_, o) return o end,
+            new = function(_, o)
+                o = o or {}
+                o.getSize = function(self)
+                    return self.dimen or (self[1] and self[1]:getSize()) or { w = 0, h = 0 }
+                end
+                return o
+            end,
         },
         -- ScrollableContainer — a pass-through stub. The real widget clips +
         -- scrolls its `content` child; the stub just keeps the options table so

@@ -28,6 +28,8 @@ local HelpWidget = InputContainer:extend{
     full_width = Screen:getWidth(),
     full_height = Screen:getHeight(),
     _panel_geom = nil,
+    cover_region = nil,
+    _page_navigation_cover = nil,
     onClose = nil,
     page = 1,
 }
@@ -335,7 +337,33 @@ function HelpWidget:buildPage()
         x = math.floor((self.full_width - size.w) / 2), y = math.floor((self.full_height - size.h) / 2),
         w = size.w, h = size.h,
     }
-    self[1] = CenterContainer:new{ dimen = self.dimen, panel }
+    local centered = CenterContainer:new{ dimen = self.dimen, panel }
+    if self.cover_region then
+        local region = self.cover_region
+        local cover = FrameContainer:new{
+            width = region.w,
+            height = region.h,
+            background = Blitbuffer.COLOR_WHITE,
+            bordersize = 0,
+            padding = 0,
+            _padding_left = 0,
+            _padding_right = 0,
+            _padding_top = 0,
+            _padding_bottom = 0,
+        }
+        cover.getSize = function()
+            return Geometry:new{ w = region.w, h = region.h }
+        end
+        cover.overlap_offset = { region.x, region.y }
+        self._page_navigation_cover = cover
+        self[1] = OverlapGroup:new{
+            cover,
+            centered,
+            dimen = self.dimen,
+        }
+    else
+        self[1] = centered
+    end
     if UIManager:isWidgetShown(self) then
         UIManager:setDirty(self, "full")
     end

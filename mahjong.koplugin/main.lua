@@ -578,10 +578,25 @@ end
 
 function Mahjong:showHelp()
     if self._help_dlg then return end
+    local picker = self._picker_dlg
+    if picker then
+        picker:setPageButtonsVisible(false)
+        -- Help is a full-screen modal with a transparent area around its card.
+        -- Repaint the picker first so its old footer controls are cleared from
+        -- the framebuffer before the help window is placed above it.
+        UIManager:setDirty(picker, "full")
+        UIManager:forceRePaint()
+    end
     self._help_dlg = HelpWidget:new{
         full_width = self.full_width,
         full_height = self.full_height,
-        onClose = function() self._help_dlg = nil end,
+        cover_region = picker and picker._page_footer_region,
+        onClose = function()
+            self._help_dlg = nil
+            if self._picker_dlg == picker and picker then
+                picker:setPageButtonsVisible(true)
+            end
+        end,
     }
     UIManager:show(self._help_dlg)
 end
