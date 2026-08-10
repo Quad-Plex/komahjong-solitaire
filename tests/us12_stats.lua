@@ -151,12 +151,14 @@ expect(win_text:find("Congratulations! New overall best score and best time!", 1
     "a first win headlines a new overall best score and best time")
 expect(win_text:find("Score: 35 (New best!)", 1, true) ~= nil,
     "a first win marks the score row with New best!")
+expect(win_text:find("Layout: Turtle", 1, true) ~= nil,
+    "the summary shows the layout above the score")
 expect(win_text:find("Time: 00:45 (New best!)", 1, true) ~= nil,
     "a first win marks the time row with New best!")
 -- A new-best marker is rendered as a TextWidget ("(New best!)"), distinct from the
 -- trophy marker shown when no record is broken.
 local win_summary_first = ctx.last_confirm
-local nb_score = win_summary_first.win_rows and win_summary_first.win_rows[1].marker_widget
+local nb_score = win_summary_first.win_rows and win_summary_first.win_rows[2].marker_widget
 expect(nb_score ~= nil and nb_score.text == "(New best!)",
     "the score row's new-best marker is a TextWidget (not a trophy)")
 expect(win_text:find("Pairs matched: 2", 1, true) ~= nil, "the summary shows the pairs matched")
@@ -190,7 +192,7 @@ local row_group = win_summary._row_group
 expect(row_group ~= nil and row_group[1] ~= nil,
     "the summary card builds the aligned rows as a widget")
 local row_count = #(win_summary.win_rows or {})
-expect(row_count == 6, "the summary has 6 session rows (got " .. row_count .. ")")
+expect(row_count == 7, "the summary has 7 session rows (got " .. row_count .. ")")
 local text_is_headline = win_summary.text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil
 expect(text_is_headline, "the dialog's text is the headline (centered title)")
 -- The headline is the first child of the card's content VerticalGroup, wrapped
@@ -283,12 +285,12 @@ local function has_text(widget, txt)
     return false
 end
 local win_summary_worse = ctx.last_confirm
-local trophy_score_row = win_summary_worse.win_rows and win_summary_worse.win_rows[1].marker_widget
+local trophy_score_row = win_summary_worse.win_rows and win_summary_worse.win_rows[2].marker_widget
 expect(type(trophy_score_row) == "table"
     and has_icon(trophy_score_row, "mahjong/trophy")
     and has_text(trophy_score_row, "(") and has_text(trophy_score_row, ")"),
     "the score row's trophy marker brackets the IconWidget (mahjong/trophy)")
-local trophy_time_row = win_summary_worse.win_rows and win_summary_worse.win_rows[2].marker_widget
+local trophy_time_row = win_summary_worse.win_rows and win_summary_worse.win_rows[3].marker_widget
 expect(type(trophy_time_row) == "table"
     and has_icon(trophy_time_row, "mahjong/trophy")
     and has_text(trophy_time_row, "(") and has_text(trophy_time_row, ")"),

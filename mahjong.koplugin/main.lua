@@ -1702,6 +1702,7 @@ function Mahjong:showWinDialog()
     local time_marker, time_marker_widget = marker_for(time_is_new_best, time_best_str)
 
     local win_rows = {
+        { label = t("game.layout"),         value = t("layout." .. layout) },
         { label = t("hud.score"),           value = tostring(self.score),
           marker = score_marker, marker_widget = score_marker_widget },
         { label = t("game.time"),           value = MahjongLogic.formatElapsed(elapsed),
