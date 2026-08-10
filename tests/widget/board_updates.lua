@@ -77,6 +77,42 @@ expect(ok == true and tilesOf(p2) == 1 and #p2.overlap == 1,
 local rpx, rpy = p2:tilePos(2, 2, 0)
 expect(p2:hitTest(rpx + 1, rpy + 1).kind == "west", "remaining tile still hit-tests")
 
+-- A clear must repaint the tiles that disappeared, plus only a same-layer
+-- neighbour whose bevel artwork actually changed. Speculative west/north
+-- candidates used to make isolated clears drive an unnecessary ~2-tile region.
+local isolated = {}
+isolated[pk(2, 2, 0)] = "b1"
+isolated[pk(10, 6, 0)] = "b1"
+local isolated_board = Board:new{ board = isolated, width = 600, height = 400 }
+ctx.dirty_calls = {}
+isolated_board:removePair({ x = 2, y = 2, layer = 0 }, { x = 10, y = 6, layer = 0 })
+expect(#ctx.dirty_calls == 2,
+    "isolated pair clear refreshes only the two removed tile regions")
+
+local bevel = {}
+bevel[pk(4, 3, 0)] = "b1"
+bevel[pk(5, 3, 0)] = "b1"
+bevel[pk(10, 6, 0)] = "c1"
+local bevel_board = Board:new{ board = bevel, width = 600, height = 400 }
+ctx.dirty_calls = {}
+-- The board view is deliberately updated after the logic board, as main.lua
+-- does before invoking Board:removePair.
+bevel[pk(5, 3, 0)] = nil
+bevel[pk(10, 6, 0)] = nil
+bevel_board:removePair({ x = 5, y = 3, layer = 0 }, { x = 10, y = 6, layer = 0 })
+local west_x, west_y = bevel_board:tilePos(4, 3, 0)
+local refreshed_west_neighbour = false
+for _, call in ipairs(ctx.dirty_calls) do
+    local region = call.region
+    if region and west_x >= region.x and west_x < region.x + region.w
+            and west_y >= region.y and west_y < region.y + region.h then
+        refreshed_west_neighbour = true
+        break
+    end
+end
+expect(refreshed_west_neighbour,
+    "pair clear includes a neighbour only when its exposed bevel changes")
+
 -- ---- Overlays ---------------------------------------------------------------
 
 local p3 = Board:new{ board = proj2, width = 600, height = 400 }
@@ -177,10 +213,10 @@ local edge_board = Board:new{
 edge_parent.board_view = edge_board
 ctx.dirty_calls = {}
 local edge_x, edge_y, edge_layer = 5, 3, 0
-for key in pairs(edge_board.tile_widgets) do
-    local x, y, layer = key:match("^([^,]+),([^,]+),([^,]+)$")
+local edge_key = next(edge_board.tile_widgets)
+if edge_key then
+    local x, y, layer = edge_key:match("^([^,]+),([^,]+),([^,]+)$")
     edge_x, edge_y, edge_layer = tonumber(x), tonumber(y), tonumber(layer)
-    break
 end
 edge_board.tilePos = function() return 0, 0 end
 edge_board:requestRefresh({ { x = edge_x, y = edge_y, layer = edge_layer } })

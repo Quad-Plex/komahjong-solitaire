@@ -60,12 +60,16 @@ captured from `example_app/casualkochess.koplugin`.
     absolutely positioned via an `OverlapGroup`'s `overlap_offset` — each tile at its real
     `(x, y, layer)` position on the shared grid. It hit-tests taps itself (topmost tile at the
     tapped point wins) and forwards `(x, y, layer)`. The stock `ButtonTable` grid from the
-    original plan was replaced; `buttontable.lua`/`button.lua` shims were removed. Tiles install
-    into `DataStorage:getDataDir()/icons/mahjong/`. Incremental board updates use clipped,
-    screen-space `ui` refresh regions per connected local cluster: the anti-aliasing margin
-    must remain within the board canvas so it cannot merge with adjacent chrome. A structural
-    final-pair update settles its local retry before the full-screen win summary is shown;
-    delayed modal callbacks are board-identity guarded and invalidated on replacement or close.
+     original plan was replaced; `buttontable.lua`/`button.lua` shims were removed. Tiles install
+     into `DataStorage:getDataDir()/icons/mahjong/`. Incremental board updates use clipped,
+     screen-space `ui` refresh regions per connected local cluster: the anti-aliasing margin
+     must remain within the board canvas so it cannot merge with adjacent chrome. A pair clear
+     includes its removed tile rects and only same-layer west/north neighbours whose bevel icon
+     actually changed; it must not refresh every possible bevel candidate, because KOReader
+     merges edge-touching rects and turns that speculative set into a visibly larger EPDC drive.
+     A structural final-pair update settles its local retry before the full-screen win summary is
+     shown; delayed modal callbacks are board-identity guarded and invalidated on replacement or
+     close.
 9. **Persistence:** `LuaSettings` in the KOReader settings dir; game state (tile deck, removed
    pairs, score) serialized to a table, saved on close, restored on start. Also persist a small
    settings table (`hints`, `deselect_on_empty`, layout, and timer options). Chain/combo scoring

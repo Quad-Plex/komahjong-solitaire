@@ -322,24 +322,28 @@ end
 
 -- Recomputes the icons of a tile's same-layer west/north neighbours: the only
 -- tiles whose bevels can change when this tile is removed (its removal exposes
--- their right/bottom bevels) or added (it hides them). The tile itself may
+-- their right/bottom bevels) or added (it hides them). Returns only locations
+-- whose widget actually changed, so the EPDC never refreshes a speculative
+-- neighbour-sized cluster around every removed tile. The tile itself may
 -- already be gone — refreshTileIcon skips tiles without a widget.
 function Board:refreshWestNorthNeighbours(x, y, layer)
+    local changed = {}
     for dy = -0.5, 0.5, 0.5 do
-        self:refreshTileIcon(x - 1, y + dy, layer)
+        if self:refreshTileIcon(x - 1, y + dy, layer) then
+            changed[#changed + 1] = { x = x - 1, y = y + dy, layer = layer }
+        end
     end
     for dx = -0.5, 0.5, 0.5 do
-        self:refreshTileIcon(x + dx, y - 1, layer)
+        if self:refreshTileIcon(x + dx, y - 1, layer) then
+            changed[#changed + 1] = { x = x + dx, y = y - 1, layer = layer }
+        end
     end
+    return changed
 end
 
-local function refreshRectsForTile(x, y, layer)
-    local rects = { { x = x, y = y, layer = layer } }
-    for dy = -0.5, 0.5, 0.5 do
-        rects[#rects + 1] = { x = x - 1, y = y + dy, layer = layer }
-    end
-    for dx = -0.5, 0.5, 0.5 do
-        rects[#rects + 1] = { x = x + dx, y = y - 1, layer = layer }
+local function appendRefreshRects(rects, additions)
+    for _, r in ipairs(additions or {}) do
+        rects[#rects + 1] = r
     end
     return rects
 end
@@ -348,8 +352,9 @@ end
 -- sitting on the tile is dropped too. Repaints the board.
 function Board:removeTile(x, y, layer)
     if not self:dropTileWidget(x, y, layer) then return false end
-    self:refreshWestNorthNeighbours(x, y, layer)
-    self:syncOverlapGroup(refreshRectsForTile(x, y, layer))
+    local rects = { { x = x, y = y, layer = layer } }
+    appendRefreshRects(rects, self:refreshWestNorthNeighbours(x, y, layer))
+    self:syncOverlapGroup(rects)
     return true
 end
 
@@ -361,13 +366,13 @@ end
 function Board:refreshTileIcon(x, y, layer)
     local key = MahjongLogic.posKey(x, y, layer)
     local w = self.tile_widgets[key]
-    if not w then return end
+    if not w then return false end
 
     local icon_board = self.paused and self.empty_board or self.board
     local icon = MahjongLogic.iconForTile(icon_board, x, y, layer)
-    if not icon then return end
+    if not icon then return false end
     local new_icon = "mahjong/" .. icon
-    if w.icon == new_icon then return end
+    if w.icon == new_icon then return false end
 
     local px, py = self:tilePos(x, y, layer)
     local new_w = IconWidget:new{
@@ -381,6 +386,7 @@ function Board:refreshTileIcon(x, y, layer)
     -- Swap in the map
     self.tile_widgets[key] = new_w
     w:free()
+    return true
 end
 
 -- Synchronizes the OverlapGroup children with tiles_by_layer and overlays,
@@ -567,25 +573,27 @@ function Board:addTile(x, y, layer, kind, defer_sync)
     })
 
     -- Update same-layer neighbors whose bevels might now be occluded.
-    self:refreshWestNorthNeighbours(x, y, layer)
+    local changed = self:refreshWestNorthNeighbours(x, y, layer)
 
     if not defer_sync then
-        self:syncOverlapGroup(refreshRectsForTile(x, y, layer))
+        local rects = { { x = x, y = y, layer = layer } }
+        appendRefreshRects(rects, changed)
+        self:syncOverlapGroup(rects)
     end
-    return true
+    return true, changed
 end
 
 -- Restores a pair of tiles (a and b are { x, y, layer, kind } tables).
 -- Returns true if both tiles were added.
 function Board:addPair(a, b)
-    local ra = self:addTile(a.x, a.y, a.layer, a.kind, true)
-    local rb = self:addTile(b.x, b.y, b.layer, b.kind, true)
-    if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
-    if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
-    local rects = refreshRectsForTile(a.x, a.y, a.layer)
-    for _, r in ipairs(refreshRectsForTile(b.x, b.y, b.layer)) do
-        rects[#rects + 1] = r
-    end
+    local ra, changed_a = self:addTile(a.x, a.y, a.layer, a.kind, true)
+    local rb, changed_b = self:addTile(b.x, b.y, b.layer, b.kind, true)
+    local rects = {
+        { x = a.x, y = a.y, layer = a.layer },
+        { x = b.x, y = b.y, layer = b.layer },
+    }
+    appendRefreshRects(rects, changed_a)
+    appendRefreshRects(rects, changed_b)
     self:syncOverlapGroup(rects)
     return ra and rb
 end
@@ -609,15 +617,13 @@ end
 function Board:removePair(a, b, extra_rects)
     local ra = self:dropTileWidget(a.x, a.y, a.layer)
     local rb = self:dropTileWidget(b.x, b.y, b.layer)
-    if ra then self:refreshWestNorthNeighbours(a.x, a.y, a.layer) end
-    if rb then self:refreshWestNorthNeighbours(b.x, b.y, b.layer) end
-    local rects = refreshRectsForTile(a.x, a.y, a.layer)
-    for _, r in ipairs(refreshRectsForTile(b.x, b.y, b.layer)) do
-        rects[#rects + 1] = r
-    end
-    for _, r in ipairs(extra_rects or {}) do
-        rects[#rects + 1] = r
-    end
+    local rects = {
+        { x = a.x, y = a.y, layer = a.layer },
+        { x = b.x, y = b.y, layer = b.layer },
+    }
+    if ra then appendRefreshRects(rects, self:refreshWestNorthNeighbours(a.x, a.y, a.layer)) end
+    if rb then appendRefreshRects(rects, self:refreshWestNorthNeighbours(b.x, b.y, b.layer)) end
+    appendRefreshRects(rects, extra_rects)
     self:syncOverlapGroup(rects)
     self:queueStructuralRefreshRetry(rects)
     return ra and rb

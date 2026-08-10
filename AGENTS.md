@@ -266,6 +266,13 @@ input callback as a transaction that may be coalesced with the next callback.
   merges touching regions, but explicit grouping is more reliable for e-ink drivers. Clamp
   the margin to the board canvas: a region that reaches an edge-adjacent HUD/feedback band
   will be merged with that band by KOReader's open-range refresh queue and ceases to be local.
+- Do not enqueue speculative neighbour regions. A pair clear always includes its removed tile
+  rects, but a west/north same-layer neighbour belongs in the refresh only when its bevel icon
+  actually changed. KOReader merges edge-touching rectangles (`openIntersectWith`), so the old
+  practice of refreshing every possible bevel candidate made isolated clears drive a roughly
+  two-tile area and could expose lower layers while the EPDC applied it. Have
+  `refreshTileIcon()` report whether it replaced the widget, and refresh only those reported
+  neighbours.
 - Batch overlay transitions. Clear old highlight widgets and install new ones with refresh
   deferred, then enqueue one combined region covering both the old and new locations. This
   prevents a stale highlight clear and a new highlight paint from racing in separate
@@ -526,11 +533,14 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    axes) AND at least one horizontal side is open (`x-1` or `x+1` on the same layer, also
    half-grid aware).
 5. **Incremental board updates:** pair removal must NOT rebuild all 144 widgets. Use
-   `board_view:removePair(a, b)` / `removeTile` / `addTile` / `addPair`, which keep
-   `tiles_by_layer` + `tile_widgets` (posKey → IconWidget) in sync and end in
-   `syncOverlapGroup()` (rebuilds the OverlapGroup child array in layer order + overlays).
-   `removePair` drops BOTH widgets before refreshing neighbours (a stale widget with a nil kind
-   crashes on `"mahjong/" .. nil` — the US-10 bug).
+    `board_view:removePair(a, b)` / `removeTile` / `addTile` / `addPair`, which keep
+    `tiles_by_layer` + `tile_widgets` (posKey → IconWidget) in sync and end in
+    `syncOverlapGroup()` (rebuilds the OverlapGroup child array in layer order + overlays).
+    `removePair` drops BOTH widgets before refreshing neighbours (a stale widget with a nil kind
+    crashes on `"mahjong/" .. nil` — the US-10 bug). Its regional refresh contains the removed
+    tiles plus only neighbours whose bevel icon actually changed: do not add all possible
+    west/north candidates, because KOReader merges touching candidate rects into an unnecessarily
+    large EPDC drive.
 6. **Overlays** (`select`/`hint`) are extra IconWidgets appended AFTER all tiles in the same
    OverlapGroup, never added to `tiles_by_layer`, so they paint on top and taps pass through.
  7. **Persistence:** one `LuaSettings` file at `DataStorage:getSettingsDir()/mahjong.lua`. Game
