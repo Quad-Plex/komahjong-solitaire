@@ -179,6 +179,10 @@ btns[4].callback()
 -- US-14: New Game shows the picker (choosing a layout IS the confirmation).
 expect(ctx.last_confirm == nil, "New Game no longer prompts (picker instead)")
 pickTurtle()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text ==
+        "Start a new game? Your current game will be stopped.",
+    "picking over the restored game opens a replacement confirmation")
+ctx.last_confirm.ok_callback()
 expect(count(mj3.board) == 144, "New Game built a fresh 144-tile board")
 expect(store.game.board ~= saved_before and count(store.game.board) == 144
         and #store.game.history == 0,
@@ -444,6 +448,10 @@ expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
         and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
     "New Game opens the layout picker")
 pickTurtle()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text ==
+        "Start a new game? Your current game will be stopped.",
+    "picking over the active game opens a replacement confirmation")
+ctx.last_confirm.ok_callback()
 expect(mj7.board ~= old_board7 and count(mj7.board) == 144,
     "picking Turtle from the picker builds a fresh board")
 

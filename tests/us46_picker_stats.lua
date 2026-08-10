@@ -142,7 +142,41 @@ expect(picker3.game_in_background == true,
 expect(picker3._close_btn.icon == "chevron.left",
     "an active game behind the picker: the close button is a return arrow")
 
+-- Choosing a layout while an unfinished game is underneath must confirm before
+-- replacing that game. Cancel keeps both the picker and the old board intact.
+local old_board = mj2.board
+local replacement
+for _, c in ipairs(picker3._card_rects) do
+    if c.id == "spider" then replacement = c break end
+end
+picker3:onTapSelect(nil, { pos = { x = replacement.x + replacement.w / 2,
+                                   y = replacement.y + replacement.h / 2 } })
+ctx.runScheduled()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text ==
+        "Start a new game? Your current game will be stopped.",
+    "choosing a layout over an active game opens a replacement confirmation")
+expect(mj2.board == old_board, "the active game is unchanged before confirmation")
+ctx.last_confirm:onClose()
+expect(mj2.board == old_board, "cancelling replacement keeps the active game")
+expect(ctx.window_stack[#ctx.window_stack].widget == picker3,
+    "cancelling replacement leaves the layout picker open")
+
+-- Confirming the same selection closes the picker and replaces the board.
+picker3 = ctx.window_stack[#ctx.window_stack].widget
+for _, c in ipairs(picker3._card_rects) do
+    if c.id == "spider" then replacement = c break end
+end
+picker3:onTapSelect(nil, { pos = { x = replacement.x + replacement.w / 2,
+                                   y = replacement.y + replacement.h / 2 } })
+ctx.runScheduled()
+ctx.last_confirm.ok_callback()
+expect(mj2.board ~= old_board and mj2.layout == "spider",
+    "confirming replacement starts the selected layout")
+
 -- The stats card opened from this picker keeps the Map column for the board.
+-- Reopen the picker for the stats assertions below.
+mj2:showLayoutPicker()
+picker3 = ctx.window_stack[#ctx.window_stack].widget
 picker3._stats_btn.callback()
 card = ctx.window_stack[#ctx.window_stack].widget
 expect(card ~= nil and card.name == "mahjongstatswidget",

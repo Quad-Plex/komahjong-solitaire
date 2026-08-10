@@ -143,8 +143,13 @@ expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
     "New Game opens the layout picker")
 local old_board = mj.board
 pickTurtle()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text ==
+        "Start a new game? Your current game will be stopped.",
+    "picking a layout over the running game opens a replacement confirmation")
+expect(mj.board == old_board, "the running game remains until replacement is confirmed")
+ctx.last_confirm.ok_callback()
 expect(mj.board ~= old_board and Logic.tileCount(mj.board) == 144,
-    "picking Turtle from the New Game picker builds a fresh board")
+    "confirming the layout choice builds a fresh board")
 
 -- ---- Close / exit --------------------------------------------------------
 

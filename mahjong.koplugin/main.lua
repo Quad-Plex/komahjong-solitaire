@@ -533,9 +533,22 @@ function Mahjong:showLayoutPicker()
         full_height = self.full_height,
         parent = self,
         wins_by_layout = (self.stats and self.stats.layout_wins) or {},
-        highscores_by_layout = (self.stats and self.stats.layout_highscores) or {},
-        best_times_by_layout = (self.stats and self.stats.layout_best_times) or {},
-        onPick = function(id) self:startGameWithLayout(id) end,
+         highscores_by_layout = (self.stats and self.stats.layout_highscores) or {},
+         best_times_by_layout = (self.stats and self.stats.layout_best_times) or {},
+         onPick = function(id)
+             if self.board and not MahjongLogic.isWin(self.board) then
+                 UIManager:show(ConfirmBox:new{
+                     text = t("game.new_game_confirm"),
+                     ok_text = t("toolbar.new_game"),
+                     ok_callback = function()
+                         self:startGameWithLayout(id)
+                     end,
+                     cancel_text = t("toolbar.close"),
+                 })
+             else
+                 self:startGameWithLayout(id)
+             end
+         end,
         onHelp = function() self:showHelp() end,
         onSettings = function() self:openSettings() end,
         onStats = function() self:openStats() end,

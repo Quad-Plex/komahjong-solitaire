@@ -343,6 +343,10 @@ expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
         and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
     "New Game opens the layout picker")
 pickTurtle()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text ==
+        "Start a new game? Your current game will be stopped.",
+    "picking over the active game opens a replacement confirmation")
+ctx.last_confirm.ok_callback()
 expect(mj1.stats.games_played == played_before + 1,
     "a mid-game New Game bumps games_played")
 expect(mj1.stats.current_streak == 0,
