@@ -151,7 +151,7 @@ local CATALOG = {
          ["layout.taipei"] = "Taipeh", ["layout.crab"] = "Krabbe",
          ["layout.hare"] = "Hase", ["layout.horse"] = "Pferd", ["layout.tiger"] = "Tiger",
          ["layout.ram"] = "Widder", ["layout.monkey"] = "Affe", ["layout.rooster"] = "Hahn",
-         ["layout.dog"] = "Hund", ["layout.snake"] = "Schlange", ["layout.boar"] = "Eber",
+         ["layout.dog"] = "Hund", ["layout.snake"] = "Schlange", ["layout.boar"] = "Wildschwein",
          ["layout.ox"] = "Ochse", ["layout.wedges"] = "Keile", ["layout.hourglass"] = "Sanduhr",
     },
 }
