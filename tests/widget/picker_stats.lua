@@ -122,8 +122,6 @@ local menu2 = {}
 mj2:addToMainMenu(menu2)
 menu2.mahjong.callback()
 local picker2 = ctx.window_stack[#ctx.window_stack].widget
-picker2._page_right.callback()
-picker2 = ctx.window_stack[#ctx.window_stack].widget
 local turtle_r
 for _, c in ipairs(picker2._card_rects) do
     if c.id == "turtle" then turtle_r = c break end
@@ -148,8 +146,6 @@ expect(picker3._close_btn.icon == "chevron.left",
 -- replacing that game. Cancel keeps both the picker and the old board intact.
 local old_board = mj2.board
 local replacement
-picker3._page_right.callback()
-picker3 = ctx.window_stack[#ctx.window_stack].widget
 for _, c in ipairs(picker3._card_rects) do
     if c.id == "spider" then replacement = c break end
 end

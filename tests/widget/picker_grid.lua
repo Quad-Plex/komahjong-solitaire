@@ -1,9 +1,8 @@
 -- US-21 — Layout picker grid expansion suite.
 --
 -- Verifies the picker's grid grew from a fixed 2x3 (6-slot) layout to a
--- 3-column grid with dynamically computed rows (max(3, ceil(#ids/3))),
--- wrapped in a scroll container so 4+ rows scroll on small screens. One card
--- per registered layout, sorted by id, in the correct 3-column positions.
+-- 3-column grid with fixed four-row pages. One card per registered layout,
+-- with the established maps on page one and newer maps following on page two.
 -- Pick / close-X / tap-outside still work. This is the prerequisite for the
 -- US-22..29 boards that take the total past the old 6-slot ceiling.
 --
@@ -80,23 +79,17 @@ for i = 1, row0_count do
         .. " matches 3-column layout (expected ~" .. expected_x .. ")")
 end
 
--- Cards are appended in sorted-id order.
-local sorted = true
-for i = 2, #picker._card_rects do
-    if picker._card_rects[i].id < picker._card_rects[i-1].id then
-        sorted = false
-    end
-end
-expect(sorted, "cards appear in sorted-id order")
-
--- Card ids match the registered layout ids exactly.
-local card_ids = {}
-for _, c in ipairs(picker._card_rects) do card_ids[#card_ids + 1] = c.id end
+-- The original layouts remain together on the first screen; newly added maps
+-- are deliberately kept on the second screen instead of alphabetized in.
+local page_one = {
+    "bridge", "cloud", "confounding", "crab", "overpass", "pyramid",
+    "red-dragon", "spider", "taipei", "tictactoe", "turtle", "ziggurat",
+}
 local ids_match = true
-for i = 1, #picker._card_rects do
-    if card_ids[i] ~= ids[i] then ids_match = false end
+for i, id in ipairs(page_one) do
+    if picker._card_rects[i].id ~= id then ids_match = false end
 end
-expect(ids_match, "card ids match sorted registered layout ids")
+expect(ids_match, "page one keeps the established layout order")
 
 -- Every card has a non-nil thumbnail-backed content (the card was built).
 for _, c in ipairs(picker._card_rects) do
@@ -133,8 +126,6 @@ local mi3 = {}
 mj3:addToMainMenu(mi3)
 mi3.mahjong.callback()
 local picker3 = ctx.window_stack[#ctx.window_stack].widget
-picker3._page_right.callback()
-picker3 = ctx.window_stack[#ctx.window_stack].widget
 local turtle_card
 for _, c in ipairs(picker3._card_rects) do
     if c.id == "turtle" then turtle_card = c break end

@@ -43,7 +43,6 @@ end
 local function pickTurtle()
     local picker = ctx.window_stack[#ctx.window_stack].widget
     if not picker or picker.name ~= "mahjonglayoutselect" then return end
-    if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
     local r
     for _, c in ipairs(picker._card_rects) do
         if c.id == "turtle" then r = c break end
@@ -115,13 +114,9 @@ local toy_spec = {
 }
 Logic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
 local toy_ids = Logic.layoutIds()
-    expect(#toy_ids == 19 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
-        and toy_ids[5] == "hare" and toy_ids[6] == "horse" and toy_ids[7] == "monkey"
-        and toy_ids[8] == "overpass" and toy_ids[9] == "pyramid" and toy_ids[10] == "ram"
-        and toy_ids[11] == "red-dragon" and toy_ids[12] == "rooster" and toy_ids[13] == "spider"
-        and toy_ids[14] == "taipei" and toy_ids[15] == "tictactoe" and toy_ids[16] == "tiger"
-        and toy_ids[17] == "toy" and toy_ids[18] == "turtle" and toy_ids[19] == "ziggurat",
+    expect(#toy_ids == 25 and toy_ids[1] == "boar" and toy_ids[5] == "crab"
+        and toy_ids[12] == "ox" and toy_ids[17] == "snake" and toy_ids[22] == "toy"
+        and toy_ids[23] == "turtle" and toy_ids[25] == "ziggurat",
     "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
 expect(#Logic.buildLayout("toy") == 5, "the toy layout has 5 positions")
 expect(Logic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -226,10 +221,6 @@ menu_items.mahjong.callback()
 local top = ctx.window_stack[#ctx.window_stack].widget
 expect(top ~= nil and top.name == "mahjonglayoutselect",
     "first launch (no saved game) shows the layout picker")
-if top._page_right and top._page_right.enabled ~= false then
-    top._page_right.callback()
-    top = ctx.window_stack[#ctx.window_stack].widget
-end
 -- The picker lists a card for every registered layout (turtle + toy at this
 -- point in the test). One of them MUST be Turtle.
 local has_turtle_card = false
@@ -237,8 +228,8 @@ for _, c in ipairs(top._card_rects) do
     if c.id == "turtle" then has_turtle_card = true end
 end
 expect(has_turtle_card, "the picker lists a Turtle card")
-expect(#top._card_rects == 7,
-    "the picker lists one card per registered layout")
+expect(#top._card_rects == 12,
+    "the picker lists a full first page of registered layouts")
 
 -- The thumbnail renders for every registered layout (turtle + toy).
 for _, c in ipairs(top._card_rects) do

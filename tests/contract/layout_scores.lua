@@ -88,8 +88,6 @@ end
 store.game = nil
 store.stats = Stats.load{ layout_highscores = { turtle = 123, spider = 456 } }
 local picker2 = openPicker()
-picker2._page_right.callback()
-picker2 = ctx.window_stack[#ctx.window_stack].widget
 local tcard = cardById(picker2, "turtle")
 local scard = cardById(picker2, "spider")
 local ocard = cardById(picker2, "bridge")
@@ -210,8 +208,6 @@ end
 store.game = nil
 store.stats = Stats.load{ layout_best_times = { turtle = 125, spider = 90 } }
 local pickerT = openPicker()
-pickerT._page_right.callback()
-pickerT = ctx.window_stack[#ctx.window_stack].widget
 local tcardT = cardById(pickerT, "turtle")
 local scardT = cardById(pickerT, "spider")
 local ocardT = cardById(pickerT, "bridge")

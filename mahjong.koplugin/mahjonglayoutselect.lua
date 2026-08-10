@@ -61,6 +61,34 @@ local BEVEL_FRAC = 0.10
 -- refresh show the feedback while the board loads in the background.
 local TAP_FEEDBACK_SECONDS = 0.2
 
+-- Keep the original layouts together on the first screen. New layouts belong
+-- on the second screen rather than being interleaved by registry id. Unknown
+-- layouts (for example, an installed custom layout) follow in sorted order.
+local PICKER_LAYOUT_ORDER = {
+    "bridge", "cloud", "confounding", "crab", "overpass", "pyramid",
+    "red-dragon", "spider", "taipei", "tictactoe", "turtle", "ziggurat",
+    "hare", "horse", "tiger", "ram", "monkey", "rooster",
+    "dog", "snake", "boar", "ox", "wedges", "hourglass",
+}
+
+local function pickerLayoutIds()
+    local registered = MahjongLogic.layouts
+    local ids, seen = {}, {}
+    for _, id in ipairs(PICKER_LAYOUT_ORDER) do
+        if registered[id] then
+            ids[#ids + 1] = id
+            seen[id] = true
+        end
+    end
+    local extra = {}
+    for _, id in ipairs(MahjongLogic.layoutIds()) do
+        if not seen[id] then extra[#extra + 1] = id end
+    end
+    table.sort(extra)
+    for _, id in ipairs(extra) do ids[#ids + 1] = id end
+    return ids
+end
+
 local LayoutSelect = InputContainer:extend{
     name = "mahjonglayoutselect",
     full_width = Screen:getWidth(),
@@ -314,7 +342,7 @@ function LayoutSelect:init()
     self.dimen = Geometry:new{ x = 0, y = 0, w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
     self._card_rects = {}
-    local all_ids = MahjongLogic.layoutIds()
+    local all_ids = pickerLayoutIds()
     self.page_count = math.max(1, math.ceil(#all_ids / 12))
     self.page = math.max(1, math.min(self.page or 1, self.page_count))
 

@@ -40,14 +40,17 @@ for id, counts in pairs(expected) do
     expect(Logic.matchingFreePair(Logic.newGame(id), id) ~= nil, id .. " nil-rng deal has a move")
 end
 
-local ids = Logic.layoutIds()
-local positions = {}
-for i, id in ipairs(ids) do positions[id] = i end
-expect(positions.hare <= 12 and positions.horse <= 12 and positions.tiger > 12
-    and positions.ram <= 12 and positions.monkey <= 12 and positions.rooster <= 12
-    and positions.dog <= 12 and positions.snake > 12 and positions.boar <= 12
-    and positions.ox <= 12 and positions.wedges > 12 and positions.hourglass <= 12,
-    "animal cards follow sorted registry paging")
+local picker = Picker:new{}
+picker._page_right.callback()
+local animal_ids = {
+    hare = true, horse = true, tiger = true, ram = true, monkey = true, rooster = true,
+    dog = true, snake = true, boar = true, ox = true, wedges = true, hourglass = true,
+}
+local all_animals = #picker._card_rects == 12
+for _, card in ipairs(picker._card_rects) do
+    if not animal_ids[card.id] then all_animals = false end
+end
+expect(all_animals, "new animal and shape cards are grouped on page two")
 
 if failures == 0 then
     print("\nALL US-49 ZODIAC CHECKS PASSED")
