@@ -263,7 +263,9 @@ input callback as a transaction that may be coalesced with the next callback.
 - For a mutation affecting several tiles, build one region per connected local cluster,
   with a small raster edge margin, but do not take the bounding box of distant changes.
   Two tiles at opposite ends of a board must not produce a board-sized refresh. KOReader
-  merges touching regions, but explicit grouping is more reliable for e-ink drivers.
+  merges touching regions, but explicit grouping is more reliable for e-ink drivers. Clamp
+  the margin to the board canvas: a region that reaches an edge-adjacent HUD/feedback band
+  will be merged with that band by KOReader's open-range refresh queue and ceases to be local.
 - Batch overlay transitions. Clear old highlight widgets and install new ones with refresh
   deferred, then enqueue one combined region covering both the old and new locations. This
   prevents a stale highlight clear and a new highlight paint from racing in separate
@@ -277,6 +279,11 @@ input callback as a transaction that may be coalesced with the next callback.
   `UIManager:tickAfterNext` so the dialog-clear repaint gets an intervening UI tick first.
   Likewise, defer shuffle/dead-board dialogs after a pair clear until the cleared board has
   painted. A plain `nextTick` may still run before that repaint drains.
+- A terminal modal after a structural tile mutation needs the same care. In particular, do
+  not show a `covers_fullscreen` win summary in the batch that clears the final pair: it can
+  prevent the board's deferred structural retry from being painted. Queue the card after the
+  retry's repaint opportunity, guard it with the board identity, and invalidate the pending
+  transition on a new game or close.
 - Do not assume two refresh requests in one callback will paint two intermediate states.
   The final framebuffer is what gets painted, so update model state and widget structure
   consistently before the queued repaint. Use tokens or identity checks on delayed callbacks
@@ -753,7 +760,12 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
   flush pending tasks with `ctx.runScheduled()` (snapshot semantics: tasks scheduled while one
   runs — like the timer polling loop's reschedule — stay queued, so nothing spins). Tests that
   override `um.scheduleIn` themselves (us11/12/17/18/19) keep their own capture and must run
-  the deferred picker deal out of it.
+   the deferred picker deal out of it.
+- Rendering-transition harnesses must put the game widget on the mock window stack when they
+  test device-only sequencing. Direct `board` + `buildUILayout()` construction intentionally
+  takes the immediate path because it has no framebuffer/EPDC work to settle. The win-summary
+  transition is covered by `tests/us47_render_safety.lua`; flush each deferred snapshot in
+  order to verify both the structural retry and the later modal opening.
 - **US-14/30 picker in harness:** `startGame()` with no saved game now shows the layout picker
   instead of dealing a board. Harnesses that drive `menu_items.mahjong.callback()` or the
   toolbar's New Game button must pick a layout to proceed — the shared idiom is a small

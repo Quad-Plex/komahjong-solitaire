@@ -105,6 +105,7 @@ function M.newContext()
             end
             return false
         end,
+        forceRePaint = function() ctx.force_repaint_calls = (ctx.force_repaint_calls or 0) + 1 end,
         show = function(_, w)
             if w and w.ok_callback then
                 ctx.last_confirm = w

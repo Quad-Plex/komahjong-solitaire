@@ -166,6 +166,30 @@ p4:requestRefresh({
 expect(#ctx.dirty_calls == 1,
     "touching local board changes share one refresh region")
 
+-- The one-pixel raster margin must not escape the board at an outer edge.
+-- Escaping into the feedback/status bands would make KOReader merge this local
+-- repaint with adjacent chrome (it merges regions that share an edge).
+local edge_parent = {}
+local edge_board = Board:new{
+    board = proj3, width = 600, height = 400, show_parent = edge_parent,
+    refresh_origin_x = 10, refresh_origin_y = 20,
+}
+edge_parent.board_view = edge_board
+ctx.dirty_calls = {}
+local edge_x, edge_y, edge_layer = 5, 3, 0
+for key in pairs(edge_board.tile_widgets) do
+    local x, y, layer = key:match("^([^,]+),([^,]+),([^,]+)$")
+    edge_x, edge_y, edge_layer = tonumber(x), tonumber(y), tonumber(layer)
+    break
+end
+edge_board.tilePos = function() return 0, 0 end
+edge_board:requestRefresh({ { x = edge_x, y = edge_y, layer = edge_layer } })
+local edge_region = ctx.dirty_calls[1] and ctx.dirty_calls[1].region
+expect(edge_region and edge_region.x >= 10 and edge_region.y >= 20
+        and edge_region.x + edge_region.w <= 610
+        and edge_region.y + edge_region.h <= 420,
+    "board refresh margins stay within the board canvas")
+
 -- A live game retries structural pair regions after an intervening repaint;
 -- standalone boards deliberately do not schedule that owner-level fallback.
 local retry_parent = {}

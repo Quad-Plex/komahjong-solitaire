@@ -36,6 +36,16 @@ local MahjongUI = require("mahjongui")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
+local function isWidgetShown(widget)
+    if UIManager.isWidgetShown then
+        return UIManager:isWidgetShown(widget)
+    end
+    for _, window in ipairs(UIManager._window_stack or {}) do
+        if window.widget == widget then return true end
+    end
+    return false
+end
+
 local function getPluginPath()
     local src = debug.getinfo(1, "S").source or ""
     src = src:gsub("^@", "")
@@ -452,7 +462,8 @@ function Mahjong:handleEvent(event)
 end
 
 function Mahjong:startGame()
-    if UIManager.isWidgetShown and UIManager:isWidgetShown(self) then
+    self._win_dialog_pending = false
+    if isWidgetShown(self) then
         UIManager:close(self)
     end
     self:refreshScoreMethod()
@@ -565,6 +576,7 @@ end
 -- US-14: deals a fresh game on the chosen layout and shows the game (or
 -- rebuilds it if already shown). Called by the picker's onPick.
 function Mahjong:startGameWithLayout(id)
+    self._win_dialog_pending = false
     -- Drop the picker first; its onClose hook would otherwise resume the
     -- timer for the OLD board, which we're about to replace. "full" so the
     -- close enqueues a real refresh (a bare close leaves the e-ink stale;
@@ -601,7 +613,7 @@ function Mahjong:startGameWithLayout(id)
     -- If the game widget is already on the stack (New Game / Play again path),
     -- a fresh UIManager:show would duplicate it; only show when absent.
     local already_shown = false
-    if UIManager.isWidgetShown and UIManager:isWidgetShown(self) then
+    if isWidgetShown(self) then
         already_shown = true
     end
     if not already_shown then
@@ -1462,7 +1474,7 @@ end
 -- boards skip the shuffle offer and show the loss dialog instead.
 function Mahjong:checkGameState()
     if MahjongLogic.isWin(self.board) then
-        self:showWinDialog()
+        self:scheduleWinDialog()
         return
     end
     if MahjongLogic.hasMoves(self.board, self.layout) then return end
@@ -1481,6 +1493,41 @@ function Mahjong:checkGameState()
                 and not MahjongLogic.hasMoves(self.board, self.layout) then
             self:handleNoMoves()
         end
+    end)
+end
+
+-- The final pair changes the board structurally. Let its local repaint and
+-- retry settle before drawing the full-screen win card over it. This applies to
+-- both human play and auto-solve; keeping the transition in one place prevents
+-- either path from racing a modal against stale tile pixels.
+function Mahjong:scheduleWinDialog()
+    -- Direct logic/UI construction is used by the headless harness and has no
+    -- framebuffer race to settle. On-device, only defer when this game is an
+    -- actual window underneath the pending card.
+    local top_window = UIManager._window_stack and UIManager._window_stack[#UIManager._window_stack]
+    -- The headless harness has no framebuffer/repaint loop, so it deliberately
+    -- takes the immediate path. A real KOReader UIManager always exposes
+    -- _repaint; only there does the deferred ordering protect the EPDC.
+    if not UIManager._repaint or not isWidgetShown(self)
+            or not top_window or top_window.widget ~= self then
+        self:showWinDialog()
+        return
+    end
+    if self._win_dialog_pending then return end
+    self._win_dialog_pending = true
+    local board = self.board
+    UIManager:tickAfterNext(function()
+        -- removePair's own structural retry is also tickAfterNext. Its callback
+        -- runs in this tick, so wait one more repaint cycle before making the
+        -- summary a covers_fullscreen window; otherwise that retry is flagged
+        -- but skipped by UIManager's covered-window paint pass.
+        UIManager:nextTick(function()
+            self._win_dialog_pending = false
+            if self.board == board and self.board_view
+                    and MahjongLogic.isWin(self.board) then
+                self:showWinDialog()
+            end
+        end)
     end)
 end
 
@@ -2012,7 +2059,7 @@ function Mahjong:autoSolveStep()
     if MahjongLogic.isWin(self.board) then
         self._auto_solve_active = false
         self:clearFlash()
-        self:showWinDialog()
+        self:scheduleWinDialog()
         return
     end
     local pair = MahjongLogic.matchingFreePair(self.board, self.layout)
@@ -2044,7 +2091,7 @@ function Mahjong:autoSolveStep()
         -- in, though none is scheduled once _auto_solve_active is cleared).
         self._auto_solve_active = false
         self:clearFlash()
-        self:showWinDialog()
+        self:scheduleWinDialog()
         return
     end
     UIManager:scheduleIn(AUTO_SOLVE_STEP_SECONDS, function()
@@ -2230,6 +2277,7 @@ function Mahjong:updateStatus()
 end
 
 function Mahjong:onCloseWidget()
+    self._win_dialog_pending = false
     -- Invalidate any pending dead-board candidate callbacks before releasing
     -- the board; scheduled UI work must never mutate a closed game.
     self._shuffle_token = self._shuffle_token + 1

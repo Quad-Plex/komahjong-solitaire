@@ -12,7 +12,7 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 - **3D Board:** Renders the 144-tile stack as an outward-bevel 3D structure
   with portrait tiles and per-layer up-left offsets; bevels step cleanly onto
   the tiles beneath.
-- **E-ink Optimized:** High-contrast tile symbols and crisp bevels designed for grayscale screens.
+- **E-ink Optimized:** High-contrast tile symbols and crisp bevels designed for grayscale screens. Incremental tile refreshes stay within the board canvas, and terminal dialogs wait for the final tile repaint to settle so they cannot leave stale board pixels behind.
 - **Adaptive Sizing:** Automatically fits the board to your device's screen resolution.
 - **Core Gameplay:** Tap matching free tiles to remove them. Flowers match any flower, and seasons match any season.
 - **Scoring:** 10 points per pair, +5 chain bonus for consecutive same-group matches, and escalating fast-clear combos (+10, then +15, then +20 within 5 seconds); hint and shuffle cost score penalties.

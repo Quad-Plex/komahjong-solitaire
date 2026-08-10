@@ -34,7 +34,9 @@ Features:
   per-layout best-score chip (when a human win has recorded one).
 - **3D board:** portrait tiles on a shared grid, each upper layer shifted
   up-left by exactly one bevel so raised tiles' bevels step cleanly onto the
-  tiles beneath; dynamic bevel restoration when neighbours are removed.
+  tiles beneath; dynamic bevel restoration when neighbours are removed. Local
+  updates are clipped to the board canvas and terminal dialogs wait for a final
+  structural repaint to settle, avoiding stale or garbled e-ink frames.
 - **Scoring:** 10 points per pair plus a +5 chain bonus for consecutive matches
   of the same group (suited/wind/dragon kind, or flower→flower / season→season;
   disabled by the `score_method` setting). **Penalties (US-18):** a hint costs 5

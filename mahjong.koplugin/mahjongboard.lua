@@ -401,11 +401,23 @@ function Board:requestRefresh(rects)
         local regions = {}
         for _, r in ipairs(rects) do
             local x, y = self:tilePos(r.x, r.y, r.layer)
+            -- Keep the anti-aliasing margin inside the board canvas. A tile on
+            -- the board edge must not touch the status/feedback bands: KOReader
+            -- deliberately merges edge-adjacent regions, which would turn this
+            -- local tile repaint into a much larger chrome refresh.
+            local min_x = self.refresh_origin_x or 0
+            local min_y = self.refresh_origin_y or 0
+            local max_x = min_x + self.width
+            local max_y = min_y + self.height
+            local left = math.max(min_x, min_x + x - margin)
+            local top = math.max(min_y, min_y + y - margin)
+            local region_right = math.min(max_x, min_x + x + self.tile_w + margin)
+            local region_bottom = math.min(max_y, min_y + y + self.tile_h + margin)
             local region = {
-                x = (self.refresh_origin_x or 0) + x - margin,
-                y = (self.refresh_origin_y or 0) + y - margin,
-                w = self.tile_w + 2 * margin,
-                h = self.tile_h + 2 * margin,
+                x = left,
+                y = top,
+                w = math.max(0, region_right - left),
+                h = math.max(0, region_bottom - top),
             }
             local merged = true
             while merged do
