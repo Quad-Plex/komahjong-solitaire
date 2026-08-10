@@ -88,12 +88,18 @@ local function valueStrings(stats)
     local best_time = stats.best_time and MahjongLogic.formatElapsed(stats.best_time) or "—"
     local avg_time = won > 0
             and MahjongLogic.formatElapsed(math.floor((stats.total_time or 0) / won)) or "—"
+    local function withLayout(value, layout_id)
+        if type(layout_id) == "string" and layout_id ~= "" then
+            return value .. " (" .. t("layout." .. layout_id) .. ")"
+        end
+        return value
+    end
     return {
         played = tostring(played),
         won = tostring(won),
         win_rate = win_rate,
-        best_score = tostring(stats.best_score or 0),
-        best_time = best_time,
+        best_score = withLayout(tostring(stats.best_score or 0), stats.best_score_layout),
+        best_time = withLayout(best_time, stats.best_time_layout),
         avg_time = avg_time,
         current_streak = tostring(stats.current_streak or 0),
         longest_streak = tostring(stats.longest_streak or 0),

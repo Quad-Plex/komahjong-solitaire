@@ -33,8 +33,8 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-expect(#ids == 18 and ids[5] == "hare" and ids[13] == "spider" and ids[17] == "turtle",
-    "registry enumerates all 18 layouts (got " .. table.concat(ids, ",") .. ")")
+expect(#ids == 24 and ids[5] == "crab" and ids[18] == "spider" and ids[22] == "turtle",
+    "registry enumerates all 24 layouts (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("spider") == "Spider", "layoutName returns 'Spider'")
 expect(Logic.maxLayer("spider") == 3, "maxLayer(spider) == 3")
 
@@ -165,11 +165,9 @@ local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
-    if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
-    picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "first launch shows the layout picker")
-    expect(#picker._card_rects == #Logic.layoutIds() - 12,
+expect(#picker._card_rects == 12,
     "picker lists one card per registered layout (got " .. #picker._card_rects .. " cards, "
     .. #Logic.layoutIds() .. " ids)")
 
@@ -194,8 +192,11 @@ local spider_card
 for _, c in ipairs(picker._card_rects) do
     if c.id == "spider" then spider_card = c break end
 end
-picker:onTapSelect(nil, { pos = { x = spider_card.x + spider_card.w / 2,
-                                   y = spider_card.y + spider_card.h / 2 } })
+expect(spider_card ~= nil, "picker exposes the Spider card on page two")
+if spider_card then
+    picker:onTapSelect(nil, { pos = { x = spider_card.x + spider_card.w / 2,
+                                       y = spider_card.y + spider_card.h / 2 } })
+end
 ctx.runScheduled() -- US-30: the picker deals on a deferred tick (flush it)
 expect(mj.board ~= nil and Logic.tileCount(mj.board) == 144,
     "picking Spider deals a 144-tile board")

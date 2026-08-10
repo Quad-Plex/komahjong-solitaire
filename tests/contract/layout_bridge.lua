@@ -48,9 +48,9 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-expect(#ids == 18 and ids[1] == "bridge" and ids[5] == "hare"
-        and ids[13] == "spider" and ids[17] == "turtle",
-    "registry enumerates all 18 layouts (got " .. table.concat(ids, ",") .. ")")
+expect(#ids == 24 and ids[1] == "boar" and ids[5] == "crab"
+        and ids[18] == "spider" and ids[22] == "turtle",
+    "registry enumerates all 24 layouts (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("bridge") == "Bridge", "layoutName returns 'Bridge'")
 expect(Logic.maxLayer("bridge") == 3, "maxLayer(bridge) == 3")
 
@@ -177,30 +177,22 @@ local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
-if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
-picker = ctx.window_stack[#ctx.window_stack].widget
-if picker._page_left and picker._page_left.enabled ~= false then picker._page_left.callback() end
-picker = ctx.window_stack[#ctx.window_stack].widget
-    expect(picker ~= nil and picker.name == "mahjonglayoutselect",
-        "first launch shows the layout picker")
-    expect(#picker._card_rects == math.min(12, #Logic.layoutIds()),
-        "picker lists one card per registered layout (got " .. #picker._card_rects .. " cards, "
-        .. #Logic.layoutIds() .. " ids)")
+expect(picker ~= nil and picker.name == "mahjonglayoutselect",
+    "first launch shows the layout picker")
+expect(#picker._card_rects == math.min(12, #Logic.layoutIds()),
+    "picker lists one card per registered layout (got " .. #picker._card_rects .. " cards, "
+    .. #Logic.layoutIds() .. " ids)")
 
 local has_bridge_card = false
 for _, c in ipairs(picker._card_rects) do
     if c.id == "bridge" then has_bridge_card = true end
 end
 expect(has_bridge_card, "picker has a Bridge card")
-picker._page_right.callback()
-picker = ctx.window_stack[#ctx.window_stack].widget
 local has_spider_card = false
 for _, c in ipairs(picker._card_rects) do
     if c.id == "spider" then has_spider_card = true end
 end
 expect(has_spider_card, "picker has a Spider card")
-picker._page_left.callback()
-picker = ctx.window_stack[#ctx.window_stack].widget
 
 -- Thumbnail renders for Bridge.
 local thumb = LayoutSelect.layoutThumbnail("bridge", 200, 200)

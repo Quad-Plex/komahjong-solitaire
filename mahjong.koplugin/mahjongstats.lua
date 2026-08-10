@@ -6,7 +6,9 @@
 --                    auto-solver (US-19) never bumps this)
 --   games_won        human-played wins (auto-solve wins do not count)
 --   best_score       highest winning score (0 until the first win)
+--   best_score_layout layout id where best_score was achieved
 --   best_time        seconds of the fastest win; nil until the first win
+--   best_time_layout  layout id where best_time was achieved
 --   total_time       cumulative seconds of all wins (for the average-time
 --                    row on the US-13 stats screen)
 --   current_streak   consecutive wins; reset to 0 by startGame() when the
@@ -45,13 +47,30 @@
 
 local MahjongStats = {}
 
+-- Finds a stable layout id for a legacy global record by matching the value in
+-- a per-layout map. Sorting avoids depending on pairs() iteration order when
+-- multiple layouts share the same record.
+local function matchingLayout(map, value)
+    if type(map) ~= "table" or value == nil then return nil end
+    local ids = {}
+    for id, candidate in pairs(map) do
+        if type(id) == "string" and candidate == value then
+            ids[#ids + 1] = id
+        end
+    end
+    table.sort(ids)
+    return ids[1]
+end
+
 -- A fresh, zeroed record.
 function MahjongStats.defaults()
     return {
         games_played = 0,
         games_won = 0,
         best_score = 0,
+        best_score_layout = nil,
         best_time = nil, -- nil = no win yet (fastest-win seconds once set)
+        best_time_layout = nil,
         total_time = 0, -- cumulative win seconds (average time per win)
         current_streak = 0,
         longest_streak = 0,
@@ -79,7 +98,13 @@ function MahjongStats.load(saved)
     stats.games_played = num(saved.games_played) or 0
     stats.games_won = num(saved.games_won) or 0
     stats.best_score = num(saved.best_score) or 0
+    if type(saved.best_score_layout) == "string" and saved.best_score_layout ~= "" then
+        stats.best_score_layout = saved.best_score_layout
+    end
     stats.best_time = num(saved.best_time)
+    if type(saved.best_time_layout) == "string" and saved.best_time_layout ~= "" then
+        stats.best_time_layout = saved.best_time_layout
+    end
     stats.total_time = num(saved.total_time) or 0
     stats.current_streak = num(saved.current_streak) or 0
     stats.longest_streak = num(saved.longest_streak) or 0
@@ -115,6 +140,14 @@ function MahjongStats.load(saved)
                 stats.layout_best_times[id] = n
             end
         end
+    end
+    -- Migrate pre-provenance records. Older saves have the global best values
+    -- and the per-layout maps, but not the layout ids that achieved them.
+    if stats.best_score_layout == nil then
+        stats.best_score_layout = matchingLayout(stats.layout_highscores, stats.best_score)
+    end
+    if stats.best_time_layout == nil then
+        stats.best_time_layout = matchingLayout(stats.layout_best_times, stats.best_time)
     end
     -- layout_played / layout_current_streaks / layout_longest_streaks /
     -- layout_total_times are per-layout counters, sanitized like the maps
@@ -192,8 +225,9 @@ end
 -- so once set it only ever decreases; it stays nil until the first win.
 -- `pairs` (the number of matched pairs in the winning game) is accepted for
 -- forward-compatibility (a future stats screen may record it); it is not part
--- of the lifetime record today.
-function MahjongStats.recordWin(stats, score, elapsed, pairs) -- luacheck: ignore 212
+-- of the lifetime record today. `layout_id` records where a new global best
+-- was achieved; it is optional to preserve the legacy call shape.
+function MahjongStats.recordWin(stats, score, elapsed, pairs, layout_id) -- luacheck: ignore 212
     stats.games_won = stats.games_won + 1
     stats.current_streak = stats.current_streak + 1
     if stats.current_streak > stats.longest_streak then
@@ -202,10 +236,12 @@ function MahjongStats.recordWin(stats, score, elapsed, pairs) -- luacheck: ignor
     local new_best_score = score > (stats.best_score or 0)
     if new_best_score then
         stats.best_score = score
+        stats.best_score_layout = type(layout_id) == "string" and layout_id ~= "" and layout_id or nil
     end
     local new_best_time = elapsed ~= nil and (stats.best_time == nil or elapsed < stats.best_time)
     if new_best_time then
         stats.best_time = elapsed
+        stats.best_time_layout = type(layout_id) == "string" and layout_id ~= "" and layout_id or nil
     end
     -- Cumulative win time feeds the "Average time per win" row on the US-13
     -- stats screen (recordWin is only ever called for real wins).
@@ -319,7 +355,8 @@ function MahjongStats.runSelfTests()
     local nb, nbt = MahjongStats.recordWin(s, 100, 90, 72)
     check(s.games_won == 1 and s.current_streak == 1 and s.longest_streak == 1,
         "recordWin bumps games_won / current_streak / longest_streak")
-    check(s.best_score == 100 and s.best_time == 90,
+    check(s.best_score == 100 and s.best_time == 90
+        and s.best_score_layout == nil and s.best_time_layout == nil,
         "the first win sets the best-score and best-time records")
     check(nb and nbt, "the first win reports both new bests")
     check(s.total_time == 90, "recordWin accumulates the win time (total_time)")
@@ -348,6 +385,27 @@ function MahjongStats.runSelfTests()
     check(s.best_score == 150 and s.best_time == 60,
         "a higher score with a slower time updates only the best score")
     check(nb5 and not nbt5, "only the score reports a new best")
+
+    local provenance = MahjongStats.defaults()
+    MahjongStats.recordWin(provenance, 100, 90, 72, "spider")
+    MahjongStats.recordWin(provenance, 90, 60, 72, "turtle")
+    check(provenance.best_score_layout == "spider"
+        and provenance.best_time_layout == "turtle",
+        "global records retain the layouts where they were achieved")
+    local loaded_provenance = MahjongStats.load{
+        best_score = 100, best_score_layout = "spider",
+        best_time = 60, best_time_layout = "turtle",
+    }
+    check(loaded_provenance.best_score_layout == "spider"
+        and loaded_provenance.best_time_layout == "turtle",
+        "global record layout provenance persists through load")
+    local migrated = MahjongStats.load{
+        best_score = 250, best_time = 80,
+        layout_highscores = { turtle = 200, spider = 250 },
+        layout_best_times = { turtle = 95, spider = 80 },
+    }
+    check(migrated.best_score_layout == "spider" and migrated.best_time_layout == "spider",
+        "legacy global records infer layout provenance from per-layout records")
 
     -- Streak: consecutive wins increment; an abandoned game resets the streak
     -- but keeps the longest-streak peak.

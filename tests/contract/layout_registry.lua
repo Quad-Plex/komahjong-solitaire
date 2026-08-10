@@ -386,18 +386,14 @@ end
 expect(not restored_via_picker,
     "a restored game does NOT show the picker (resumes directly)")
 
--- ---- Deregister the toy layout (restore the 12 built-in layouts) ---------------
+-- ---- Deregister the toy layout (restore the 24 built-in layouts) ---------------
 
 Logic.deregisterLayout("toy")
-expect(#Logic.layoutIds() == 18 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "cloud"
-        and Logic.layoutIds()[3] == "confounding" and Logic.layoutIds()[4] == "crab"
-        and Logic.layoutIds()[5] == "hare" and Logic.layoutIds()[6] == "horse" and Logic.layoutIds()[7] == "monkey"
-        and Logic.layoutIds()[8] == "overpass" and Logic.layoutIds()[9] == "pyramid" and Logic.layoutIds()[10] == "ram"
-        and Logic.layoutIds()[11] == "red-dragon" and Logic.layoutIds()[12] == "rooster" and Logic.layoutIds()[13] == "spider"
-        and Logic.layoutIds()[14] == "taipei" and Logic.layoutIds()[15] == "tictactoe" and Logic.layoutIds()[16] == "tiger"
-        and Logic.layoutIds()[17] == "turtle" and Logic.layoutIds()[18] == "ziggurat",
-    "deregistering the toy layout restores the {bridge, cloud, confounding, crab, overpass,\n"
-    .. "pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} registry")
+local restored_ids = Logic.layoutIds()
+expect(#restored_ids == 24
+        and table.concat(restored_ids, ",") ==
+            "boar,bridge,cloud,confounding,crab,dog,hare,horse,hourglass,monkey,overpass,ox,pyramid,ram,red-dragon,rooster,snake,spider,taipei,tictactoe,tiger,turtle,wedges,ziggurat",
+    "deregistering the toy layout restores the complete built-in registry")
 
 if failures == 0 then
     print("\nALL US-14 LAYOUT-REGISTRY CHECKS PASSED")

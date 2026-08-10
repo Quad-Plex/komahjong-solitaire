@@ -127,6 +127,8 @@ mj.stats.games_played = 10
 mj.stats.games_won = 4
 mj.stats.best_score = 340
 mj.stats.best_time = 95
+mj.stats.best_score_layout = "spider"
+mj.stats.best_time_layout = "turtle"
 mj.stats.total_time = 480
 mj.stats.current_streak = 2
 mj.stats.longest_streak = 3
@@ -162,8 +164,10 @@ expect(map_col[1][2].text == "Turtle", "the right column is headed by the layout
 expect(dlg._values.played.text == "10", "card shows Games played")
 expect(dlg._values.won.text == "4", "card shows Games won")
 expect(dlg._values.win_rate.text == "40%", "card shows the win rate (4/10)")
-expect(dlg._values.best_score.text == "340", "card shows Best score")
-expect(dlg._values.best_time.text == "01:35", "card shows Best time (95 s)")
+expect(dlg._values.best_score.text == "340 (Spider)",
+    "card shows Best score with the layout where it was achieved")
+expect(dlg._values.best_time.text == "01:35 (Turtle)",
+    "card shows Best time with the layout where it was achieved")
 expect(dlg._values.avg_time.text == "02:00", "card shows Average time per win (480/4)")
 expect(dlg._values.current_streak.text == "2", "card shows Current streak")
 expect(dlg._values.longest_streak.text == "3", "card shows Longest streak")

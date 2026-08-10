@@ -1658,7 +1658,7 @@ function Mahjong:showWinDialog()
     local new_layout_score, new_layout_time = false, false
     if not self.game_was_autosolved then
         new_best_score, new_best_time = MahjongStats.recordWin(
-            self.stats, self.score, elapsed, pairs)
+            self.stats, self.score, elapsed, pairs, self.layout)
         -- US-30: the layout picker's trophy badge counts human wins per layout
         -- (auto-solve wins never reach recordWin, so they never count either).
         -- US-31: the same call records the layout's best winning score for the
