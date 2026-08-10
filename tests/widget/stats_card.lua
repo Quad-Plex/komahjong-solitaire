@@ -212,6 +212,8 @@ local panel = dlg[1][1]
 expect(type(panel) == "table" and panel.background == "white"
         and panel.bordersize ~= nil and panel.radius ~= nil,
     "the centered panel is a bordered white card")
+expect(panel.padding == 10,
+    "the stats card uses compact side padding")
 expect(type(dlg._panel_geom) == "table" and type(dlg._panel_geom.w) == "number"
         and type(dlg._panel_geom.h) == "number",
     "the panel's screen rect is exposed for the tap-outside test")

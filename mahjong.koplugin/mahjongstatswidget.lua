@@ -202,8 +202,9 @@ function StatsWidget:init()
     -- With no layout selected (show_map=false) the card is a single Global
     -- column, so the two-column math collapses to one column width.
     local content_w = show_map and (column_w * 2 + col_gap) or column_w
-    local panel_padding = math.min(Screen:scaleBySize(24),
-        math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05)))
+    -- This card is content-sized; large responsive padding leaves conspicuous
+    -- empty margins beside the columns and pushes the close button outward.
+    local panel_padding = Screen:scaleBySize(10)
     local max_panel_w = math.max(1, self.full_width - 2 * Screen:scaleBySize(8))
 
     self._values = {}
