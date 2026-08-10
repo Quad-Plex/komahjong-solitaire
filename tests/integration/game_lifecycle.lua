@@ -4,6 +4,7 @@
 -- structure and control flow against the current implementation.
 
 local mock = require("mock")
+local fixtures = require("support.fixtures")
 local ctx = mock.newContext()
 
 local failures = 0
@@ -18,18 +19,6 @@ end
 
 -- US-14: startGame with no saved game shows the layout picker; pick Turtle to
 -- deal a board. Drives the real tap path (hit-test the Turtle card).
-local function pickTurtle()
-    local picker = ctx.window_stack[#ctx.window_stack].widget
-    if not picker or picker.name ~= "mahjonglayoutselect" then return end
-    if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
-    local r
-    for _, c in ipairs(picker._card_rects) do
-        if c.id == "turtle" then r = c break end
-    end
-    picker:onTapSelect(nil, { pos = { x = r.x + r.w / 2, y = r.y + r.h / 2 } })
-    ctx.runScheduled() -- US-30: the picker deals on a deferred tick (flush it)
-end
-
 -- ---- _meta.lua ----------------------------------------------------------
 
 local meta = ctx.loadPlugin("_meta")
@@ -70,7 +59,7 @@ menu_items.mahjong.callback()
 expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
         and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
     "startGame with no saved game shows the layout picker")
-pickTurtle()
+fixtures.pickTurtle(ctx)
 expect(#ctx.window_stack == 1 and ctx.window_stack[1].widget == mj,
     "startGame shows the plugin widget")
 expect(type(mj.board) == "table" and Logic.tileCount(mj.board) == 144,
@@ -143,7 +132,7 @@ expect(ctx.window_stack[#ctx.window_stack].widget ~= nil
         and ctx.window_stack[#ctx.window_stack].widget.name == "mahjonglayoutselect",
     "New Game opens the layout picker")
 local old_board = mj.board
-pickTurtle()
+fixtures.pickTurtle(ctx)
 expect(ctx.last_confirm ~= nil and ctx.last_confirm.text ==
         "Start a new game? Your current game will be stopped.",
     "picking a layout over the running game opens a replacement confirmation")

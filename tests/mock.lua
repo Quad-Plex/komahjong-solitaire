@@ -1,6 +1,6 @@
 -- Shared KOReader stub infrastructure for the headless test suite.
 --
--- Each tests/us*.lua creates a fresh context with mock.newContext(), loads the
+-- Each manifest-listed suite creates a fresh context with mock.newContext(), loads the
 -- REAL plugin modules through it (mock:loadPlugin), and asserts behavior.
 -- KOReader's UI cannot be exercised headlessly; the stubs prove load-order,
 -- return values, and control flow. Visual checks still need the device/emulator.

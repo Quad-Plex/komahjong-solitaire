@@ -41,8 +41,10 @@ using the table above. Use the same coordinate conversion and no-runtime-
 decoder rule as US-49. Preserve half-grid coordinates where they occur.
 
 Add English/German `layout.<id>` strings; update the registry documentation;
-and add `tests/us40_zodiac_two.lua` to `tests/run.sh`. The harness covers the
-same pure-logic, persistence, board-widget and picker-page checks as US-49.
+and extend the shared layout contract data and suite listed in
+`tests/manifest.lua`. The contract covers the same pure-logic, persistence,
+board-widget and picker-page checks as US-49 without cloning a story-specific
+harness.
 
 The final expected sorted registry order is:
 

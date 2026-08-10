@@ -96,8 +96,10 @@ Then fully restart KOReader and open **Tools → Mahjong Solitaire**.
 ## Development
 
 Game-logic modules are pure Lua so they can be tested headlessly. Run the
-official suite with `tests/run.sh` (syntax check, `luacheck`, logic
-self-tests, headless harnesses).
+official feature-driven suite with `tests/run.sh` (syntax check, `luacheck`,
+logic self-tests, and the deterministic suites listed in
+`tests/manifest.lua`). Shared files under `tests/support/` are fixtures, not
+executable suites.
 
 ### Icon tooling (`tools/`)
 

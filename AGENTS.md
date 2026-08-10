@@ -382,22 +382,16 @@ local area, with a delayed retry only for structural changes that can overlap ra
   device. `tests/mock.lua` now mirrors the real `OverlapGroup:getSize()` (iterates children,
   calls `getSize()`, applies `dimen` override). When you stub a container for tests, mimic its real
    `getSize`/`init` behavior or the suite can't catch layout crashes.
-- **`ScrollableContainer` pitfalls (US-21).** The scroll container module is
-  `ui/widget/container/scrollablecontainer` (class `ScrollableContainer`), **not**
-  `svcontainer` — the latter does not exist on the device and a bad `require`
-  path causes a load-time error that silently drops the entire plugin.
-  `ScrollableContainer:initState()` reads `self[1]:getSize()` for its content,
-  so the content **must** be passed as a positional child
-  (`ScrollableContainer:new{ child, dimen = ... }`), not a named `content` field.
-  Finally, the parent widget passed to `UIManager:show` must set
-  `self.cropping_widget` to the scroll container so the UIManager confines
-  repaints/flashes to the clipped region (see `mahjonglayoutselect.lua` `show()`).
+- **Current picker contract (US-48).** The layout picker uses fixed three-column
+  by four-row pages. Do not reintroduce `ScrollableContainer` or scroll-era
+  cropping behavior; page changes and card selection are tested through the
+  picker widget's active-page hit regions.
 
-## Mahjong plugin — current state and key contracts (US-01..US-35, US-22a shipped)
+## Mahjong plugin — current state and key contracts (US-01..US-49 shipped; US-50 planned)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..US-35, US-22a
+per user story; `_completed` in the filename marks shipped stories — US-01..US-49
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -432,11 +426,11 @@ mahjong.koplugin/            # the deliverable
 │                            #   lifetime stats + Reset-after-confirm
 ├── mahjongpause.lua         # pause overlay (US-17): floating card with a Resume button; the
 │                            #   full-screen tap gesture consumes taps (no tap-outside dismiss)
-├── mahjonglayoutselect.lua  # full-screen layout picker (US-14): 2x3 grid of cards, each a
+├── mahjonglayoutselect.lua  # full-screen layout picker (US-14): fixed 3x4 paged grid, each a
 │                            #   thumbnail (miniature schematic of the layout's positions) +
 │                            #   name; tapping a card deals a game on that layout
 └── icons/*.svg              # generated tile faces + UI glyphs (gen_icons.py owns them all)
-tests/                       # official suite (tests/run.sh): mock.lua + usNN_*.lua harnesses
+tests/                       # official feature-driven suite (manifest.lua + support + suites)
 tools/                       # gen_icons.py, check_icons.py, preview.py (icon QA, not in suite)
 install_plugin.sh            # rsync to the Kindle over /mnt/d
 example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
@@ -611,7 +605,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     otherwise (first launch, New Game, win "Play again") it shows the full-screen
     `mahjonglayoutselect.lua` picker — choosing a layout IS the New Game confirmation, so the
     old New Game `ConfirmBox` and the `confirm_new_game` setting are retired. The picker is an opaque
-    `InputContainer` (full-screen, not a floating card) with a 2x3 grid of cards (one per registered layout, sorted id order); each card is a
+    `InputContainer` (full-screen, not a floating card) with a fixed 3x4 paged grid of cards (one per registered layout, sorted id order); each card is a
     `FrameContainer` holding a `layoutThumbnail(id, w, h)` schematic (an `OverlapGroup` of small
     rounded `FrameContainer` tiles, one per layout position, per-layer up-left offset so the 3D
     shape reads) plus the layout name. A single full-screen `TapSelect` gesture hit-tests the
@@ -743,10 +737,11 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 
 - Tooling now installed on this machine: `lua` (5.1) and `luacheck` (via luarocks).
   The official suite is `tests/`; run everything with `tests/run.sh` (syntax check
-  `luac -p`, `luacheck mahjong.koplugin/`, the embedded `mahjonglogic.lua`/`mahjonglayouts.lua`
-  self-tests, and the
-  headless harnesses). **All future stories must extend this suite** (add a new `tests/usNN_*.lua`
-  and register it in `tests/run.sh`), not create throwaway scripts.
+  `luac -p`, `luacheck mahjong.koplugin/`, embedded pure-module self-tests, and
+  the suites listed in `tests/manifest.lua`). New tests are feature-owned and
+  extend the responsible suite; add a manifest entry rather than creating a
+  story-numbered harness. Modify `run.sh` only for runner, discovery, or
+  environment behavior. Do not create throwaway scripts.
 - Icon QA lives in `tools/` (not the test suite, which must stay dependency-free):
   `tools/gen_icons.py` regenerates the tile SVGs, `tools/check_icons.py` asserts the icons
   parse, match the generator, touch edge-to-edge with no gaps, and aren't clipped,
@@ -767,7 +762,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 - Rendering-transition harnesses must put the game widget on the mock window stack when they
   test device-only sequencing. Direct `board` + `buildUILayout()` construction intentionally
   takes the immediate path because it has no framebuffer/EPDC work to settle. The win-summary
-  transition is covered by `tests/us47_render_safety.lua`; flush each deferred snapshot in
+    transition is covered by `tests/integration/render_safety.lua`; flush each deferred snapshot in
   order to verify both the structural retry and the later modal opening.
 - **US-14/30 picker in harness:** `startGame()` with no saved game now shows the layout picker
   instead of dealing a board. Harnesses that drive `menu_items.mahjong.callback()` or the

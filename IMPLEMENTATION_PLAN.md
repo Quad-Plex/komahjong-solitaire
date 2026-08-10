@@ -112,12 +112,14 @@ kindle_majong/
 │   ├── US-31_layout-highscore_completed.md
 │   ├── US-32_failure-recognition_completed.md
 │   ├── US-33_autosolve-lock_completed.md
-│   ├── US-48_paged-layout-picker.md
-│   ├── US-49_zodiac-layouts-one.md
+│   ├── US-48_paged-layout-picker_completed.md
+│   ├── US-49_zodiac-layouts-one_completed.md
 │   └── US-50_zodiac-layouts-two.md
-├── tests/                        # official test suite (tests/run.sh)
-│   ├── run.sh                    # luac -p + luacheck + logic self-tests + harnesses
-│   ├── mock.lua                  # shared KOReader stubs (fresh mock.newContext() per test)
+├── tests/                        # official feature-driven test suite (tests/run.sh)
+│   ├── run.sh                    # syntax/lint/self-tests + manifest suites
+│   ├── manifest.lua              # authoritative deterministic suite list
+│   ├── mock.lua                  # shared KOReader stubs (fresh context per suite)
+│   ├── support/                  # assertions, fixtures, picker and layout data
 │   ├── us01_shell.lua            # meta, menu, dispatcher, startGame/new-game/exit shell
 │   ├── us03_icons.lua            # installIconsIfNeeded copies every SVG
 │   ├── us06_board.lua            # 3D turtle: geometry, z-order, hit-test, taps, wiring
@@ -171,7 +173,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-33, US-22a, US-37**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-33, US-22a, US-37, US-48, US-49**.
 
 | Story | File | Status |
 |---|---|---|
@@ -210,9 +212,10 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-32 — Failure recognition (deadlock detection) | [US-32_failure-recognition_completed.md](implementation-plan/US-32_failure-recognition_completed.md) | ✅ completed |
 | US-33 — Uninterruptible auto-solve (input lock + tainted save + resume-on-reload) | [US-33_autosolve-lock_completed.md](implementation-plan/US-33_autosolve-lock_completed.md) | ✅ completed |
 | US-37 — English/German localization with runtime language selection | [US-37_localization_completed.md](implementation-plan/US-37_localization_completed.md) | ✅ completed |
-| US-48 — Paged layout picker (fixed 3×4 pages) | [US-48_paged-layout-picker.md](implementation-plan/US-48_paged-layout-picker.md) | ✅ completed |
-| US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one.md](implementation-plan/US-49_zodiac-layouts-one.md) | ✅ completed |
+| US-48 — Paged layout picker (fixed 3×4 pages) | [US-48_paged-layout-picker_completed.md](implementation-plan/US-48_paged-layout-picker_completed.md) | ✅ completed |
+| US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one_completed.md](implementation-plan/US-49_zodiac-layouts-one_completed.md) | ✅ completed |
 | US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two.md](implementation-plan/US-50_zodiac-layouts-two.md) | planned |
+| US-51 — Feature-driven test-suite transformation | [US-51_test-suite-transformation.md](implementation-plan/US-51_test-suite-transformation.md) | planned |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) had shipped. A full git checkout of the GNOME
@@ -232,6 +235,14 @@ maps are added. US-49 adds six compact, multi-layer, 144-tile layouts from PySol
 revisiting the already-exhausted GNOME source. The built-in collection now has 18 layouts: the
 first twelve sorted maps remain page one, while the six US-49 maps occupy the beginning of page
 two. US-50 is planned and will fill the remaining page-two slots.
+
+US-51 transforms the historical story-oriented harness collection into a
+feature-driven suite. `tests/manifest.lua` is the executable inventory and
+`tests/support/` contains non-executable shared infrastructure. Existing
+coverage is migrated by ownership; future changes extend the owning feature
+suite and add a manifest entry rather than cloning a story harness. Layout
+contracts are grouped below `tests/contract/` while retaining each layout's
+distinctive edge-case assertions.
 
 ## Agent workflow for each story
 
@@ -290,7 +301,7 @@ The layout picker (US-14) made the New Game `ConfirmBox` redundant — choosing 
 is the confirmation. The original plan kept the `confirm_new_game` setting key around
 and just stopped consulting it on the New-Game path, deferring a small cleanup. After
 shipping, that cleanup landed too: the setting default, its settings-dialog toggle row,
-and all test references to it were removed (the `tests/us10_persistence.lua` dialog
+and all test references to it were removed (the persistence feature suite's dialog
 section was rewritten to exercise toggle/Cancel/Reset via `hints` and `score_method`
 instead). `confirm_new_game` no longer exists anywhere in code, config, or tests.
 

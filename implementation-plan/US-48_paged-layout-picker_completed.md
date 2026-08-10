@@ -91,8 +91,9 @@ also choose a card. The close X remains the only way to cancel the picker.
 
 ### 4. Tests
 
-Extend `tests/us21_picker.lua` or add `tests/us38_paged_picker.lua`, and
-register any new harness in `tests/run.sh`. Cover:
+Extend the feature-owned picker suite listed in `tests/manifest.lua`. Do not
+create a story-numbered harness or edit `tests/run.sh` merely to add coverage.
+Cover:
 
 - With the current 12 built-ins, `page_count == 1`, `_card_rects` has all 12
   sorted ids, four rows of three cards, and both the scroll-container require
