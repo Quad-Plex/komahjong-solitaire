@@ -60,13 +60,8 @@ end
 -- {"bridge", "cloud", "confounding", "overpass", "pyramid", "red-dragon",
 -- "spider", "taipei", "tictactoe", "turtle", "ziggurat"} (sorted).
 local ids = Logic.layoutIds()
-expect(#ids == 18 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
-         and ids[4] == "crab" and ids[5] == "hare" and ids[6] == "horse" and ids[7] == "monkey"
-         and ids[8] == "overpass" and ids[9] == "pyramid" and ids[10] == "ram"
-         and ids[11] == "red-dragon" and ids[12] == "rooster" and ids[13] == "spider"
-         and ids[14] == "taipei" and ids[15] == "tictactoe" and ids[16] == "tiger"
-         and ids[17] == "turtle" and ids[18] == "ziggurat",
-    "registry enumerates all 18 built-in layouts (got "
+expect(#ids == 24 and table.concat(ids, ",") == "boar,bridge,cloud,confounding,crab,dog,hare,horse,hourglass,monkey,overpass,ox,pyramid,ram,red-dragon,rooster,snake,spider,taipei,tictactoe,tiger,turtle,wedges,ziggurat",
+     "registry enumerates all 24 built-in layouts (got "
     .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
 expect(Logic.layoutName("spider") == "Spider", "layoutName returns the registered Spider name")

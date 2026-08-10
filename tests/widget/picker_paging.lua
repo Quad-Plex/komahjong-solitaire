@@ -45,9 +45,9 @@ expect(picker._page_left.enabled ~= false, "left arrow is enabled on page two")
 
 picker._page_right.callback()
 expect(picker.page == 3, "right arrow changes to page three")
-expect(#picker._card_rects == 6, "page three contains the remaining six cards")
-expect(picker._card_rects[1].id == ids[25] and picker._card_rects[6].id == ids[30],
-    "page three contains registry slots twenty-five through thirty")
+expect(#picker._card_rects == 12, "page three contains the remaining twelve cards")
+expect(picker._card_rects[1].id == ids[25] and picker._card_rects[12].id == ids[36],
+    "page three contains registry slots twenty-five through thirty-six")
 expect(picker._page_right.enabled == false, "right arrow is disabled on the last page")
 picker._page_left.callback()
 

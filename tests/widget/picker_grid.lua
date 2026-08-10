@@ -100,12 +100,13 @@ expect(ids_match, "card ids match sorted registered layout ids")
 
 -- Every card has a non-nil thumbnail-backed content (the card was built).
 for _, c in ipairs(picker._card_rects) do
-    expect(c.id == "bridge" or c.id == "cloud" or c.id == "confounding"
-            or c.id == "crab" or c.id == "hare" or c.id == "horse" or c.id == "monkey"
-            or c.id == "overpass" or c.id == "pyramid" or c.id == "ram"
+    expect(c.id == "boar" or c.id == "bridge" or c.id == "cloud" or c.id == "confounding"
+            or c.id == "crab" or c.id == "dog" or c.id == "hare" or c.id == "horse"
+            or c.id == "hourglass" or c.id == "monkey" or c.id == "overpass" or c.id == "ox"
+            or c.id == "pyramid" or c.id == "ram"
             or c.id == "red-dragon" or c.id == "spider" or c.id == "taipei"
             or c.id == "tictactoe" or c.id == "tiger" or c.id == "turtle"
-            or c.id == "rooster" or c.id == "ziggurat",
+            or c.id == "rooster" or c.id == "snake" or c.id == "wedges" or c.id == "ziggurat",
         "card id is a known layout (" .. tostring(c.id) .. ")")
 end
 

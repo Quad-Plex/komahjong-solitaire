@@ -981,13 +981,9 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 19 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
-        and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
-        and toy_ids[5] == "hare" and toy_ids[6] == "horse" and toy_ids[7] == "monkey"
-        and toy_ids[8] == "overpass" and toy_ids[9] == "pyramid" and toy_ids[10] == "ram"
-        and toy_ids[11] == "red-dragon" and toy_ids[12] == "rooster" and toy_ids[13] == "spider"
-        and toy_ids[14] == "taipei" and toy_ids[15] == "tictactoe" and toy_ids[16] == "tiger"
-        and toy_ids[17] == "toy" and toy_ids[18] == "turtle" and toy_ids[19] == "ziggurat",
+    check(#toy_ids == 25 and toy_ids[1] == "boar" and toy_ids[6] == "dog"
+        and toy_ids[7] == "hare" and toy_ids[9] == "hourglass"
+        and toy_ids[12] == "ox" and toy_ids[22] == "toy" and toy_ids[25] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -1021,7 +1017,7 @@ function MahjongLogic.runSelfTests()
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
     MahjongLogic.deregisterLayout("toy")
-    check(#MahjongLogic.layoutIds() == 18,
+    check(#MahjongLogic.layoutIds() == 24,
         "deregistering toy restores the built-in registry including animal maps: "
         .. "{bridge, cloud, confounding, crab, hare, horse, monkey, overpass, "
         .. "pyramid, ram, red-dragon, rooster, spider, taipei, tictactoe, tiger, turtle, "

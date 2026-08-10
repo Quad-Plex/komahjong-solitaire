@@ -83,6 +83,8 @@ local CATALOG = {
          ["layout.taipei"] = "Taipei", ["layout.crab"] = "Crab",
          ["layout.hare"] = "Hare", ["layout.horse"] = "Horse", ["layout.tiger"] = "Tiger",
          ["layout.ram"] = "Ram", ["layout.monkey"] = "Monkey", ["layout.rooster"] = "Rooster",
+         ["layout.dog"] = "Dog", ["layout.snake"] = "Snake", ["layout.boar"] = "Boar",
+         ["layout.ox"] = "Ox", ["layout.wedges"] = "Wedges", ["layout.hourglass"] = "Hourglass",
     },
     de = {
         ["app.name"] = "Mahjong Solitaire", ["app.description"] = "Mahjong-Solitaire-Spiel für KOReader.",
@@ -149,6 +151,8 @@ local CATALOG = {
          ["layout.taipei"] = "Taipeh", ["layout.crab"] = "Krabbe",
          ["layout.hare"] = "Hase", ["layout.horse"] = "Pferd", ["layout.tiger"] = "Tiger",
          ["layout.ram"] = "Widder", ["layout.monkey"] = "Affe", ["layout.rooster"] = "Hahn",
+         ["layout.dog"] = "Hund", ["layout.snake"] = "Schlange", ["layout.boar"] = "Eber",
+         ["layout.ox"] = "Ochse", ["layout.wedges"] = "Keile", ["layout.hourglass"] = "Sanduhr",
     },
 }
 
