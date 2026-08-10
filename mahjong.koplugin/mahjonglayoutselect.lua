@@ -1,10 +1,8 @@
 -- Layout selection screen (US-14) — full-screen picker.
 --
 -- A full-screen opaque widget (not a floating card): choosing a layout is a
--- fresh start, so the previous board does not need to show through. A 3-column
--- grid on Kindle-sized canvases, and a 2-column grid on narrow phones, holds one
--- card per registered layout (dynamically many rows — minimum 3) and is wrapped
--- in a scroll container so extra rows scroll instead of clipping (US-21). Each
+-- fresh start, so the previous board does not need to show through. The picker
+-- uses fixed 3-column by 4-row pages with a small footer pager (US-48). Each
 -- card carries a small thumbnail (a miniature schematic
 -- of the layout's positions — small rounded rects per tile, per-layer up-left
 -- offset so the 3D shape reads) centered by the tower's face center of mass
@@ -38,7 +36,6 @@ local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local CenterContainer = require("ui/widget/container/centercontainer")
-local SVContainer = require("ui/widget/container/scrollablecontainer")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
@@ -80,6 +77,8 @@ local LayoutSelect = InputContainer:extend{
     best_times_by_layout = nil, -- map layout_id -> fastest win seconds (time chip)
     _card_rects = nil, -- { { id=, x=, y=, w=, h=, card= } } in widget-local coords
     _pending_pick = nil, -- layout id of a tapped-but-not-yet-dealt card (US-30)
+    page = 1,
+    page_count = 1,
 }
 
 -- Builds a miniature schematic of a layout's positions, scaled to fit a w x h
@@ -315,6 +314,9 @@ function LayoutSelect:init()
     self.dimen = Geometry:new{ x = 0, y = 0, w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
     self._card_rects = {}
+    local all_ids = MahjongLogic.layoutIds()
+    self.page_count = math.max(1, math.ceil(#all_ids / 12))
+    self.page = math.max(1, math.min(self.page or 1, self.page_count))
 
     local edge_pad = math.min(Screen:scaleBySize(16),
         math.max(Screen:scaleBySize(4), math.floor(self.full_width * 0.04)))
@@ -409,24 +411,20 @@ function LayoutSelect:init()
         width = title_row_w,
     }
 
-    -- Grid: 3 columns with a dynamically computed row count. Every registered
-    -- layout gets a card (one per id, sorted); rows = ceil(#ids / 3) floored at
-    -- 3 so the grid never shrinks below the original 3-row footprint. An SVContainer
-    -- wraps the grid so a tall grid (4+ rows on small e-ink screens) scrolls instead
-    -- of clipping (US-21 — prerequisite for the full GNOME board set).
-    -- Three columns preserve the original picker on Kindle-sized canvases.
-    -- A narrow phone gets two wider cards; the scroll container handles the
-    -- extra rows without shrinking the thumbnails into unreadable slivers.
-    local cols = self.full_width < 480 and 2 or 3
-    local ids = MahjongLogic.layoutIds()
-    local rows = math.max(3, math.ceil(#ids / cols))
+    -- US-48: every page has exactly three columns and four rows. Empty slots
+    -- remain transparent so a partial final page keeps the same geometry.
+    local cols, rows = 3, 4
+    local ids = all_ids
     local title_row_h = math.max(title_h, close_size)
     local top_pad = Screen:scaleBySize(5)
     local grid_top = top_pad + title_row_h + Screen:scaleBySize(16)
     local grid_w = self.full_width - 2 * edge_pad - (cols - 1) * gap
     local card_w = math.max(1, math.floor(grid_w / cols))
-    local grid_h = math.max(1, self.full_height - grid_top - edge_pad - (rows - 1) * gap)
-    local card_h = math.max(Screen:scaleBySize(120), math.floor(grid_h / rows))
+    local footer_h = Screen:scaleBySize(34)
+    local footer_gap = Screen:scaleBySize(8)
+    local grid_h = math.max(1, self.full_height - grid_top - edge_pad - footer_gap - footer_h
+        - (rows - 1) * gap)
+    local card_h = math.max(1, math.floor(grid_h / rows))
 
     -- Card layout: thumbnail on top, name underneath.
     local name_h = math.min(Screen:scaleBySize(28), math.max(Screen:scaleBySize(16), math.floor(card_h * 0.25)))
@@ -441,7 +439,7 @@ function LayoutSelect:init()
         local row_children = { HorizontalSpan:new{ width = edge_pad } }
         for c = 0, cols - 1 do
             slot = slot + 1
-            local id = ids[slot]
+            local id = ids[(self.page - 1) * 12 + slot]
             if id then
                 local thumb = layoutThumbnail(id, thumb_w, thumb_h)
                 -- US-30: played-count badge in the top-right corner of the
@@ -543,31 +541,45 @@ function LayoutSelect:init()
         end
     end
 
-    -- Wrap the grid rows in an SVContainer (scroll view) so the grid scrolls
-    -- vertically on small screens when 4+ rows don't fit. The card-rect math
-    -- above records positions in widget-local coords: the SVContainer sits at
-    -- x=0 within the content VerticalGroup, and the grid rows' left edge_pad
-    -- span places the first card at x=edge_pad — matching _card_rects. The
-    -- SVContainer's width is the full grid-row width (edge_pad + cards + gaps
-    -- + edge_pad) so no card is clipped by the viewport; height is capped to
-    -- the available screen space, letting the full grid scroll when it
-    -- overflows (US-21).
-    local grid_total_h = rows * card_h + (rows - 1) * gap
-    local grid_avail_h = math.max(1, self.full_height - grid_top - edge_pad)
-    local grid_content_w = 2 * edge_pad + cols * card_w + (cols - 1) * gap
-    local grid_scroller = SVContainer:new{
-        VerticalGroup:new{
-            unpack(grid_rows),
-        },
-        dimen = Geometry:new{ w = grid_content_w, h = math.min(grid_avail_h, grid_total_h) },
+    local left = ButtonWidget:new{
+        text = "←", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
+        bordersize = Screen:scaleBySize(1), padding = 0,
+        callback = function() self:setPage(self.page - 1) end,
     }
+    local right = ButtonWidget:new{
+        text = "→", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
+        bordersize = Screen:scaleBySize(1), padding = 0,
+        callback = function() self:setPage(self.page + 1) end,
+    }
+    if self.page == 1 then
+        if left.disable then left:disable() else left.enabled = false end
+    end
+    if self.page == self.page_count then
+        if right.disable then right:disable() else right.enabled = false end
+    end
+    self._page_left = left
+    self._page_right = right
+    local indicator = TextWidget:new{
+        text = string.format("%d/%d", self.page, self.page_count), padding = 0,
+        face = Font:getFace("smallinfofont", Screen:scaleBySize(15)),
+        fgcolor = Blitbuffer.COLOR_BLACK,
+    }
+    local footer = CenterContainer:new{
+        HorizontalGroup:new{
+            left, HorizontalSpan:new{ width = Screen:scaleBySize(14) },
+            indicator, HorizontalSpan:new{ width = Screen:scaleBySize(14) }, right,
+        },
+        dimen = Geometry:new{ w = self.full_width, h = footer_h },
+    }
+    local grid = VerticalGroup:new{ unpack(grid_rows) }
     local content = VerticalGroup:new{
         VerticalSpan:new{ width = top_pad },
         title_row,
         VerticalSpan:new{ width = Screen:scaleBySize(16) },
-        grid_scroller,
+        grid,
+        VerticalSpan:new{ width = footer_gap },
+        footer,
     }
-    self._grid_scroller = grid_scroller
 
     -- Wrap in an opaque full-screen FrameContainer so the picker paints a
     -- solid background (hides the previous board behind it).
@@ -592,11 +604,16 @@ function LayoutSelect:init()
     }
 end
 
+function LayoutSelect:setPage(page)
+    page = math.max(1, math.min(page, self.page_count or 1))
+    if page == self.page then return end
+    self._pending_pick = nil
+    self.page = page
+    self:init()
+    UIManager:setDirty(self, "ui")
+end
+
 function LayoutSelect:show()
-    -- Scrolling content lives in a ScrollableContainer; KOReader requires the
-    -- top-level widget to expose it as cropping_widget so the UIManager can
-    -- confine repaints/flashes to the clipped region.
-    self.cropping_widget = self._grid_scroller
     UIManager:show(self)
 end
 

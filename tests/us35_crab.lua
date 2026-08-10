@@ -185,7 +185,7 @@ menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "first launch shows the layout picker")
-expect(#picker._card_rects == #Logic.layoutIds(),
+    expect(#picker._card_rects == math.min(12, #Logic.layoutIds()),
     "picker lists one card per registered layout (got " .. #picker._card_rects .. " cards, "
     .. #Logic.layoutIds() .. " ids)")
 expect(#picker._card_rects == 12, "the picker is a full 12-card grid (got " .. #picker._card_rects .. ")")

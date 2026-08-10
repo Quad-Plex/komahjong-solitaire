@@ -236,7 +236,7 @@ for _, c in ipairs(top._card_rects) do
     if c.id == "turtle" then has_turtle_card = true end
 end
 expect(has_turtle_card, "the picker lists a Turtle card")
-expect(#top._card_rects == #Logic.layoutIds(),
+expect(#top._card_rects == math.min(12, #Logic.layoutIds()),
     "the picker lists one card per registered layout")
 
 -- The thumbnail renders for every registered layout (turtle + toy).

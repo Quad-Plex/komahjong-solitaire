@@ -64,14 +64,14 @@ menu.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker.name == "mahjonglayoutselect" and picker.full_width == 360
         and picker.full_height == 640, "picker uses the phone canvas dimensions")
-expect(#picker._card_rects == #Logic.layoutIds(), "narrow picker still exposes every layout card")
+expect(#picker._card_rects == math.min(12, #Logic.layoutIds()), "narrow picker exposes the active page")
 local first_row = 0
 for _, rect in ipairs(picker._card_rects) do
     if rect.y == picker._card_rects[1].y then first_row = first_row + 1 end
-    expect(rect.x >= 0 and rect.x + rect.w <= 360 and rect.h >= 120,
+    expect(rect.x >= 0 and rect.x + rect.w <= 360 and rect.h > 0,
         "picker card stays inside the narrow canvas")
 end
-expect(first_row == 2, "narrow picker uses two wider columns")
+expect(first_row == 3, "narrow picker keeps three columns")
 
 local turtle
 for _, rect in ipairs(picker._card_rects) do
