@@ -149,6 +149,22 @@ expect(mj_sel.selected.x == 3 and mapCount(bv.overlays) == 1
 expect(#ctx.dirty_calls == 1,
     "a selection switch enqueues ONE combined refresh (not clear+set) on the game level")
 
+-- Re-tapping the selected tile while a hint is active must also batch both
+-- overlay clears. This used to clear selection and hint in separate requests.
+local mj_deselect = Mahjong:new()
+mj_deselect.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"}, {6,2,0,"b2"}, {8,2,0,"b2"},
+}
+mj_deselect:buildUILayout()
+mj_deselect:handleTileTap(2, 2, 0)
+mj_deselect:showHint()
+ctx.dirty_calls = {}
+mj_deselect:handleTileTap(2, 2, 0)
+expect(mj_deselect.selected == nil and mapCount(mj_deselect.board_view.overlays) == 0,
+    "re-tapping selection clears selection and persistent hint")
+expect(#ctx.dirty_calls == 2,
+    "selection and hint clears share ONE refresh pass with disjoint local regions")
+
 -- ---- clearHintBatched defers the clear and returns the rects -------------------
 
 local mj_hint = Mahjong:new()

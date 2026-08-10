@@ -65,6 +65,22 @@ ctx.runScheduled()
 expect(ctx.last_confirm == nil,
     "a pending win transition cannot open a card over a closed game")
 
+-- Opening the layout picker supersedes a pending win card even though the won
+-- game remains on the stack beneath the opaque picker.
+local superseded = Mahjong:new()
+superseded.board = boardWith{ { 2, 2, 0, "b1" }, { 4, 2, 0, "b1" } }
+superseded:buildUILayout()
+UIManager:show(superseded)
+superseded:handleTileTap(2, 2, 0)
+superseded:handleTileTap(4, 2, 0)
+superseded:showLayoutPicker()
+ctx.last_confirm = nil
+ctx.runScheduled()
+ctx.runScheduled()
+ctx.runScheduled()
+expect(ctx.last_confirm == nil,
+    "a pending win transition cannot open a card over the layout picker")
+
 if failures == 0 then
     print("\nALL US-47 RENDER SAFETY CHECKS PASSED")
 else

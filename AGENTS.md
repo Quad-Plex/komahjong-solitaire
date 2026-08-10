@@ -274,6 +274,15 @@ input callback as a transaction that may be coalesced with the next callback.
   pair removals can arrive before the previous e-ink update settles, accumulate their local
   regions and re-request them once via `UIManager:tickAfterNext`. Guard the retry so a closed
   or replaced board cannot dirty a new window.
+- Board gestures do not receive the `Button` widget's built-in EPDC handoff. After a structural
+  pair clear, first drain its local repaint with `UIManager:forceRePaint()`, then call
+  `UIManager:yieldToEPDC()` before more gameplay can write overlapping framebuffer pixels. This
+  is a short controller-read handoff, not `waitForVSync()`; never use a full waveform wait in the
+  normal pair-clear path. Keep the deferred retry too: it heals a locally half-applied drive, while
+  the handoff reduces the framebuffer-read race that can cause it.
+- A pending terminal transition (win or no-moves card) is a transient input lock. Do not let a
+  settings/stats/pause card invalidate it and strand the user on an empty or dead board. A picker
+  or new-game transition may deliberately supersede it, but must invalidate the transition token.
 - Never rebuild a large widget tree while a modal is still on the window stack. KOReader's
   `ConfirmBox` runs `ok_callback` before closing itself; defer a board rebuild with
   `UIManager:tickAfterNext` so the dialog-clear repaint gets an intervening UI tick first.

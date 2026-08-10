@@ -479,10 +479,26 @@ function Board:queueStructuralRefreshRetry(rects)
         self._refresh_retry_scheduled = false
         local retry_rects = self._refresh_retry_rects
         self._refresh_retry_rects = nil
-        if self.show_parent and self.show_parent.board_view == self and retry_rects then
+        -- A covers_fullscreen dialog prevents KOReader from repainting the game
+        -- window, but does not prevent a queued regional refresh from reaching
+        -- the EPDC. Do not drive stale board pixels while the game is hidden.
+        local parent = self.show_parent
+        local visible = parent and (not parent.isBoardRefreshActive
+            or parent:isBoardRefreshActive(self))
+        if parent and parent.board_view == self and visible and retry_rects then
             self:requestRefresh(retry_rects)
         end
     end)
+end
+
+-- Pair clears are the one board operation that quickly writes new pixels in a
+-- region the EPDC may still be sampling. Drain the local repaint now, then give
+-- the controller its documented short framebuffer handoff before callers can
+-- perform another structural mutation. This is deliberately not a VSync wait:
+-- waiting for a complete waveform can stall input for hundreds of milliseconds.
+function Board:flushStructuralRefresh() -- luacheck: no unused args
+    if UIManager.forceRePaint then UIManager:forceRePaint() end
+    if UIManager.yieldToEPDC then UIManager:yieldToEPDC() end
 end
 
 -- True while a structural pair refresh still has a deferred retry scheduled
