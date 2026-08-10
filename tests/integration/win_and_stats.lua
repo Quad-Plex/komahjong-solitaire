@@ -161,7 +161,8 @@ local win_summary_first = ctx.last_confirm
 local nb_score = win_summary_first.win_rows and win_summary_first.win_rows[2].marker_widget
 expect(nb_score ~= nil and nb_score.text == "(New best!)",
     "the score row's new-best marker is a TextWidget (not a trophy)")
-expect(win_text:find("Pairs matched: 2", 1, true) ~= nil, "the summary shows the pairs matched")
+expect(win_text:find("Pairs matched", 1, true) == nil,
+    "the summary omits the always-72 pairs matched stat")
 expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
@@ -192,7 +193,7 @@ local row_group = win_summary._row_group
 expect(row_group ~= nil and row_group[1] ~= nil,
     "the summary card builds the aligned rows as a widget")
 local row_count = #(win_summary.win_rows or {})
-expect(row_count == 7, "the summary has 7 session rows (got " .. row_count .. ")")
+expect(row_count == 6, "the summary has 6 session rows (got " .. row_count .. ")")
 local text_is_headline = win_summary.text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil
 expect(text_is_headline, "the dialog's text is the headline (centered title)")
 -- The headline is the first child of the card's content VerticalGroup, wrapped
@@ -397,8 +398,8 @@ expect(win_text:find("(🏆 65)", 1, true) ~= nil,
     "an auto-solve win shows the prior layout best score as a trophy")
 expect(win_text:find("(🏆 00:30)", 1, true) ~= nil,
     "an auto-solve win shows the prior layout best time as a trophy")
-expect(win_text:find("Pairs matched: 2", 1, true) ~= nil,
-    "the auto-solve win dialog still shows the pair count")
+expect(win_text:find("Pairs matched", 1, true) == nil,
+    "the auto-solve win dialog omits the pairs matched stat")
 expect(win_text:find("Hints used: 1", 1, true) ~= nil,
     "the auto-solve win dialog shows hints used")
 expect(win_text:find("Shuffles: 2", 1, true) ~= nil,

@@ -1694,12 +1694,13 @@ function Mahjong:showWinDialog()
     -- column trick). The pairs are also kept on the dialog (win_rows) so the
     -- headless harness can reconstruct the rendered text for assertions.
     --
-    -- These are the stats for THIS play session only — score, time, pairs
-    -- matched, and the per-game help counters — plus the current winning
-    -- streak, placed last (below the shuffle and hint counters). The global
-    -- best records (overall / per-layout best score and time, which the
-    -- headline above still celebrates) are NOT listed here as their own rows,
-    -- so the card stays focused on what was achieved in this session.
+    -- These are the stats for THIS play session only — score, time, and the
+    -- per-game help counters — plus the current winning streak, placed last
+    -- (below the shuffle and hint counters). The pairs matched stat is
+    -- omitted (it is always 72 on a win). The global best records (overall /
+    -- per-layout best score and time, which the headline above still
+    -- celebrates) are NOT listed here as their own rows, so the card stays
+    -- focused on what was achieved in this session.
     --
     -- US-12: the score/time rows still reach for the best, though — a win that
     -- breaks the overall or this-layout record gets a "(New best!)" text marker
@@ -1767,7 +1768,6 @@ function Mahjong:showWinDialog()
           marker = score_marker, marker_widget = score_marker_widget },
         { label = t("game.time"),           value = MahjongLogic.formatElapsed(elapsed),
           marker = time_marker, marker_widget = time_marker_widget },
-        { label = t("game.pairs_matched"),  value = tostring(pairs) },
         -- US-18: always report the per-game help counters, including clean
         -- wins, so the summary explicitly tells the player whether either was
         -- used.
