@@ -12,9 +12,8 @@
 -- Layout inside the card:
 --   * the headline ("You cleared the board!" / "Congratulations! …best score…")
 --     centered across the card's content width;
---   * the summary rows as right-aligned labels (widest label drives the column)
---     with the VALUES in a uniform, LEFT-aligned column — every value starts at
---     the same x;
+--   * the summary rows split into two equal columns: labels are right-aligned
+--     against the center line, and VALUES are left-aligned from that line;
 --   * a two-button row (Play again / Select Layout) centered at the bottom.
 --
 -- A tap anywhere OUTSIDE the buttons is silently consumed (never closes the
@@ -84,7 +83,6 @@ function WinSummary:init()
     for _, r in ipairs(win_rows) do
         max_label_w = math.max(max_label_w, measureText(r.label, label_face))
     end
-    local label_gap = Screen:scaleBySize(12)
     local row_gap = Screen:scaleBySize(4)
     local marker_gap = Screen:scaleBySize(4)
     -- The value column's width must account for the marker text too (the
@@ -95,28 +93,6 @@ function WinSummary:init()
         local full = r.value .. (r.marker and (" " .. r.marker) or "")
         max_value_w = math.max(max_value_w, measureText(full, value_face))
     end
-    local row_widgets = {}
-    for i, r in ipairs(win_rows) do
-        local row_children = {
-            HorizontalSpan:new{ width = max_label_w - measureText(r.label, label_face) },
-            TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
-            HorizontalSpan:new{ width = label_gap },
-            TextWidget:new{ text = r.value, padding = 0, face = value_face, bold = true },
-        }
-        -- A score/time row may carry a marker widget (a "(New best!)" TextWidget
-        -- or a trophy+old-best group); render it just right of the value, after
-        -- a small gap, so the marker rides on the same value column.
-        if r.marker_widget then
-            row_children[#row_children + 1] = HorizontalSpan:new{ width = marker_gap }
-            row_children[#row_children + 1] = r.marker_widget
-        end
-        row_widgets[#row_widgets + 1] = HorizontalGroup:new(row_children)
-        if i < #win_rows then
-            row_widgets[#row_widgets + 1] = VerticalSpan:new{ width = row_gap }
-        end
-    end
-    self._row_group = VerticalGroup:new(row_widgets)
-
     -- Headline, centered across the card's content width.
     local headline_widget = TextWidget:new{
         text = self.text,
@@ -165,10 +141,47 @@ function WinSummary:init()
     -- and the button row so those center over the value column. Widths come
     -- from measured text (the mock's group containers expose no getSize, so this
     -- never depends on a container's getSize — mirroring the stats screen).
-    local rows_w = max_label_w + label_gap + max_value_w
+    -- The rows use two equal columns.  Size the card for the larger side so
+    -- the midpoint is a real divider, rather than centering the natural row
+    -- width (which made the labels and values move together as one block).
+    local column_w = math.max(max_label_w, max_value_w)
+    local rows_w = 2 * column_w
     local buttons_w = 2 * btn_w + Screen:scaleBySize(10)
     local content_w = math.min(max_content_w, math.max(rows_w, headline_size.w, buttons_w))
     local headline_h = headline_size.h
+
+    local half_w = math.floor(content_w / 2)
+    local row_widgets = {}
+    for i, r in ipairs(win_rows) do
+        local label_w = measureText(r.label, label_face)
+        local value_w = measureText(r.value, value_face)
+        local row_children = {
+            -- This span ends the label at the exact center of the card.
+            HorizontalSpan:new{ width = math.max(0, half_w - label_w) },
+            TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
+            TextWidget:new{ text = r.value, padding = 0, face = value_face, bold = true },
+        }
+        -- A score/time row may carry a marker widget (a "(New best!)" TextWidget
+        -- or a trophy+old-best group); render it in the value column after a
+        -- small gap. The trailing span keeps every row as wide as the content,
+        -- preserving the same center line even when values have different widths.
+        local used_w = half_w + value_w
+        if r.marker_widget then
+            row_children[#row_children + 1] = HorizontalSpan:new{ width = marker_gap }
+            row_children[#row_children + 1] = r.marker_widget
+            local marker_w = 0
+            if r.marker_widget.getSize then
+                marker_w = r.marker_widget:getSize().w or 0
+            end
+            used_w = used_w + marker_gap + marker_w
+        end
+        row_children[#row_children + 1] = HorizontalSpan:new{ width = math.max(0, content_w - used_w) }
+        row_widgets[#row_widgets + 1] = HorizontalGroup:new(row_children)
+        if i < #win_rows then
+            row_widgets[#row_widgets + 1] = VerticalSpan:new{ width = row_gap }
+        end
+    end
+    self._row_group = VerticalGroup:new(row_widgets)
 
     -- Horizontal children are centered at `content_w`; the rows keep their
     -- left-aligned value column below.
