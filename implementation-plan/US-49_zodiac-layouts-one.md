@@ -65,6 +65,11 @@ bridge, cloud, confounding, crab, hare, horse, monkey, overpass, pyramid,
 ram, red-dragon, rooster, spider, taipei, tictactoe, tiger, turtle, ziggurat
 ```
 
+## Status
+
+Implemented. The six layouts are registered, localized, covered by the layout
+self-tests and `tests/us49_zodiac_one.lua`, and appear on picker page two.
+
 ## Verification
 
 - `lua mahjong.koplugin/mahjonglayouts.lua`

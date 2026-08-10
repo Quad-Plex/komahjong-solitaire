@@ -15,8 +15,8 @@ A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch
 
 ## Status
 
-All user stories through **US-37** are shipped (`US-01..US-31`, `US-22a`,
-`US-32`, `US-33`, `US-37`); `IMPLEMENTATION_PLAN.md` and the story files under
+All user stories through **US-49** are shipped (`US-01..US-31`, `US-22a`,
+`US-32`, `US-33`, `US-37`, `US-48`, `US-49`); `IMPLEMENTATION_PLAN.md` and the story files under
 `implementation-plan/` are the source of truth for design decisions and the
 per-story history.
 
@@ -27,13 +27,14 @@ board renders as an outward-bevel 3D stack of 144 tiles.
 Features:
 
 - **18 layouts today:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
-  Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, and Crab — each a
-  byte-identical transcription of the GNOME Mahjongg maps. Choosing a layout
+  Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, Crab, Hare, Horse,
+  Tiger, Ram, Monkey, and Rooster. The first twelve are transcriptions of the
+  GNOME Mahjongg maps; the six animal layouts come from PySolFC. Choosing a layout
   from the full-screen **layout picker** is how you start a New Game; picker
   cards show a thumbnail schematic, a per-layout win-count trophy badge, and a
-  per-layout best-score chip (when a human win has recorded one). Planned
-  US-48..US-50 replace picker scrolling with two fixed pages and add twelve
-  compact 144-tile PySolFC layouts.
+  per-layout best-score chip (when a human win has recorded one). US-48 replaces
+  picker scrolling with fixed 3x4 pages; the six compact 144-tile PySolFC layouts
+  from US-49 are on the second page. US-50 is planned.
 - **3D board:** portrait tiles on a shared grid, each upper layer shifted
   up-left by exactly one bevel so raised tiles' bevels step cleanly onto the
   tiles beneath; dynamic bevel restoration when neighbours are removed. Local

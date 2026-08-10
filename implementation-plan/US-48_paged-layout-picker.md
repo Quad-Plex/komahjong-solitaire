@@ -1,4 +1,4 @@
-# US-48 - Paged layout picker (two fixed 3x4 pages)
+# US-48 - Paged layout picker (fixed 3x4 pages)
 
 As a player, I want the layout picker to retain its readable 3-column by
 4-row card grid while offering a small page selector below it, so I can choose
@@ -12,10 +12,10 @@ grow without a known bound, but it is inferior for the e-ink target: scrolling
 is less discoverable than paging, card height changes as layouts are added,
 and the card grid can run below the screen.
 
-US-49 and US-50 add twelve layouts to the current twelve built-ins. This story
-is their prerequisite: the picker has exactly **two pages**, each with twelve
-cards in a fixed **3 columns x 4 rows** grid. Page one remains the current
-sorted first twelve maps; page two holds the sorted next twelve maps. The
+US-49 adds six layouts to the current twelve built-ins, and US-50 is planned to
+add six more. The picker has a fixed **3 columns x 4 rows** page capacity. Page
+one remains the current sorted first twelve maps; additional maps occupy page
+two in sorted order. The
 registry remains the single source of ordering (`MahjongLogic.layoutIds()`).
 
 ## Implementation
@@ -37,8 +37,7 @@ In `mahjong.koplugin/mahjonglayoutselect.lua`:
   including transparent placeholders in a partially populated final page.
 - Preserve the current 3-column layout on the supported e-ink canvases.
   Remove the two-column narrow-phone branch rather than changing the page
-  capacity: a page is always 12 cards and US-49/50 must result in exactly two
-  pages. Use existing screen-relative padding, font and thumbnail scaling so
+  capacity: a page is always 12 cards. Use existing screen-relative padding, font and thumbnail scaling so
   the 3 columns still fit a narrow display.
 
 ### 2. Make vertical space for the footer
@@ -98,9 +97,9 @@ register any new harness in `tests/run.sh`. Cover:
 - With the current 12 built-ins, `page_count == 1`, `_card_rects` has all 12
   sorted ids, four rows of three cards, and both the scroll-container require
   and `cropping_widget` are absent.
-- Register twelve temporary compact layouts through `registerLayout`, using
-  ids that sort after the built-ins. The picker exposes page `1/2` with the
-  first 12 ids and page `2/2` with exactly the remaining 12; all `_card_rects`
+- Register temporary compact layouts through `registerLayout`, using ids that
+  sort after the built-ins. The picker exposes page `1/N` with the first 12 ids
+  and the final page with the remaining ids; all `_card_rects`
   on either page are within the full-screen bounds and each page has four
   rows.
 - Page arrows change only the rendered page / `_card_rects`, are disabled at
@@ -116,8 +115,8 @@ register any new harness in `tests/run.sh`. Cover:
 ## Verification
 
 - `tests/run.sh`
-- On device/emulator: inspect page 1 at 12 layouts, then with the US-49/50
-  layouts installed inspect `1/2` and `2/2`. Confirm every page is a readable
+- On device/emulator: inspect page 1 at 12 layouts, then with the US-49 layouts
+  installed inspect `1/2` and `2/2`. Confirm every page is a readable
   3x4 grid, no scrolling is possible or necessary, the footer matches Help's
   arrows and indicator, and page-two map selection, close and return work.
 
@@ -125,5 +124,5 @@ register any new harness in `tests/run.sh`. Cover:
 
 - No changes to the layout registry, board geometry, tile rules, persistence
   schema, scores or statistics.
-- No arbitrary-size paging or persisted last-page preference. This story is
-  intentionally a two-page, 24-layout product decision.
+- No persisted last-page preference. Page capacity remains fixed at 12 cards;
+  the number of pages follows the registered layout count.

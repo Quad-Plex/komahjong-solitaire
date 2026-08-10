@@ -499,10 +499,13 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    (`pyramid`, per-layer 41/34/27/20/13/6/3, grid x=0..11, y=1..7, the deepest board at 7
    layers), Confounding Cross (`confounding`, per-layer 47/42/27/18/9/1, grid x=0..10, y=0..8)
    and Taipei (`taipei`, per-layer 63/46/19/10/3/2/1, grid x=0..10, y=0..6). US-35 adds Crab
-   (`crab`, per-layer 77/50/15/2, grid x=1..14, y=0..7, the classic Microsoft Mahjong Titans
-   crab transcribed from KMahjongg's `crab.layout`). The sorted built-in registry is
-   {bridge, cloud, confounding, crab, overpass, pyramid, red-dragon, spider, taipei,
-   tictactoe, turtle, ziggurat}. Every layout-dependent function takes a layout id (defaulting to
+    (`crab`, per-layer 77/50/15/2, grid x=1..14, y=0..7, the classic Microsoft Mahjong Titans
+    crab transcribed from KMahjongg's `crab.layout`). US-49 adds the PySolFC animal layouts Hare
+    (59/44/26/11/4), Horse (62/49/27/6), Tiger (62/58/18/6), Ram (69/52/20/3), Monkey
+    (60/44/23/15/2), and Rooster (66/44/26/7/1), all on x=0..14, y=0..7. The sorted built-in
+    registry is {bridge, cloud, confounding, crab, hare, horse, monkey, overpass, pyramid, ram,
+    red-dragon, rooster, spider, taipei, tictactoe, tiger, turtle, ziggurat}. Every
+    layout-dependent function takes a layout id (defaulting to
    `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
    `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,
    `freeTiles(board, id)`, `hasMoves`/`matchingFreePair*`/`countFreePairs` (all take a trailing

@@ -210,8 +210,8 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-32 — Failure recognition (deadlock detection) | [US-32_failure-recognition_completed.md](implementation-plan/US-32_failure-recognition_completed.md) | ✅ completed |
 | US-33 — Uninterruptible auto-solve (input lock + tainted save + resume-on-reload) | [US-33_autosolve-lock_completed.md](implementation-plan/US-33_autosolve-lock_completed.md) | ✅ completed |
 | US-37 — English/German localization with runtime language selection | [US-37_localization_completed.md](implementation-plan/US-37_localization_completed.md) | ✅ completed |
-| US-48 — Paged layout picker (two fixed 3×4 pages) | [US-48_paged-layout-picker.md](implementation-plan/US-48_paged-layout-picker.md) | planned |
-| US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one.md](implementation-plan/US-49_zodiac-layouts-one.md) | planned |
+| US-48 — Paged layout picker (fixed 3×4 pages) | [US-48_paged-layout-picker.md](implementation-plan/US-48_paged-layout-picker.md) | ✅ completed |
+| US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one.md](implementation-plan/US-49_zodiac-layouts-one.md) | ✅ completed |
 | US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two.md](implementation-plan/US-50_zodiac-layouts-two.md) | planned |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
@@ -228,9 +228,10 @@ table above). The stories must be read in order — later stories assume the ear
 contracts.
 
 US-48 replaces US-21's scrollable picker with a fixed, Help-style paged picker before further
-maps are added. US-49 and US-50 use compact, multi-layer, 144-tile layouts from PySolFC rather
-than revisiting the already-exhausted GNOME source. Together they expand the built-in collection
-from 12 to 24: the existing maps remain page one, while the twelve PySolFC maps fill page two.
+maps are added. US-49 adds six compact, multi-layer, 144-tile layouts from PySolFC rather than
+revisiting the already-exhausted GNOME source. The built-in collection now has 18 layouts: the
+first twelve sorted maps remain page one, while the six US-49 maps occupy the beginning of page
+two. US-50 is planned and will fill the remaining page-two slots.
 
 ## Agent workflow for each story
 
