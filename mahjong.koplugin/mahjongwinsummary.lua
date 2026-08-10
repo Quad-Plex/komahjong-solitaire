@@ -84,7 +84,7 @@ function WinSummary:init()
         max_label_w = math.max(max_label_w, measureText(r.label, label_face))
     end
     local row_gap = Screen:scaleBySize(4)
-    local center_gap = Screen:scaleBySize(2)
+    local center_gap = Screen:scaleBySize(4)
     local marker_gap = Screen:scaleBySize(4)
     -- The value column's width must account for the marker text too (the
     -- "(New best!)" / trophy+best that rides after a value), so the card is
