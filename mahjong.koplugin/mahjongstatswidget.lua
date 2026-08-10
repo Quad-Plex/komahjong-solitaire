@@ -159,8 +159,9 @@ function StatsWidget:init()
 
     local label_gap = math.min(Screen:scaleBySize(12),
         math.max(Screen:scaleBySize(6), math.floor(self.full_width * 0.03)))
-    local col_gap = math.min(Screen:scaleBySize(24),
-        math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.06)))
+    -- Keep the dual-column gutter tight. The columns already have their own
+    -- midpoint spacing, so a larger responsive gap only wastes card width.
+    local col_gap = Screen:scaleBySize(10)
     local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(16))
     local label_color = Blitbuffer.COLOR_DARK_GRAY
     local value_face = Font:getFace("cfont", Screen:scaleBySize(18))
@@ -183,18 +184,15 @@ function StatsWidget:init()
         { key = "longest_streak", label = t("stats.longest_streak") },
     }
 
-    -- Right-align the labels to the widest one so the value column starts at
-    -- the same x on every row (the settings dialog's layout trick). Both
-    -- columns share the same labels, so one width serves both.
+    -- Each column uses the same divider logic as the win summary: labels end
+    -- at one shared x-coordinate and values begin after the gap. Keep the
+    -- column itself to the measured content width instead of reserving equal
+    -- empty halves on both sides of the divider.
     local max_label_w = 0
-    for _, r in ipairs(row_specs) do
-        local w = measureText(r.label, label_face, false)
-        if w > max_label_w then max_label_w = w end
-    end
-    -- The value column width across both columns' values, so the panel is
-    -- wide enough for the widest value either column shows.
     local max_value_w = 0
     for _, r in ipairs(row_specs) do
+        local label_w = measureText(r.label, label_face, false)
+        if label_w > max_label_w then max_label_w = label_w end
         local w = measureText(vs[r.key], value_face, true)
         if w > max_value_w then max_value_w = w end
         local mw = measureText(map_vs[r.key], value_face, true)
@@ -211,8 +209,10 @@ function StatsWidget:init()
     self._values = {}
 
     -- Builds one column: a centered header ("Global" or the layout name) over
-    -- the column width, then the labelled value rows. Value widgets are stored
-    -- in _values under `prefix .. key` so updateValues() can re-render them.
+    -- the column width, then the labelled value rows. Each row is split around
+    -- the column midpoint, matching the win-summary label/value alignment.
+    -- Value widgets are stored in _values under `prefix .. key` so
+    -- updateValues() can re-render them.
     local function buildColumn(header_text, source_vs, prefix)
         local header = TextWidget:new{
             text = header_text,
@@ -238,11 +238,14 @@ function StatsWidget:init()
                 face = value_face,
             }
             self._values[prefix .. r.key] = value_widget
+            local label_w = measureText(r.label, label_face, false)
+            local value_w = measureText(source_vs[r.key], value_face, true)
             vchildren[#vchildren + 1] = HorizontalGroup:new{
-                HorizontalSpan:new{ width = max_label_w - measureText(r.label, label_face, false) },
+                HorizontalSpan:new{ width = max_label_w - label_w },
                 TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
                 HorizontalSpan:new{ width = label_gap },
                 value_widget,
+                HorizontalSpan:new{ width = max_value_w - value_w },
             }
         end
         return VerticalGroup:new(vchildren)

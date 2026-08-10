@@ -104,7 +104,7 @@ local CATALOG = {
         ["pause.title"] = "Pausiert", ["pause.body"] = "Das Spiel ist pausiert.", ["pause.resume"] = "Fortsetzen",
         ["stats.games_played"] = "Gespielte Spiele", ["stats.games_won"] = "Gewonnene Spiele",
         ["stats.win_rate"] = "Siegquote", ["stats.best_score"] = "Bester Punktestand",
-        ["stats.best_time"] = "Beste Zeit", ["stats.average_time"] = "Durchschnittszeit pro Sieg",
+        ["stats.best_time"] = "Beste Zeit", ["stats.average_time"] = "Durchschn. Zeit pro Sieg",
         ["stats.current_streak"] = "Aktuelle Serie", ["stats.longest_streak"] = "Längste Serie",
         ["stats.global"] = "Gesamt", ["stats.reset_confirm"] = "Alle Statistiken zurücksetzen? Dies kann nicht rückgängig gemacht werden.",
          ["game.exit_confirm"] = "Mahjong Solitaire beenden?", ["game.blocked"] = "Stein ist blockiert",

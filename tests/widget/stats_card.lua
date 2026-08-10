@@ -158,6 +158,8 @@ local global_col = dlg[1][1][1][3][1]
 local map_col = dlg[1][1][1][3][3]
 expect(global_col ~= nil and map_col ~= nil and dlg[1][1][1][3][2] ~= nil,
     "the panel holds a two-column HorizontalGroup (col, gap, col)")
+expect(dlg[1][1][1][3][2].width == 10,
+    "the dual-column gutter stays at the minimum separation")
 expect(global_col[1][2].text == "Global", "the left column is headed 'Global'")
 expect(map_col[1][2].text == "Turtle", "the right column is headed by the layout name")
 
@@ -181,6 +183,24 @@ expect(dlg._values.map_best_time.text == "03:20", "map column shows Best time (2
 expect(dlg._values.map_avg_time.text == "01:20", "map column shows Average time per win (240/3)")
 expect(dlg._values.map_current_streak.text == "2", "map column shows Current streak on the layout")
 expect(dlg._values.map_longest_streak.text == "3", "map column shows Longest streak on the layout")
+
+-- Both columns use the win-summary divider rule without reserving oversized
+-- empty halves: labels share an end column, values share a start column, and
+-- the trailing span keeps each row compact. This is exercised with both
+-- columns present on a running game, not just the picker/global-only path.
+local compact_rows = true
+for _, col in ipairs({ global_col, map_col }) do
+    for i = 1, 8 do
+        local row = col[(i - 1) * 2 + 3]
+        if not row or not row[1] or not row[2] or not row[3]
+                or not row[4] or not row[5]
+                or row[1].width ~= row[5].width then
+            compact_rows = false
+        end
+    end
+end
+expect(compact_rows,
+    "Global and layout rows keep compact aligned columns")
 
 -- ---- Floating-card structure + onShow refresh ----------------------------------
 
