@@ -26,12 +26,14 @@ board renders as an outward-bevel 3D stack of 144 tiles.
 
 Features:
 
-- **12 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
+- **12 layouts today:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
   Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, and Crab — each a
   byte-identical transcription of the GNOME Mahjongg maps. Choosing a layout
   from the full-screen **layout picker** is how you start a New Game; picker
   cards show a thumbnail schematic, a per-layout win-count trophy badge, and a
-  per-layout best-score chip (when a human win has recorded one).
+  per-layout best-score chip (when a human win has recorded one). Planned
+  US-38..US-40 replace picker scrolling with two fixed pages and add twelve
+  compact 144-tile PySolFC layouts.
 - **3D board:** portrait tiles on a shared grid, each upper layer shifted
   up-left by exactly one bevel so raised tiles' bevels step cleanly onto the
   tiles beneath; dynamic bevel restoration when neighbours are removed. Local
