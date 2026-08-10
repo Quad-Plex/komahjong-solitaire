@@ -65,11 +65,11 @@ mj:handleTileTap(2, 2, 0)
 mj:handleTileTap(4, 2, 0)
 expect(mj.score == 10, "first pair scores 10 (got " .. tostring(mj.score) .. ")")
 
--- Pair 2 fast (same group): chain +5, combo +10 -> +25 (total 35).
+-- Pair 2 fast (same group): chain +50, combo +10 -> +70 (total 80).
 mj:handleTileTap(6, 2, 0)
 mj:handleTileTap(8, 2, 0)
-expect(mj.score == 35 and mj.combo_chain == 1,
-    "a fast same-group pair gets the chain and a combo (35, chain 1)")
+expect(mj.score == 80 and mj.combo_chain == 1,
+    "a fast same-group pair gets the chain and a combo (80, chain 1)")
 
 -- Use a hint: it must break the combo chain.
 mj:showHint()
@@ -78,11 +78,11 @@ expect(mj.last_match_elapsed == nil and mj.combo_chain == 0,
 
 -- Pair 3 (still fast, same kind). Without the break it would also get a
 -- combo (chain would climb to 2 and add COMBO_BONUS + COMBO_INCREMENT). With
--- the break it gets ONLY the chain bonus (+5) -> 35 - 5 (hint penalty) + 15.
+-- the break it gets ONLY the chain bonus (+50) -> 80 - 5 (hint penalty) + 60.
 mj:handleTileTap(10, 2, 0)
 mj:handleTileTap(12, 2, 0)
-expect(mj.score == 45,
-    "a pair right after a hint gets chain but NO combo (35 - 5 + 15 = 45, got "
+expect(mj.score == 135,
+    "a pair right after a hint gets chain but NO combo (80 - 5 + 60 = 135, got "
         .. tostring(mj.score) .. ")")
 expect(mj.combo_chain == 0, "post-hint pair restarts the combo chain at 0")
 

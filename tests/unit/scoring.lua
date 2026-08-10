@@ -2,8 +2,8 @@
 -- invalid-selection flash.
 --
 -- Checks:
---   * Logic: pairPoints (base 10 / +5 chain) and matchGroup;
---   * A consecutive same-kind match chains (+5) and a fast match gets +10;
+--   * Logic: pairPoints (base 10 / +50 chain) and matchGroup;
+--   * A consecutive same-kind match chains (+50) and a fast match gets +10;
 --   * A different-kind match does NOT chain;
 --   * Flower pairs chain with any flower;
 --   * Undo restores the score AND the chain state (last_match_kind);
@@ -40,14 +40,14 @@ end
 -- ---- Logic scoring (US-09) -------------------------------------------------
 
 expect(Logic.SCORE_PER_PAIR == 10, "logic base score constant is 10")
-expect(Logic.CHAIN_BONUS == 5, "logic chain bonus constant is 5")
+expect(Logic.CHAIN_BONUS == 50, "logic chain bonus constant is 50")
 expect(Logic.COMBO_BONUS == 10, "logic combo bonus constant is 10")
 expect(Logic.COMBO_INCREMENT == 5, "combo-chain increment is 5")
 expect(Logic.pairPoints(nil, "b1") == 10, "first match scores the base 10")
-expect(Logic.pairPoints("b1", "b1") == 15, "same-kind chain scores 15")
+expect(Logic.pairPoints("b1", "b1") == 60, "same-kind chain scores 60")
 expect(Logic.pairPoints("b2", "b1") == 10, "different kind scores 10")
-expect(Logic.pairPoints("flower1", "flower3") == 15, "flower-to-flower chains")
-expect(Logic.pairPoints("season2", "season1") == 15, "season-to-season chains")
+expect(Logic.pairPoints("flower1", "flower3") == 60, "flower-to-flower chains")
+expect(Logic.pairPoints("season2", "season1") == 60, "season-to-season chains")
 expect(Logic.pairPoints("flower1", "season1") == 10, "flower never chains with a season")
 expect(Logic.matchGroup("b1") == "b1" and Logic.matchGroup("flower1") == "flower",
     "matchGroup maps kinds to their chain group")
@@ -68,8 +68,8 @@ expect(mj.status_bar.stats.score == 10, "HUD score chip shows 10")
 
 mj:handleTileTap(6, 2, 0)
 mj:handleTileTap(8, 2, 0)
-expect(mj.score == 35, "fast consecutive same-kind pair gets chain + combo, total 35 (got " .. tostring(mj.score) .. ")")
-expect(mj.status_bar.stats.score == 35, "HUD score chip reflects the chain and combo bonuses")
+expect(mj.score == 80, "fast consecutive same-kind pair gets chain + combo, total 80 (got " .. tostring(mj.score) .. ")")
+expect(mj.status_bar.stats.score == 80, "HUD score chip reflects the chain and combo bonuses")
 expect(mj.flash_text.text == "COMBO +10", "fast pair shows COMBO +10 in the feedback band")
 expect(Logic.isWin(mj.board), "board emptied after the chain pair")
 
@@ -80,7 +80,7 @@ expect(mj.score == 10, "undo restores score to 10")
 expect(mj.last_match_kind == "b1", "undo restores the chain state")
 mj:handleTileTap(6, 2, 0)
 mj:handleTileTap(8, 2, 0)
-expect(mj.score == 25, "undo breaks the combo window but preserves chain scoring (back to 25)")
+expect(mj.score == 70, "undo breaks the combo window but preserves chain scoring (back to 70)")
 expect(mj.flash_text.text ~= "COMBO +10", "redoing an undone pair shows no combo message")
 
 -- ---- No chain across different kinds ---------------------------------------
@@ -111,7 +111,7 @@ mj3:handleTileTap(2, 2, 0)
 mj3:handleTileTap(4, 2, 0)
 mj3:handleTileTap(6, 2, 0)
 mj3:handleTileTap(8, 2, 0)
-expect(mj3.score == 35, "flower pairs chain and combo (10 + 25 = 35)")
+expect(mj3.score == 80, "flower pairs chain and combo (10 + 70 = 80)")
 
 -- ---- Escalating combo chain ---------------------------------------------------
 
@@ -126,11 +126,11 @@ mj_chain:handleTileTap(2, 2, 0)
 mj_chain:handleTileTap(4, 2, 0)
 mj_chain:handleTileTap(6, 2, 0)
 mj_chain:handleTileTap(8, 2, 0)
-expect(mj_chain.score == 35 and mj_chain.flash_text.text == "COMBO +10",
+expect(mj_chain.score == 80 and mj_chain.flash_text.text == "COMBO +10",
     "the first fast clear gets a +10 combo")
 mj_chain:handleTileTap(10, 2, 0)
 mj_chain:handleTileTap(12, 2, 0)
-expect(mj_chain.score == 65 and mj_chain.flash_text.text == "COMBO-CHAIN +15"
+expect(mj_chain.score == 155 and mj_chain.flash_text.text == "COMBO-CHAIN +15"
         and mj_chain.flash_text.bold == true,
     "the next fast clear escalates to COMBO-CHAIN +15")
 
@@ -191,9 +191,9 @@ ctx.last_confirm = nil
 mj5:handleTileTap(6, 2, 0)
 mj5:handleTileTap(8, 2, 0)
 expect(ctx.last_confirm ~= nil
-        and ctx.summaryText(ctx.last_confirm):find("Score: 35", 1, true) ~= nil,
-    "win dialog shows the chain/combo-inclusive score (35)")
-expect(mj5.score == 35, "score is 35 at the win")
+        and ctx.summaryText(ctx.last_confirm):find("Score: 80", 1, true) ~= nil,
+    "win dialog shows the chain/combo-inclusive score (80)")
+expect(mj5.score == 80, "score is 80 at the win")
 
 -- ---- Shuffle keeps the chain state -------------------------------------------
 
@@ -221,10 +221,10 @@ end
 expect(ta ~= nil, "shuffled board still has a playable pair")
 mj6:handleTileTap(ta.x, ta.y, ta.layer)
 mj6:handleTileTap(tb.x, tb.y, tb.layer)
--- The second same-kind pair chains (+15) and is fast (+10), but the
+-- The second same-kind pair chains (+60) and is fast (+10), but the
 -- user-initiated shuffle in between costs SHUFFLE_PENALTY (10), so the net is
--- 10 + 25 - 10 = 25 (US-18).
-expect(mj6.score == 25, "chain/combo applies across a shuffle (10 + 25 - 10 = 25)")
+-- 10 + 70 - 10 = 70 (US-18).
+expect(mj6.score == 70, "chain/combo applies across a shuffle (10 + 70 - 10 = 70)")
 
 -- ---- Combo window ------------------------------------------------------------
 
@@ -240,7 +240,7 @@ mj7:handleTileTap(4, 2, 0)
 mj7.last_match_elapsed = mj7:getElapsed() - 6
 mj7:handleTileTap(6, 2, 0)
 mj7:handleTileTap(8, 2, 0)
-expect(mj7.score == 25, "a match after five seconds gets chain points but no combo")
+expect(mj7.score == 70, "a match after five seconds gets chain points but no combo")
 expect(mj7.flash_text.text ~= "COMBO +10", "expired combo window shows no combo message")
 
 if failures == 0 then

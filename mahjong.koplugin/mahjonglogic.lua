@@ -486,11 +486,11 @@ end
 
 -- Scoring ---------------------------------------------------------------
 --
--- US-09: base 10 points per matched pair, plus a +5 consecutive bonus when
+-- Base 10 points per matched pair, plus a +50 consecutive bonus when
 -- the pair belongs to the same tile group as the previous match (a chain).
 -- A fast-clear combo is scored by the UI using the active-game elapsed time.
 local SCORE_PER_PAIR = 10
-local CHAIN_BONUS = 5
+local CHAIN_BONUS = 50
 local COMBO_BONUS = 10
 local COMBO_INCREMENT = 5
 MahjongLogic.SCORE_PER_PAIR = SCORE_PER_PAIR
@@ -1543,15 +1543,15 @@ function MahjongLogic.runSelfTests()
 
     -- Scoring (US-09) -------------------------------------------------
     check(MahjongLogic.SCORE_PER_PAIR == 10, "base score is 10 per pair")
-    check(MahjongLogic.CHAIN_BONUS == 5, "chain bonus is 5")
+    check(MahjongLogic.CHAIN_BONUS == 50, "chain bonus is 50")
     check(MahjongLogic.pairPoints(nil, "b1") == 10, "first match scores the base 10")
-    check(MahjongLogic.pairPoints("b1", "b1") == 15, "consecutive same-kind match chains (+5)")
+    check(MahjongLogic.pairPoints("b1", "b1") == 60, "consecutive same-kind match chains (+50)")
     check(MahjongLogic.pairPoints("b2", "b1") == 10, "a different kind breaks the chain")
-    check(MahjongLogic.pairPoints("flower1", "flower3") == 15, "flower pairs chain with any flower")
-    check(MahjongLogic.pairPoints("season1", "season2") == 15, "season pairs chain with any season")
+    check(MahjongLogic.pairPoints("flower1", "flower3") == 60, "flower pairs chain with any flower")
+    check(MahjongLogic.pairPoints("season1", "season2") == 60, "season pairs chain with any season")
     check(MahjongLogic.pairPoints("flower1", "season1") == 10, "a flower never chains with a season")
     check(MahjongLogic.pairPoints("b1", "flower1") == 10, "a suited tile never chains with a flower")
-    check(MahjongLogic.pairPoints("east", "east") == 15, "consecutive winds chain")
+    check(MahjongLogic.pairPoints("east", "east") == 60, "consecutive winds chain")
     check(MahjongLogic.matchGroup("b1") == "b1", "matchGroup of a suited kind is the kind")
     check(MahjongLogic.matchGroup("east") == "east", "matchGroup of a wind is the kind")
     check(MahjongLogic.matchGroup("red") == "red", "matchGroup of a dragon is the kind")

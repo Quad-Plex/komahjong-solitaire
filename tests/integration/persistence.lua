@@ -210,7 +210,7 @@ mj5:handleTileTap(6, 2, 0)
 mj5:handleTileTap(8, 2, 0)
 expect(Logic.isWin(mj5.board), "test board emptied for the win")
 expect(ctx.last_confirm ~= nil
-        and ctx.summaryText(ctx.last_confirm):find("Score: 35", 1, true) ~= nil,
+        and ctx.summaryText(ctx.last_confirm):find("Score: 80", 1, true) ~= nil,
     "win dialog shows the final score")
 expect(store.game == nil, "a won board is not left in the saved state")
 

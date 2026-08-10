@@ -149,7 +149,7 @@ expect(ctx.last_confirm ~= nil, "a win shows the win dialog")
 local win_text = ctx.summaryText(ctx.last_confirm)
 expect(win_text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil,
     "a first win headlines a new overall best score and best time")
-expect(win_text:find("Score: 35 (New best!)", 1, true) ~= nil,
+expect(win_text:find("Score: 80 (New best!)", 1, true) ~= nil,
     "a first win marks the score row with New best!")
 expect(win_text:find("Layout: Turtle", 1, true) ~= nil,
     "the summary shows the layout above the score")
@@ -167,11 +167,11 @@ expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
     "the summary shows zero shuffles on a clean win")
-expect(win_text:find("Overall best score: 35", 1, true) == nil,
+expect(win_text:find("Overall best score: 80", 1, true) == nil,
     "the session summary no longer lists the global overall best score")
 expect(win_text:find("Overall best time: 00:45", 1, true) == nil,
     "the session summary no longer lists the global overall best time")
-expect(win_text:find("Turtle best score: 35", 1, true) == nil,
+expect(win_text:find("Turtle best score: 80", 1, true) == nil,
     "the session summary no longer lists the layout best score")
 expect(win_text:find("Turtle best time: 00:45", 1, true) == nil,
     "the session summary no longer lists the layout best time")
@@ -221,12 +221,12 @@ if row_group then
     end
     expect(aligned, "every row's value TextWidget starts at the same x (left-aligned column)")
 end
-expect(mj1.stats.games_won == 1 and mj1.stats.best_score == 35
+expect(mj1.stats.games_won == 1 and mj1.stats.best_score == 80
         and mj1.stats.best_time == 45 and mj1.stats.current_streak == 1
         and mj1.stats.longest_streak == 1,
     "a human win recorded games_won / bests / streak")
 expect(mj1.game_won == true, "showWinDialog sets the game_won flag")
-expect(store.stats ~= nil and store.stats.games_won == 1 and store.stats.best_score == 35,
+expect(store.stats ~= nil and store.stats.games_won == 1 and store.stats.best_score == 80,
     "the win was persisted to the stats key")
 expect(store.game == nil, "a won board is still not saved under the game key")
 
@@ -259,14 +259,14 @@ expect(win_text:find("You cleared the board!", 1, true) ~= nil,
     "a win that breaks no record falls back to the plain headline")
 expect(mj1.stats.games_won == 2 and mj1.stats.current_streak == 2,
     "a worse win still counts and extends the streak")
-expect(mj1.stats.best_score == 35 and mj1.stats.best_time == 45,
+expect(mj1.stats.best_score == 80 and mj1.stats.best_time == 45,
     "a worse win keeps the existing records")
 -- US-12: a win that breaks no record shows the current best (this layout's best)
 -- next to the score/time as a trophy, so the player can compare against the
 -- record instead of seeing an empty marker space.
 expect(win_text:find("🏆", 1, true) ~= nil,
     "a win that breaks no record shows a trophy comparing the result to the best")
-expect(win_text:find("(🏆 35)", 1, true) ~= nil,
+expect(win_text:find("(🏆 80)", 1, true) ~= nil,
     "the score row shows the layout best in a bracketed trophy (score tied, not beaten)")
 expect(win_text:find("(🏆 00:45)", 1, true) ~= nil,
     "the time row shows the layout best time in a bracketed trophy (slower than the best)")
@@ -309,16 +309,16 @@ setBoard(mj1, {
 mj1.elapsed_base = 30
 playAndWin(mj1, 3)
 expect(Logic.isWin(mj1.board), "six-tile board emptied for the win")
-expect(mj1.score == 65, "the six-tile chain/combo win scores 65 (10+25+30)")
+expect(mj1.score == 155, "the six-tile chain/combo win scores 155 (10+70+75)")
 expect(mj1.pairs_matched == 3, "the pair counter tracked the three matched pairs")
 win_text = ctx.summaryText(ctx.last_confirm)
 expect(win_text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil,
     "a better third win headlines a new overall best score and best time")
-expect(win_text:find("Overall best score: 65", 1, true) == nil,
+expect(win_text:find("Overall best score: 155", 1, true) == nil,
     "the session summary omits the global overall best score row")
-expect(win_text:find("Turtle best score: 65", 1, true) == nil,
+expect(win_text:find("Turtle best score: 155", 1, true) == nil,
     "the session summary omits the global layout best score row")
-expect(mj1.stats.best_score == 65 and mj1.stats.best_time == 30,
+expect(mj1.stats.best_score == 155 and mj1.stats.best_time == 30,
     "the records updated to the better win")
 
 -- ---- A mid-game New Game abandons the game and resets the streak --------------
@@ -383,7 +383,7 @@ while scheduled[1] and guard < 200 do
     guard = guard + 1
 end
 expect(Logic.isWin(mj2.board), "auto-solve cleared the board")
-expect(mj2.stats.games_won == 3 and mj2.stats.best_score == 65
+expect(mj2.stats.games_won == 3 and mj2.stats.best_score == 155
         and mj2.stats.best_time == 30 and mj2.stats.current_streak == 0
         and mj2.stats.games_played == 3,
     "an auto-solve win leaves the loaded lifetime stats untouched")
@@ -394,7 +394,7 @@ expect(win_text:find("New best!", 1, true) == nil,
 -- US-12: an auto-solve win doesn't record a new best, so its score/time rows
 -- instead show the prior best (this layout's) as a trophy — exactly the
 -- "did not beat the record, compare to the best" case.
-expect(win_text:find("(🏆 65)", 1, true) ~= nil,
+expect(win_text:find("(🏆 155)", 1, true) ~= nil,
     "an auto-solve win shows the prior layout best score as a trophy")
 expect(win_text:find("(🏆 00:30)", 1, true) ~= nil,
     "an auto-solve win shows the prior layout best time as a trophy")
@@ -415,7 +415,7 @@ expect(mj2.game_won == false and mj2.game_was_autosolved == false,
 -- ---- Win that only breaks THIS layout's records headlines the layout variant ----
 
 -- Seed global bests (100 / 00:10) that this win can't touch, but give Turtle a
--- weaker layout record (30 / 00:40). A 2-pair win scores 35 in 25s, so it beats
+-- weaker layout record (30 / 00:40). A 2-pair win scores 80 in 25s, so it beats
 -- only Turtle's records — the headline must call out the layout, not the overall.
 store.game = nil
 store.stats = Stats.load{

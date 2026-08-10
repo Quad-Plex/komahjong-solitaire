@@ -18,7 +18,7 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 - **E-ink Optimized:** High-contrast tile symbols and crisp bevels designed for grayscale screens. Incremental tile refreshes stay within the board canvas, and terminal dialogs wait for the final tile repaint to settle so they cannot leave stale board pixels behind.
 - **Adaptive Sizing:** Automatically fits the board to your device's screen resolution.
 - **Core Gameplay:** Tap matching free tiles to remove them. Flowers match any flower, and seasons match any season.
-- **Scoring:** 10 points per pair, +5 chain bonus for consecutive same-group matches, and escalating fast-clear combos (+10, then +15, then +20 within 5 seconds); hint and shuffle cost score penalties.
+- **Scoring:** 10 points per pair, +50 chain bonus for consecutive same-group matches, and escalating fast-clear combos (+10, then +15, then +20 within 5 seconds); hint and shuffle cost score penalties.
 - **Undo / Hint / Shuffle:** Undo restores a pair (and its score), a hint highlights a matching free pair, and dead boards offer a confirm-gated reshuffle. No-moves recovery evaluates 15 candidate shuffles in the background and keeps the one with the most available matching free pairs, with bounded auto-repeat if all candidates remain stuck.
 - **Auto-solve:** Long-press the Hint button to let the solver clear the board automatically.
 - **Failure recognition:** Provably-dead boards (e.g. two identical tiles stacked) trigger a loss dialog instead of an endless shuffle loop.
@@ -51,7 +51,7 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 ## Scoring
 
 - **Base Score:** 10 points per matched pair.
-- **Chain Bonus:** +5 when consecutive matches are of the same tile group.
+- **Chain Bonus:** +50 when consecutive matches are of the same tile group.
 - **Penalties:** 5 per hint session, 10 per manual shuffle (floor at 0, not refunded by undo).
 
 ## License
