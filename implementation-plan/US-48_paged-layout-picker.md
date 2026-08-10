@@ -1,4 +1,4 @@
-# US-38 - Paged layout picker (two fixed 3x4 pages)
+# US-48 - Paged layout picker (two fixed 3x4 pages)
 
 As a player, I want the layout picker to retain its readable 3-column by
 4-row card grid while offering a small page selector below it, so I can choose
@@ -12,7 +12,7 @@ grow without a known bound, but it is inferior for the e-ink target: scrolling
 is less discoverable than paging, card height changes as layouts are added,
 and the card grid can run below the screen.
 
-US-39 and US-40 add twelve layouts to the current twelve built-ins. This story
+US-49 and US-50 add twelve layouts to the current twelve built-ins. This story
 is their prerequisite: the picker has exactly **two pages**, each with twelve
 cards in a fixed **3 columns x 4 rows** grid. Page one remains the current
 sorted first twelve maps; page two holds the sorted next twelve maps. The
@@ -37,7 +37,7 @@ In `mahjong.koplugin/mahjonglayoutselect.lua`:
   including transparent placeholders in a partially populated final page.
 - Preserve the current 3-column layout on the supported e-ink canvases.
   Remove the two-column narrow-phone branch rather than changing the page
-  capacity: a page is always 12 cards and US-39/40 must result in exactly two
+  capacity: a page is always 12 cards and US-49/50 must result in exactly two
   pages. Use existing screen-relative padding, font and thumbnail scaling so
   the 3 columns still fit a narrow display.
 
@@ -116,7 +116,7 @@ register any new harness in `tests/run.sh`. Cover:
 ## Verification
 
 - `tests/run.sh`
-- On device/emulator: inspect page 1 at 12 layouts, then with the US-39/40
+- On device/emulator: inspect page 1 at 12 layouts, then with the US-49/50
   layouts installed inspect `1/2` and `2/2`. Confirm every page is a readable
   3x4 grid, no scrolling is possible or necessary, the footer matches Help's
   arrows and indicator, and page-two map selection, close and return work.

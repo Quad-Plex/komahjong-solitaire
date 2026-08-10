@@ -1,4 +1,4 @@
-# US-39 - Zodiac layouts I (Hare through Rooster)
+# US-49 - Zodiac layouts I (Hare through Rooster)
 
 As a player, I want six additional compact animal-shaped layouts, so the
 second page of the layout picker has a varied, recognizable first half.
@@ -34,7 +34,7 @@ shape.
 
 ## Prerequisite
 
-US-38 is complete. Adding these six maps raises the built-in total from 12 to
+US-48 is complete. Adding these six maps raises the built-in total from 12 to
 18, which starts page two without changing the fixed page-one grid.
 
 ## Implementation
@@ -55,7 +55,7 @@ All board data changes are in `mahjong.koplugin/mahjonglayouts.lua`:
    existing individual-layout harnesses: registry/name/max layer/bounds,
    144 unique positions, a solvable nil-rng deal, save/restore, board widget
    construction and pair removal. Assert that all six cards are on picker page
-   two after US-38, not page one.
+   two after US-48, not page one.
 
 Update registry-order assertions and README/AGENTS documentation mechanically.
 With the other planned maps absent, sorted ids are:

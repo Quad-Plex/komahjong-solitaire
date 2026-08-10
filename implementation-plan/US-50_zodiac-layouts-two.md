@@ -1,4 +1,4 @@
-# US-40 - Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass)
+# US-50 - Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass)
 
 As a player, I want the second picker page to be filled with another six
 compact, layered layouts, so the 24-layout collection has two complete pages
@@ -30,7 +30,7 @@ maps are non-flat and 144 tiles; no deck-size adaptation is needed.
 
 ## Prerequisite
 
-US-38 and US-39 are complete. This story takes 18 built-ins to exactly 24, so
+US-48 and US-49 are complete. This story takes 18 built-ins to exactly 24, so
 the selector's two 3x4 pages are both full.
 
 ## Implementation
@@ -38,11 +38,11 @@ the selector's two 3x4 pages are both full.
 In `mahjong.koplugin/mahjonglayouts.lua`, transcribe the six exact PySolFC
 definitions to native specs, register them and add `checkShape` assertions
 using the table above. Use the same coordinate conversion and no-runtime-
-decoder rule as US-39. Preserve half-grid coordinates where they occur.
+decoder rule as US-49. Preserve half-grid coordinates where they occur.
 
 Add English/German `layout.<id>` strings; update the registry documentation;
 and add `tests/us40_zodiac_two.lua` to `tests/run.sh`. The harness covers the
-same pure-logic, persistence, board-widget and picker-page checks as US-39.
+same pure-logic, persistence, board-widget and picker-page checks as US-49.
 
 The final expected sorted registry order is:
 

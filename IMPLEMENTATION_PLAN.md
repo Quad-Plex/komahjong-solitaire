@@ -77,7 +77,7 @@ captured from `example_app/casualkochess.koplugin`.
 kindle_majong/
 ├── AGENTS.md                     # this repo's plugin-writing guide (already written)
 ├── IMPLEMENTATION_PLAN.md        # this file — the overview (design + story index)
-├── implementation-plan/          # one file per user story (US-01..40, US-22a)
+├── implementation-plan/          # one file per user story (US-01..50, US-22a)
 │   ├── US-01_plugin-skeleton_completed.md
 │   ├── US-02_game-shell_completed.md
 │   ├── US-03_tile-deck_completed.md
@@ -112,9 +112,9 @@ kindle_majong/
 │   ├── US-31_layout-highscore_completed.md
 │   ├── US-32_failure-recognition_completed.md
 │   ├── US-33_autosolve-lock_completed.md
-│   ├── US-38_paged-layout-picker.md
-│   ├── US-39_zodiac-layouts-one.md
-│   └── US-40_zodiac-layouts-two.md
+│   ├── US-48_paged-layout-picker.md
+│   ├── US-49_zodiac-layouts-one.md
+│   └── US-50_zodiac-layouts-two.md
 ├── tests/                        # official test suite (tests/run.sh)
 │   ├── run.sh                    # luac -p + luacheck + logic self-tests + harnesses
 │   ├── mock.lua                  # shared KOReader stubs (fresh mock.newContext() per test)
@@ -210,9 +210,9 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-32 — Failure recognition (deadlock detection) | [US-32_failure-recognition_completed.md](implementation-plan/US-32_failure-recognition_completed.md) | ✅ completed |
 | US-33 — Uninterruptible auto-solve (input lock + tainted save + resume-on-reload) | [US-33_autosolve-lock_completed.md](implementation-plan/US-33_autosolve-lock_completed.md) | ✅ completed |
 | US-37 — English/German localization with runtime language selection | [US-37_localization_completed.md](implementation-plan/US-37_localization_completed.md) | ✅ completed |
-| US-38 — Paged layout picker (two fixed 3×4 pages) | [US-38_paged-layout-picker.md](implementation-plan/US-38_paged-layout-picker.md) | planned |
-| US-39 — Zodiac layouts I (Hare through Rooster) | [US-39_zodiac-layouts-one.md](implementation-plan/US-39_zodiac-layouts-one.md) | planned |
-| US-40 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-40_zodiac-layouts-two.md](implementation-plan/US-40_zodiac-layouts-two.md) | planned |
+| US-48 — Paged layout picker (two fixed 3×4 pages) | [US-48_paged-layout-picker.md](implementation-plan/US-48_paged-layout-picker.md) | planned |
+| US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one.md](implementation-plan/US-49_zodiac-layouts-one.md) | planned |
+| US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two.md](implementation-plan/US-50_zodiac-layouts-two.md) | planned |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) had shipped. A full git checkout of the GNOME
@@ -227,8 +227,8 @@ ships, rename its file to add the `_completed` suffix (and re-run the story inde
 table above). The stories must be read in order — later stories assume the earlier ones'
 contracts.
 
-US-38 replaces US-21's scrollable picker with a fixed, Help-style paged picker before further
-maps are added. US-39 and US-40 use compact, multi-layer, 144-tile layouts from PySolFC rather
+US-48 replaces US-21's scrollable picker with a fixed, Help-style paged picker before further
+maps are added. US-49 and US-50 use compact, multi-layer, 144-tile layouts from PySolFC rather
 than revisiting the already-exhausted GNOME source. Together they expand the built-in collection
 from 12 to 24: the existing maps remain page one, while the twelve PySolFC maps fill page two.
 

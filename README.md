@@ -32,7 +32,7 @@ Features:
   from the full-screen **layout picker** is how you start a New Game; picker
   cards show a thumbnail schematic, a per-layout win-count trophy badge, and a
   per-layout best-score chip (when a human win has recorded one). Planned
-  US-38..US-40 replace picker scrolling with two fixed pages and add twelve
+  US-48..US-50 replace picker scrolling with two fixed pages and add twelve
   compact 144-tile PySolFC layouts.
 - **3D board:** portrait tiles on a shared grid, each upper layer shifted
   up-left by exactly one bevel so raised tiles' bevels step cleanly onto the
