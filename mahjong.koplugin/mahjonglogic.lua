@@ -598,6 +598,31 @@ function MahjongLogic.matchingFreePairs(board, id)
     return pairs
 end
 
+-- Like matchingFreePairs, but ordered so hints can lead with the same
+-- high-stack preference as the auto-solver. Equal layer rankings retain the
+-- normal deterministic scan order, which keeps hint cycling predictable.
+function MahjongLogic.matchingFreePairsHighest(board, id)
+    local pairs = MahjongLogic.matchingFreePairs(board, id)
+    local ordered = {}
+    local rank = function(pair)
+        return math.max(pair.a.layer, pair.b.layer), math.min(pair.a.layer, pair.b.layer)
+    end
+    for _, pair in ipairs(pairs) do
+        local top, bottom = rank(pair)
+        local insert_at = #ordered + 1
+        for i, existing in ipairs(ordered) do
+            local existing_top, existing_bottom = rank(existing)
+            if top > existing_top
+                    or (top == existing_top and bottom > existing_bottom) then
+                insert_at = i
+                break
+            end
+        end
+        table.insert(ordered, insert_at, pair)
+    end
+    return ordered
+end
+
 -- The first matching free pair on the board, as { a = { x, y, layer, kind },
 -- b = { x, y, layer, kind } }, or nil if no move exists. Used for the no-moves
 -- check, the auto-solver (US-19) and the logic self-tests; the hint uses
@@ -612,6 +637,29 @@ function MahjongLogic.matchingFreePair(board, id)
         end
     end
     return nil
+end
+
+-- The auto-solver prefers exposing the uppermost tiles first. Rank a pair by
+-- the layers it occupies, highest layer first, then by the lower layer. This
+-- means a pair containing the top tile wins ties over a pair made entirely of
+-- lower tiles, while ties retain freeTiles' deterministic scan order.
+function MahjongLogic.matchingFreePairHighest(board, id)
+    local free = MahjongLogic.freeTiles(board, id)
+    local best, best_top, best_bottom
+    for i = 1, #free - 1 do
+        for j = i + 1, #free do
+            if MahjongLogic.matches(free[i].kind, free[j].kind) then
+                local top = math.max(free[i].layer, free[j].layer)
+                local bottom = math.min(free[i].layer, free[j].layer)
+                if not best or top > best_top
+                        or (top == best_top and bottom > best_bottom) then
+                    best = { a = free[i], b = free[j] }
+                    best_top, best_bottom = top, bottom
+                end
+            end
+        end
+    end
+    return best
 end
 
 -- The number of distinct matching free pairs currently available — i.e. how

@@ -188,6 +188,7 @@ expect(#thumb == 144,
     "Spider thumbnail has one tile widget per layout position (got " .. #thumb .. ")")
 
 -- Pick Spider -> deals a 144-tile board on the spider layout.
+picker:setPage(1)
 local spider_card
 for _, c in ipairs(picker._card_rects) do
     if c.id == "spider" then spider_card = c break end

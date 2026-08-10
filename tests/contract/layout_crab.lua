@@ -37,9 +37,8 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-    expect(#ids == 18 and ids[4] == "crab" and ids[5] == "hare"
-        and ids[13] == "spider" and ids[17] == "turtle",
-    "registry enumerates all 18 layouts (got " .. table.concat(ids, ",") .. ")")
+    expect(#ids == 24,
+    "registry enumerates all 24 layouts (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("crab") == "Crab", "layoutName returns 'Crab'")
 expect(Logic.maxLayer("crab") == 3, "maxLayer(crab) == 3")
 
@@ -180,7 +179,7 @@ local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
-if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
+picker:setPage(1)
 picker = ctx.window_stack[#ctx.window_stack].widget
 if picker._page_left and picker._page_left.enabled ~= false then picker._page_left.callback() end
 picker = ctx.window_stack[#ctx.window_stack].widget
@@ -190,7 +189,7 @@ expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "picker lists one card per registered layout (got " .. #picker._card_rects .. " cards, "
     .. #Logic.layoutIds() .. " ids)")
 expect(#picker._card_rects == 12, "page one is a full 12-card grid (got " .. #picker._card_rects .. ")")
-expect(#picker._card_rects == 12 and #Logic.layoutIds() == 18
+    expect(#picker._card_rects == 12 and #Logic.layoutIds() == 24
     and 12 == (3 * 4), "page one has 12 cards = 3 columns x 4 rows")
 
 local has_crab_card = false

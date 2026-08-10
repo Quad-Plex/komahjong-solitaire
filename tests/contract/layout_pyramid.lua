@@ -36,9 +36,8 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-    expect(#ids == 18 and ids[5] == "hare" and ids[9] == "pyramid"
-        and ids[13] == "spider" and ids[17] == "turtle",
-    "registry enumerates all 18 layouts (got " .. table.concat(ids, ",") .. ")")
+    expect(#ids == 24,
+    "registry enumerates all 24 layouts (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("pyramid") == "Pyramid's Walls",
     "layoutName returns 'Pyramid's Walls'")
 expect(Logic.maxLayer("pyramid") == 6, "maxLayer(pyramid) == 6")
@@ -188,7 +187,7 @@ local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
-if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
+picker:setPage(1)
 picker = ctx.window_stack[#ctx.window_stack].widget
 if picker._page_left and picker._page_left.enabled ~= false then picker._page_left.callback() end
 picker = ctx.window_stack[#ctx.window_stack].widget

@@ -1936,7 +1936,7 @@ function Mahjong:showHint()
         board_view:clearOverlay(self._last_hint.a.x, self._last_hint.a.y, self._last_hint.a.layer, true)
         board_view:clearOverlay(self._last_hint.b.x, self._last_hint.b.y, self._last_hint.b.layer, true)
     end
-    local pairs = MahjongLogic.matchingFreePairs(self.board)
+    local pairs = MahjongLogic.matchingFreePairsHighest(self.board, self.layout)
     if #pairs == 0 then
         self._last_hint = nil
         if #transition_rects > 0 then
@@ -2216,7 +2216,7 @@ function Mahjong:autoSolveStep()
         self:scheduleWinDialog()
         return
     end
-    local pair = MahjongLogic.matchingFreePair(self.board, self.layout)
+    local pair = MahjongLogic.matchingFreePairHighest(self.board, self.layout)
     if not pair then
         -- Dead board mid-solve: shuffle and carry on (mirrors the manual
         -- no-moves prompt). History is cleared first so the shuffle can't
@@ -2227,7 +2227,7 @@ function Mahjong:autoSolveStep()
         local attempts = 10
         repeat
             MahjongLogic.shuffleBoard(self.board)
-            pair = MahjongLogic.matchingFreePair(self.board, self.layout)
+            pair = MahjongLogic.matchingFreePairHighest(self.board, self.layout)
             attempts = attempts - 1
         until pair or attempts == 0
         self.board_view:updateBoard()

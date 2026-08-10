@@ -110,6 +110,41 @@ expect(ctx.last_confirm ~= nil
     "a cleared board shows the win dialog")
 expect(mj2.flash_text.text == "", "the solve clears the band before the win dialog")
 
+-- ---- The solver chooses the highest available stack pair first --------------------
+
+local mj_high = Mahjong:new()
+mj_high.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {8,2,1,"c1"}, {10,2,1,"c1"},
+}
+mj_high:buildUILayout()
+mj_high.score = 0
+scheduled = {}
+mj_high.hint_button.hold_callback()
+local high_arm = scheduled[1][2]
+scheduled = {}
+high_arm()
+expect(Logic.tileCount(mj_high.board) == 2
+        and mj_high.board[pk(2,2,0)] ~= nil,
+    "auto-solve removes the highest-layer pair before lower tiles")
+while scheduled[1] do
+    local e = table.remove(scheduled, 1)
+    e[2]()
+end
+expect(Logic.isWin(mj_high.board), "highest-layer-first solving still clears the board")
+
+local mj_hint_high = Mahjong:new()
+mj_hint_high.board = boardWith{
+    {2,2,0,"b1"}, {4,2,0,"b1"},
+    {8,2,1,"c1"}, {10,2,1,"c1"},
+}
+mj_hint_high:buildUILayout()
+mj_hint_high:showHint()
+expect(mj_hint_high._last_hint ~= nil
+        and mj_hint_high._last_hint.a.layer == 1
+        and mj_hint_high._last_hint.b.layer == 1,
+    "hints lead with the highest-layer pair")
+
 -- ---- A board tap is IGNORED while the solver runs (US-33) -------------------
 
 local mj3 = Mahjong:new()
