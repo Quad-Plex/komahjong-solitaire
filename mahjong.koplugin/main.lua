@@ -73,7 +73,7 @@ local ICON_DIR = "mahjong"
 -- US-09 scoring: base + chain bonus live in mahjonglogic.lua
 -- (MahjongLogic.pairPoints / SCORE_PER_PAIR / CHAIN_BONUS); main.lua only
 -- tracks the kind and active-game time of the previous match for chain/combo
--- scoring. Combos only apply in Chain mode (score_method="chain").
+-- scoring.
 -- FLASH_TIMEOUT: how long a non-blocking feedback message (e.g. "Tile is
 -- blocked") stays visible in the band between the board and the toolbar.
 local FLASH_TIMEOUT = 2
@@ -105,8 +105,7 @@ local HINT_PULSE_STEP_SECONDS = 0.5
 local HINT_PULSE_TICKS = 6
 
 -- Settings keys (persisted via LuaSettings in the KOReader settings dir).
--- score_method: "chain" (default, +5 for consecutive same-group matches) or
--- "basic" (flat 10 per pair). layout: the last-chosen layout id (US-14);
+-- Chain/combo scoring is always enabled. layout: the last-chosen layout id (US-14);
 -- "turtle" today, US-15/16 add "spider"/"bridge".
 -- timer_update: "interval" (repaint the mm:ss on a periodic polling loop,
 -- default) or "move" (only repaint on board interaction, so an idle board
@@ -117,7 +116,6 @@ local SETTINGS_DEFAULTS = {
     language = "en",
     hints = true,               -- show hints on the toolbar / allow the Hint button
     deselect_on_empty = true,   -- empty board taps clear the current selection
-    score_method = "chain",     -- "chain" or "basic"
     layout = "turtle",
     timer_update = "interval",  -- "interval" or "move"
     timer_interval = 5,         -- seconds between periodic timer repaints
@@ -319,7 +317,6 @@ local Mahjong = FrameContainer:extend{
     combo_chain = 0, -- consecutive fast-clear count (the first combo is 1)
     history = nil, -- stack of { a, b, ka, kb, score, prev_last }
     settings = nil, -- LuaSettings handle (US-10)
-    score_method = "chain", -- "chain" or "basic" (settings, defaulted for tests)
     stats = nil, -- lifetime stats record (US-12), loaded in init()
     game_won = false, -- true once the CURRENT game is won by the player (US-12)
     game_was_autosolved = false, -- set by startAutoSolve; gates stats recording (US-12/US-19)
@@ -407,10 +404,6 @@ function Mahjong:setLanguage(language)
     return language
 end
 
-function Mahjong:refreshScoreMethod()
-    self.score_method = self:getSetting("score_method", SETTINGS_DEFAULTS.score_method)
-end
-
 -- US-12: lifetime stats are persisted under their own "stats" key, separate
 -- from the "game" key (a win or a restore never touches the game save). Every
 -- mutation flushes immediately so a win or a new game survives an abrupt exit.
@@ -471,7 +464,6 @@ function Mahjong:startGame()
     if isWidgetShown(self) then
         UIManager:close(self)
     end
-    self:refreshScoreMethod()
     local restored = self:restoreGameState()
     if restored then
         self.layout = restored.layout or "turtle"
@@ -625,7 +617,6 @@ function Mahjong:startGameWithLayout(id)
     self.hints_used = 0
     self.shuffles_used = 0
     self._last_hint = nil
-    self:refreshScoreMethod()
     self.elapsed_base = 0
     self._timer_running = false
     self:noteNewGame()
@@ -921,7 +912,6 @@ function Mahjong:openSettings()
                 self:updateStatus()
                 UIManager:setDirty(self, "ui", self.dimensions)
             end
-            self:refreshScoreMethod()
             self:updateStatus()
             -- The timer mode/interval may have changed (US-11): restart the
             -- polling loop. stopTimer freezes elapsed_base, startTimer resumes.
@@ -1429,22 +1419,14 @@ function Mahjong:applyMatch(a, b, extra_rects)
     local prev_match_elapsed = self.last_match_elapsed
     local now_elapsed = self:getElapsed()
     -- Auto-solve paces its own moves and keeps the persistent "Auto-solving…"
-    -- message; combos are a reward for the player's fast clears. Combos only
-    -- apply in Chain mode — the Basic score method disables both the group
-    -- chain bonus and the combo bonus.
-    local chain_enabled = self.score_method == "chain"
-    local combo = chain_enabled
-        and not self._auto_solve_active
+    -- message; combos are a reward for the player's fast clears and are not
+    -- awarded for automated moves.
+    local combo = not self._auto_solve_active
         and prev_match_elapsed ~= nil
         and now_elapsed >= prev_match_elapsed
         and now_elapsed - prev_match_elapsed <= COMBO_WINDOW_SECONDS
     local combo_chain = combo and ((self.combo_chain or 0) + 1) or 0
-    local points
-    if chain_enabled then
-        points = MahjongLogic.pairPoints(prev_last, ka)
-    else
-        points = MahjongLogic.SCORE_PER_PAIR
-    end
+    local points = MahjongLogic.pairPoints(prev_last, ka)
     if combo then
         points = points + MahjongLogic.COMBO_BONUS
             + (combo_chain - 1) * MahjongLogic.COMBO_INCREMENT

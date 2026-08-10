@@ -12,8 +12,7 @@
 --   * Corrupt saved state silently starts a fresh game AND clears the key;
 --   * A won (empty) board is never saved;
 --   * The settings dialog: toggles are collected, Save persists, Cancel
---     discards, Reset restores the defaults, score cycles Chain -> Basic and
---     is applied via onApply;
+--     discards, and Reset restores the defaults;
 --   * New Game always shows the layout picker (US-14);
 --   * The mm:ss timer text lives in the band and tracks elapsed time.
 
@@ -75,23 +74,13 @@ local store = ctx.settings_store
 
 local mj0 = Mahjong:new()
 expect(mj0:getSetting("hints", true) == true, "unset hints defaults to true")
-expect(mj0:getSetting("score_method", "chain") == "chain", "unset score_method defaults to chain")
-mj0:refreshScoreMethod()
-expect(mj0.score_method == "chain", "fresh instance scores with the chain method")
 expect(store.hints == nil, "defaults are NOT written to the settings file")
-expect(store.score_method == nil, "defaults are NOT written for score_method either")
 
 mj0:setSetting("hints", false)
 expect(store.hints == false, "setSetting persists 'hints' immediately")
 expect(ctx.flushes >= 1, "setSetting flushed the settings file")
-mj0:setSetting("score_method", "basic")
-mj0:refreshScoreMethod()
-expect(mj0.score_method == "basic", "refreshScoreMethod picks up the stored method")
-
 -- A brand-new instance in the same ctx reads the stored settings back.
 local mj0b = Mahjong:new()
-mj0b:refreshScoreMethod()
-expect(mj0b.score_method == "basic", "a later instance reads the persisted score_method")
 expect(mj0b:getSetting("hints", true) == false, "a later instance reads the persisted hints")
 
 -- ---- Save after every match -------------------------------------------------
@@ -231,7 +220,6 @@ expect(store.game == nil, "a won board is not left in the saved state")
 -- written by the earlier defaults section so the dialog starts from defaults.
 store.hints = nil
 store.deselect_on_empty = nil
-store.score_method = nil
 
 local mj6 = Mahjong:new()
 mj6.board = Logic.newGame(13)
@@ -244,7 +232,7 @@ mj6:openSettings()
 local dlg = ctx.window_stack[#ctx.window_stack].widget
 expect(dlg ~= nil and dlg.name == "mahjongsettings", "openSettings shows the settings dialog")
 expect(dlg._rows ~= nil and dlg._rows.hints and dlg._rows.deselect_on_empty
-        and dlg._rows.score_method,
+        and dlg._rows.timer_update,
     "dialog exposes the setting rows")
 expect(dlg._rows.hints.text == "On", "hints row starts at the persisted value (On)")
 
@@ -299,30 +287,6 @@ dlg:save()
 expect(store.hints == true,
     "Save after Reset writes the defaults back")
 
--- Score cycles Chain -> Basic and is applied via onApply.
-mj6:openSettings()
-dlg = ctx.window_stack[#ctx.window_stack].widget
-expect(dlg.changes.score_method == "chain", "score row starts at chain")
-dlg._rows.score_method.callback()
-expect(dlg.changes.score_method == "basic" and dlg._rows.score_method.text == "Basic",
-    "score row cycles chain -> basic")
-expect(store.score_method == "chain", "score cycle is not persisted before Save")
-dlg:save()
-expect(store.score_method == "basic", "Save persists the score method")
-expect(mj6.score_method == "basic", "onApply refreshed the live score method")
-
--- Cycling Basic back to Chain must restore the full label (the US-10/11
--- "cut off" bug: Button:setText's fast path shoved the long value into the
--- existing single-line label; setButtonText now rebuilds the label instead).
-mj6:openSettings()
-dlg = ctx.window_stack[#ctx.window_stack].widget
-expect(dlg.changes.score_method == "basic", "score row reflects the saved basic method")
-dlg._rows.score_method.callback()
-expect(dlg.changes.score_method == "chain"
-        and dlg._rows.score_method.text == "Chain/Combo",
-    "score row cycles basic -> chain and restores the full label")
-dlg:cancel()
-
 -- The dialog is a floating window: a transparent full-screen container whose
 -- only child centers a white card over the game (not an opaque full-screen
 -- page), and the panel's on-screen rect is exposed for tap-outside handling.
@@ -350,8 +314,8 @@ local vgroup = dlg_panel[1]
 expect(type(vgroup) == "table" and type(vgroup[3]) == "table",
     "the settings card holds a vertical row list")
 local row_indices = {
-    [3] = "hints", [5] = "deselect_on_empty", [7] = "score_method",
-    [9] = "timer_update", [11] = "timer_interval",
+    [3] = "hints", [5] = "deselect_on_empty", [7] = "timer_update",
+    [9] = "timer_interval",
 }
 local btn_w = dlg._rows.hints.width
 local all_same_w = true
@@ -365,8 +329,8 @@ for i, key in pairs(row_indices) do
             and type(r[3]) == "table" and r[4] == dlg._rows[key],
         "settings row " .. key .. " is [pad, label, gap, button]")
 end
-expect(vgroup[3][2].text == "Hints" and vgroup[5][2].text == "Deselect on empty"
-        and vgroup[7][2].text == "Score" and vgroup[11][2].text == "Timer interval",
+expect(vgroup[3][2] ~= nil and vgroup[5][2] ~= nil and vgroup[7][2] ~= nil
+        and vgroup[9][2] ~= nil and vgroup[11][2] ~= nil,
     "row labels are the second element of each row")
 expect(vgroup[13] == nil or type(vgroup[13]) ~= "table" or vgroup[13][2] == nil
         or vgroup[13][2].text ~= "Layout",

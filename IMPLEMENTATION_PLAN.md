@@ -68,7 +68,8 @@ captured from `example_app/casualkochess.koplugin`.
     delayed modal callbacks are board-identity guarded and invalidated on replacement or close.
 9. **Persistence:** `LuaSettings` in the KOReader settings dir; game state (tile deck, removed
    pairs, score) serialized to a table, saved on close, restored on start. Also persist a small
-   settings table (`hints`, `deselect_on_empty`, score method, layout, and timer options).
+   settings table (`hints`, `deselect_on_empty`, layout, and timer options). Chain/combo scoring
+   is always used.
 10. **No heavy background work needed** (no engine/AI) — the only timers are cosmetic (elapsed
     time). Coroutines are unnecessary; keep the UI loop simple.
 
@@ -302,7 +303,7 @@ is the confirmation. The original plan kept the `confirm_new_game` setting key a
 and just stopped consulting it on the New-Game path, deferring a small cleanup. After
 shipping, that cleanup landed too: the setting default, its settings-dialog toggle row,
 and all test references to it were removed (the persistence feature suite's dialog
-section was rewritten to exercise toggle/Cancel/Reset via `hints` and `score_method`
+section was rewritten to exercise toggle/Cancel/Reset via `hints` and `deselect_on_empty`
 instead). `confirm_new_game` no longer exists anywhere in code, config, or tests.
 
 ---

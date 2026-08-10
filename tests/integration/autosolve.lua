@@ -103,7 +103,7 @@ while scheduled[1] and guard < 200 do
 end
 expect(Logic.isWin(mj2.board), "auto-solve clears the entire board")
 expect(guard == 2, "the remaining two pairs were removed one per step")
-expect(mj2.score == 30, "auto-solve scores 10 per pair (chain bonus off on a fresh board)")
+expect(mj2.score == 30, "auto-solve scores 10 per pair when the pairs are different groups")
 expect(#mj2.history == 3, "auto-solve records history for undo")
 expect(ctx.last_confirm ~= nil
         and ctx.last_confirm.text:find("You cleared the board", 1, true),

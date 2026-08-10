@@ -540,7 +540,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     `{ax,ay,al,bx,by,bl,ka,kb,score,prev_last}`), validated hard on load (count sum must be 144,
     kinds valid, positions in the saved layout, history disjoint, layout id registered). A **v1**
     save (no `layout` field) restores as Turtle. An unknown saved `layout` id is corrupt →
-    fresh. Settings = their own keys (`hints`, `deselect_on_empty`, `score_method`,
+    fresh. Settings = their own keys (`hints`, `deselect_on_empty`,
     `layout`, `timer_update`, `timer_interval`). `deselect_on_empty` defaults to
     true; when false, an empty-board tap leaves the selected tile highlighted
     until it is matched or replaced by another viable tile. A **won (empty) board is NOT saved** —
@@ -551,7 +551,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    run-id token; `stopTimer` freezes `elapsed_base`. No timer score bonus.
 9. **Scoring:** base 10 per pair (`SCORE_PER_PAIR`), +5 chain bonus (`CHAIN_BONUS`) when the new
    pair is in the same `matchGroup` as the previous match; flowers chain with flowers, seasons
-   with seasons. `score_method="basic"` disables the chain. **A hint breaks the fast-clear
+   with seasons. Chain/combo scoring is always enabled for human play. **A hint breaks the fast-clear
    combo:** `showHint` resets `last_match_elapsed` and `combo_chain` when a hint is shown, so
    the pair cleared after a hint earns NO combo and any running combo chain restarts at 0 — this
    blocks "hint then immediately tap the shown pair" from farming escalating COMBO points. The
@@ -578,7 +578,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
      `CenterContainer` → white rounded `FrameContainer`; `TapClose` dismisses on a tap outside
      `_panel_geom`; `onShow` re-dirties a refresh function over `_panel_geom` (else the panel may
      stay invisible); row buttons `setDirty(self, "ui")`; toggle labels are rebuilt via
-     `setButtonText` (Button:setText truncates long values — the score-toggle bug); value buttons
+     `setButtonText` (Button:setText can truncate changed values); value buttons
      are sized to the widest value; timer-interval button greys out in "On interaction" mode. The
      stats screen is the read-only counterpart: right-aligned labels + a uniform value column, a
      Reset button gated behind a `ConfirmBox`, and an `onClose` hook (main.lua's `openStats`

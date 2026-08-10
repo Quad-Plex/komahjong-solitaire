@@ -53,12 +53,10 @@ local DEFAULTS = {
     language = "en",
     hints = true,
     deselect_on_empty = true,
-    score_method = "chain",
     layout = "turtle",
     timer_update = "interval",
     timer_interval = 5,
 }
-local SCORE_OPTIONS = { "chain", "basic" }
 local TIMER_MODES = { "interval", "move" }
 local TIMER_INTERVALS = { 1, 2, 5, 10, 15, 30, 60 }
 
@@ -70,7 +68,7 @@ local SettingsWidget = InputContainer:extend{
     onApply = nil,
     onCancel = nil,   -- optional hook so the owner can react to a discard
     changes = nil,    -- current (unsaved) values
-    _rows = nil,      -- { hints=btn, deselect_on_empty=btn, score_method=btn, timer_update=btn,
+    _rows = nil,      -- { hints=btn, deselect_on_empty=btn, timer_update=btn,
                       --   timer_interval=btn }
     _panel_geom = nil, -- absolute screen rect of the floating panel (tap-outside test)
 }
@@ -97,17 +95,9 @@ end
 
 -- Re-render a row button's label.
 --
--- The label is REBUILT from scratch (free the old TextWidget, then re-run
--- Button:init) instead of going through Button:setText. KOReader's
--- Button:setText has a "fast path" that shoves the new text into the button's
--- EXISTING label widget; when that label is a single-line TextWidget (e.g.
--- after showing the short "Basic") and the new value is long ("Chain (+5
--- bonus)"), the fast path renders the long text as one truncated line, cut off
--- at the end of the button — the score-toggle bug. Rebuilding always runs the
--- full truncation/wrap logic, so the value renders exactly like it did the
--- first time the button was built. The headless mock has neither setText nor
--- init, so the fallback just stores the text field (the suite asserts on
--- `.text`).
+-- Rebuild the label so changed values always go through KOReader's full
+-- truncation/wrap logic. The headless mock has neither setText nor init, so the
+-- fallback just stores the text field (the suite asserts on `.text`).
 local function setButtonText(btn, text)
     if not btn then return end
     btn.text = text
@@ -136,7 +126,6 @@ function SettingsWidget:init()
         hints = getv("hints", defaults.hints),
         deselect_on_empty = getv("deselect_on_empty", defaults.deselect_on_empty),
         language = getv("language", defaults.language),
-        score_method = getv("score_method", defaults.score_method),
         layout = getv("layout", defaults.layout),
         timer_update = getv("timer_update", defaults.timer_update),
         timer_interval = getv("timer_interval", defaults.timer_interval),
@@ -149,9 +138,6 @@ function SettingsWidget:init()
     local label_color = Blitbuffer.COLOR_DARK_GRAY
 
     -- Value texts ----------------------------------------------------------
-    local function scoreText(method)
-        return method == "basic" and t("settings.basic") or t("settings.chain")
-    end
     local function timerModeText(mode)
         return mode == "move" and t("settings.interaction") or t("settings.periodic")
     end
@@ -184,8 +170,6 @@ function SettingsWidget:init()
     end
     considerValue(t("settings.on"))
     considerValue(t("settings.off"))
-    considerValue(t("settings.basic"))
-    considerValue(scoreText("chain"))
     considerValue(timerModeText("move"))
     considerValue(timerModeText("interval"))
     for _, sec in ipairs(TIMER_INTERVALS) do
@@ -203,7 +187,7 @@ function SettingsWidget:init()
     -- the buttons staggered). (The Layout row was dropped from the dialog;
     -- the layout setting itself is still round-tripped via `changes`.)
     local row_labels = { t("settings.hints"), t("settings.deselect_on_empty"),
-                         t("settings.language"), t("hud.score"),
+                         t("settings.language"),
                          t("settings.timer_update"), t("settings.timer_interval") }
     local max_label_w = 0
     for _, l in ipairs(row_labels) do
@@ -277,23 +261,6 @@ function SettingsWidget:init()
         UIManager:setDirty(self, "ui", self._panel_geom)
     end
     self._rows.language = language_btn
-
-    -- Score-method button (cycles Chain -> Basic) -------------------------
-    local score_btn
-    score_btn = makeButton(
-        scoreText(self.changes.score_method), control_w, Screen:scaleBySize(32),
-        function() return scoreText(self.changes.score_method) end)
-    score_btn.callback = function()
-        local idx = 1
-        for i, m in ipairs(SCORE_OPTIONS) do
-            if m == self.changes.score_method then idx = i break end
-        end
-        idx = idx % #SCORE_OPTIONS + 1
-        self.changes.score_method = SCORE_OPTIONS[idx]
-        setButtonText(score_btn, score_btn.refresh())
-        UIManager:setDirty(self, "ui", self._panel_geom)
-    end
-    self._rows.score_method = score_btn
 
     -- Timer-update mode (cycles Periodic -> On interaction) ----------------
     -- The interval button is created just below, but its enabled state is
@@ -415,8 +382,6 @@ function SettingsWidget:init()
             VerticalSpan:new{ width = gap },
             row(t("settings.deselect_on_empty"), deselect_on_empty_btn),
             VerticalSpan:new{ width = gap },
-            row(t("hud.score"), score_btn),
-            VerticalSpan:new{ width = gap },
             row(t("settings.timer_update"), timer_mode_btn),
             VerticalSpan:new{ width = gap },
             row(t("settings.timer_interval"), timer_interval_btn),
@@ -483,7 +448,6 @@ function SettingsWidget:save()
         p:setSetting("hints", self.changes.hints)
         p:setSetting("deselect_on_empty", self.changes.deselect_on_empty)
         p:setSetting("language", self.changes.language)
-        p:setSetting("score_method", self.changes.score_method)
         p:setSetting("layout", self.changes.layout)
         p:setSetting("timer_update", self.changes.timer_update)
         p:setSetting("timer_interval", self.changes.timer_interval)
@@ -516,14 +480,12 @@ function SettingsWidget:resetToDefaults()
     self.changes.hints = defaults.hints
     self.changes.deselect_on_empty = defaults.deselect_on_empty
     self.changes.language = defaults.language
-    self.changes.score_method = defaults.score_method
     self.changes.layout = defaults.layout
     self.changes.timer_update = defaults.timer_update
     self.changes.timer_interval = defaults.timer_interval
     setButtonText(self._rows.hints, self._rows.hints.refresh())
     setButtonText(self._rows.deselect_on_empty, self._rows.deselect_on_empty.refresh())
     setButtonText(self._rows.language, self._rows.language.refresh())
-    setButtonText(self._rows.score_method, self._rows.score_method.refresh())
     setButtonText(self._rows.timer_update, self._rows.timer_update.refresh())
     setButtonText(self._rows.timer_interval, self._rows.timer_interval.refresh())
     if self._set_interval_enabled then self._set_interval_enabled() end
