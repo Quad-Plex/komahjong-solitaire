@@ -4,7 +4,7 @@ As a player, I want feedback on my progress and a running score.
 
 - Score model (keep simple, document it in README):
   - Base 10 points per matched pair.
-  - Consecutive bonus: +5 if the previous match was the same tile kind (chain).
+  - Consecutive bonus: +50 if the previous match was the same tile kind (chain).
   - Timer bonus: on a win, add remaining-time bonus (or skip if timing not implemented).
 - HUD top bar (`hudbar.lua`, replacing the original `TitleBarWidget` subtitle): the top of the
   screen is a full-width band with the title plus three stylized stat "chips" — Pairs remaining,

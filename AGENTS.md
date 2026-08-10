@@ -559,7 +559,7 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    controls when the mm:ss **repaints** — `timer_update="interval"` (default, poll every
    `timer_interval`s, default 5) vs `"move"` (repaint on interaction only). `startTimer` bumps a
    run-id token; `stopTimer` freezes `elapsed_base`. No timer score bonus.
-9. **Scoring:** base 10 per pair (`SCORE_PER_PAIR`), +5 chain bonus (`CHAIN_BONUS`) when the new
+9. **Scoring:** base 10 per pair (`SCORE_PER_PAIR`), +50 chain bonus (`CHAIN_BONUS`) when the new
    pair is in the same `matchGroup` as the previous match; flowers chain with flowers, seasons
    with seasons. Chain/combo scoring is always enabled for human play. **A hint breaks the fast-clear
    combo:** `showHint` resets `last_match_elapsed` and `combo_chain` when a hint is shown, so

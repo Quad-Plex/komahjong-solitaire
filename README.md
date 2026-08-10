@@ -41,7 +41,7 @@ Features:
   tiles beneath; dynamic bevel restoration when neighbours are removed. Local
   updates are clipped to the board canvas and terminal dialogs wait for a final
   structural repaint to settle, avoiding stale or garbled e-ink frames.
-- **Scoring:** 10 points per pair plus a +5 chain bonus for consecutive matches
+- **Scoring:** 10 points per pair plus a +50 chain bonus for consecutive matches
   of the same group (suited/wind/dragon kind, or flower→flower / season→season),
   with escalating fast-clear combo bonuses. **Penalties (US-18):** a hint costs 5
   and a manual shuffle costs 10, charged once per hint *session* (US-20) and
@@ -77,7 +77,7 @@ Features:
 ## Scoring rules
 
 - **Base:** 10 points for every matched pair.
-- **Chain bonus:** +5 when the new pair belongs to the same tile group as the
+- **Chain bonus:** +50 when the new pair belongs to the same tile group as the
   immediately previous match — same suited/wind/dragon kind, or any flower
   after a flower, any season after a season. The chain spans shuffles and
   survives undo correctly. This chain scoring is always enabled.
