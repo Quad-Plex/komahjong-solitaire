@@ -21,6 +21,7 @@ end
 local function pickTurtle()
     local picker = ctx.window_stack[#ctx.window_stack].widget
     if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
     local r
     for _, c in ipairs(picker._card_rects) do
         if c.id == "turtle" then r = c break end

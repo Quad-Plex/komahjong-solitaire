@@ -74,6 +74,8 @@ end
 expect(first_row == 3, "narrow picker keeps three columns")
 
 local turtle
+if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
+picker = ctx.window_stack[#ctx.window_stack].widget
 for _, rect in ipairs(picker._card_rects) do
     if rect.id == "turtle" then turtle = rect break end
 end

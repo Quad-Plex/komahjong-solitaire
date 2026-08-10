@@ -80,6 +80,10 @@ end
 -- ---- Card names are dark black -----------------------------------------------
 
 local mj, picker = openPicker()
+if picker._page_right and picker._page_right.enabled ~= false then
+    picker._page_right.callback()
+    picker = ctx.window_stack[#ctx.window_stack].widget
+end
 local tcard = turtleCard(picker)
 expect(tcard ~= nil, "the picker lists a Turtle card")
 if tcard then
@@ -172,6 +176,8 @@ local mi3 = {}
 mj3:addToMainMenu(mi3)
 mi3.mahjong.callback()
 local picker3 = ctx.window_stack[#ctx.window_stack].widget
+picker3._page_right.callback()
+picker3 = ctx.window_stack[#ctx.window_stack].widget
 local tcard3 = turtleCard(picker3)
 local before_background = tcard3.card.background
 picker3:onTapSelect(nil, { pos = { x = tcard3.x + tcard3.w / 2,
@@ -195,6 +201,8 @@ local mi4 = {}
 mj4:addToMainMenu(mi4)
 mi4.mahjong.callback()
 local picker4 = ctx.window_stack[#ctx.window_stack].widget
+picker4._page_right.callback()
+picker4 = ctx.window_stack[#ctx.window_stack].widget
 local tcard4 = turtleCard(picker4)
 picker4:onTapSelect(nil, { pos = { x = tcard4.x + tcard4.w / 2,
                                    y = tcard4.y + tcard4.h / 2 } })

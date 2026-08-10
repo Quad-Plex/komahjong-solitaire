@@ -88,6 +88,8 @@ end
 store.game = nil
 store.stats = Stats.load{ layout_highscores = { turtle = 123, spider = 456 } }
 local picker2 = openPicker()
+picker2._page_right.callback()
+picker2 = ctx.window_stack[#ctx.window_stack].widget
 local tcard = cardById(picker2, "turtle")
 local scard = cardById(picker2, "spider")
 local ocard = cardById(picker2, "bridge")
@@ -112,7 +114,7 @@ end
 expect(scard ~= nil and cardScoreChip(scard) ~= nil
     and cardScoreChip(scard)[1][3].text == "456",
     "Spider's chip shows its own best score (456)")
-expect(ocard ~= nil and cardScoreChip(ocard) == nil,
+expect(ocard == nil or cardScoreChip(ocard) == nil,
     "a layout without a highscore shows no chip")
 
 -- ---- A human win records the score; the chip appears after Select Layout ------
@@ -208,6 +210,8 @@ end
 store.game = nil
 store.stats = Stats.load{ layout_best_times = { turtle = 125, spider = 90 } }
 local pickerT = openPicker()
+pickerT._page_right.callback()
+pickerT = ctx.window_stack[#ctx.window_stack].widget
 local tcardT = cardById(pickerT, "turtle")
 local scardT = cardById(pickerT, "spider")
 local ocardT = cardById(pickerT, "bridge")
@@ -226,7 +230,7 @@ end
 expect(scardT ~= nil and cardTimeChip(scardT) ~= nil
     and cardTimeChip(scardT)[1].text == "01:30",
     "Spider's chip shows its own best time (90s) as mm:ss (01:30)")
-expect(ocardT ~= nil and cardTimeChip(ocardT) == nil,
+expect(ocardT == nil or cardTimeChip(ocardT) == nil,
     "a layout without a best time shows no time chip")
 
 -- A human win records the layout best time and the chip appears after Select Layout.

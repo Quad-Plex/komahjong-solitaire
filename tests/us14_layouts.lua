@@ -43,6 +43,7 @@ end
 local function pickTurtle()
     local picker = ctx.window_stack[#ctx.window_stack].widget
     if not picker or picker.name ~= "mahjonglayoutselect" then return end
+    if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
     local r
     for _, c in ipairs(picker._card_rects) do
         if c.id == "turtle" then r = c break end
@@ -53,18 +54,19 @@ end
 
 -- ---- Registry ---------------------------------------------------------------
 --
--- US-14 registered Turtle; US-15 adds Spider; US-16 Bridge; US-22 Ziggurat;
+    -- US-14 registered Turtle; later stories add the remaining maps;
 -- US-23 Cloud; US-24/25/26 Tic-Tac-Toe, Red Dragon, Overpass; US-27/28/29
 -- Pyramid's Walls, Confounding Cross, Taipei. The registry now enumerates exactly
 -- {"bridge", "cloud", "confounding", "overpass", "pyramid", "red-dragon",
 -- "spider", "taipei", "tictactoe", "turtle", "ziggurat"} (sorted).
 local ids = Logic.layoutIds()
-expect(#ids == 12 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
-        and ids[4] == "crab" and ids[5] == "overpass" and ids[6] == "pyramid"
-        and ids[7] == "red-dragon" and ids[8] == "spider" and ids[9] == "taipei"
-        and ids[10] == "tictactoe" and ids[11] == "turtle" and ids[12] == "ziggurat",
-    "registry enumerates exactly {bridge, cloud, confounding, overpass, pyramid,\n"
-    .. "red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got "
+expect(#ids == 18 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
+         and ids[4] == "crab" and ids[5] == "hare" and ids[6] == "horse" and ids[7] == "monkey"
+         and ids[8] == "overpass" and ids[9] == "pyramid" and ids[10] == "ram"
+         and ids[11] == "red-dragon" and ids[12] == "rooster" and ids[13] == "spider"
+         and ids[14] == "taipei" and ids[15] == "tictactoe" and ids[16] == "tiger"
+         and ids[17] == "turtle" and ids[18] == "ziggurat",
+    "registry enumerates all 18 built-in layouts (got "
     .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
 expect(Logic.layoutName("spider") == "Spider", "layoutName returns the registered Spider name")
@@ -118,13 +120,13 @@ local toy_spec = {
 }
 Logic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
 local toy_ids = Logic.layoutIds()
-expect(#toy_ids == 13 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+    expect(#toy_ids == 19 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
         and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
-        and toy_ids[5] == "overpass" and toy_ids[6] == "pyramid"
-        and toy_ids[7] == "red-dragon" and toy_ids[8] == "spider"
-        and toy_ids[9] == "taipei" and toy_ids[10] == "tictactoe"
-        and toy_ids[11] == "toy" and toy_ids[12] == "turtle"
-        and toy_ids[13] == "ziggurat",
+        and toy_ids[5] == "hare" and toy_ids[6] == "horse" and toy_ids[7] == "monkey"
+        and toy_ids[8] == "overpass" and toy_ids[9] == "pyramid" and toy_ids[10] == "ram"
+        and toy_ids[11] == "red-dragon" and toy_ids[12] == "rooster" and toy_ids[13] == "spider"
+        and toy_ids[14] == "taipei" and toy_ids[15] == "tictactoe" and toy_ids[16] == "tiger"
+        and toy_ids[17] == "toy" and toy_ids[18] == "turtle" and toy_ids[19] == "ziggurat",
     "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
 expect(#Logic.buildLayout("toy") == 5, "the toy layout has 5 positions")
 expect(Logic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -229,6 +231,10 @@ menu_items.mahjong.callback()
 local top = ctx.window_stack[#ctx.window_stack].widget
 expect(top ~= nil and top.name == "mahjonglayoutselect",
     "first launch (no saved game) shows the layout picker")
+if top._page_right and top._page_right.enabled ~= false then
+    top._page_right.callback()
+    top = ctx.window_stack[#ctx.window_stack].widget
+end
 -- The picker lists a card for every registered layout (turtle + toy at this
 -- point in the test). One of them MUST be Turtle.
 local has_turtle_card = false
@@ -236,7 +242,7 @@ for _, c in ipairs(top._card_rects) do
     if c.id == "turtle" then has_turtle_card = true end
 end
 expect(has_turtle_card, "the picker lists a Turtle card")
-expect(#top._card_rects == math.min(12, #Logic.layoutIds()),
+expect(#top._card_rects == 7,
     "the picker lists one card per registered layout")
 
 -- The thumbnail renders for every registered layout (turtle + toy).
@@ -397,12 +403,13 @@ expect(not restored_via_picker,
 -- ---- Deregister the toy layout (restore the 12 built-in layouts) ---------------
 
 Logic.deregisterLayout("toy")
-expect(#Logic.layoutIds() == 12 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "cloud"
+expect(#Logic.layoutIds() == 18 and Logic.layoutIds()[1] == "bridge" and Logic.layoutIds()[2] == "cloud"
         and Logic.layoutIds()[3] == "confounding" and Logic.layoutIds()[4] == "crab"
-        and Logic.layoutIds()[5] == "overpass" and Logic.layoutIds()[6] == "pyramid"
-        and Logic.layoutIds()[7] == "red-dragon" and Logic.layoutIds()[8] == "spider"
-        and Logic.layoutIds()[9] == "taipei" and Logic.layoutIds()[10] == "tictactoe"
-        and Logic.layoutIds()[11] == "turtle" and Logic.layoutIds()[12] == "ziggurat",
+        and Logic.layoutIds()[5] == "hare" and Logic.layoutIds()[6] == "horse" and Logic.layoutIds()[7] == "monkey"
+        and Logic.layoutIds()[8] == "overpass" and Logic.layoutIds()[9] == "pyramid" and Logic.layoutIds()[10] == "ram"
+        and Logic.layoutIds()[11] == "red-dragon" and Logic.layoutIds()[12] == "rooster" and Logic.layoutIds()[13] == "spider"
+        and Logic.layoutIds()[14] == "taipei" and Logic.layoutIds()[15] == "tictactoe" and Logic.layoutIds()[16] == "tiger"
+        and Logic.layoutIds()[17] == "turtle" and Logic.layoutIds()[18] == "ziggurat",
     "deregistering the toy layout restores the {bridge, cloud, confounding, crab, overpass,\n"
     .. "pyramid, red-dragon, spider, taipei, tictactoe, turtle, ziggurat} registry")
 

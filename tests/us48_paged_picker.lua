@@ -25,7 +25,7 @@ end
 local picked
 local picker = Picker:new{ onPick = function(id) picked = id end }
 local ids = Logic.layoutIds()
-expect(picker.page_count == 2, "24 layouts create exactly two pages")
+expect(picker.page_count == 3, "30 layouts create exactly three pages")
 expect(#picker._card_rects == 12, "page one has twelve cards")
 expect(picker.page == 1, "picker starts on page one")
 expect(picker._page_left.enabled == false, "left arrow is disabled on page one")
@@ -40,8 +40,16 @@ expect(picker.page == 2, "right arrow changes to page two")
 expect(#picker._card_rects == 12, "page two has twelve cards")
 expect(picker._card_rects[1].id == ids[13], "page two starts at registry slot thirteen")
 expect(picker._card_rects[12].id == ids[24], "page two ends at registry slot twenty-four")
-expect(picker._page_right.enabled == false, "right arrow is disabled on the last page")
+expect(picker._page_right.enabled ~= false, "right arrow is enabled before the last page")
 expect(picker._page_left.enabled ~= false, "left arrow is enabled on page two")
+
+picker._page_right.callback()
+expect(picker.page == 3, "right arrow changes to page three")
+expect(#picker._card_rects == 6, "page three contains the remaining six cards")
+expect(picker._card_rects[1].id == ids[25] and picker._card_rects[6].id == ids[30],
+    "page three contains registry slots twenty-five through thirty")
+expect(picker._page_right.enabled == false, "right arrow is disabled on the last page")
+picker._page_left.callback()
 
 local card = picker._card_rects[1]
 picker:onTapSelect(nil, { pos = { x = card.x + card.w / 2, y = card.y + card.h / 2 } })

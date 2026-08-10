@@ -80,7 +80,9 @@ local CATALOG = {
         ["layout.ziggurat"] = "Ziggurat", ["layout.cloud"] = "Cloud", ["layout.tictactoe"] = "Tic-Tac-Toe",
         ["layout.red-dragon"] = "Red Dragon", ["layout.overpass"] = "Overpass",
         ["layout.pyramid"] = "Pyramid's Walls", ["layout.confounding"] = "Confounding Cross",
-        ["layout.taipei"] = "Taipei", ["layout.crab"] = "Crab",
+         ["layout.taipei"] = "Taipei", ["layout.crab"] = "Crab",
+         ["layout.hare"] = "Hare", ["layout.horse"] = "Horse", ["layout.tiger"] = "Tiger",
+         ["layout.ram"] = "Ram", ["layout.monkey"] = "Monkey", ["layout.rooster"] = "Rooster",
     },
     de = {
         ["app.name"] = "Mahjong Solitaire", ["app.description"] = "Mahjong-Solitaire-Spiel für KOReader.",
@@ -144,7 +146,9 @@ local CATALOG = {
         ["layout.bridge"] = "Brücke", ["layout.ziggurat"] = "Zikkurat", ["layout.cloud"] = "Wolke",
         ["layout.tictactoe"] = "Tic-Tac-Toe", ["layout.red-dragon"] = "Roter Drache", ["layout.overpass"] = "Überführung",
         ["layout.pyramid"] = "Pyramidenwände", ["layout.confounding"] = "Verwirrendes Kreuz",
-        ["layout.taipei"] = "Taipeh", ["layout.crab"] = "Krabbe",
+         ["layout.taipei"] = "Taipeh", ["layout.crab"] = "Krabbe",
+         ["layout.hare"] = "Hase", ["layout.horse"] = "Pferd", ["layout.tiger"] = "Tiger",
+         ["layout.ram"] = "Widder", ["layout.monkey"] = "Affe", ["layout.rooster"] = "Hahn",
     },
 }
 

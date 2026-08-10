@@ -4,7 +4,7 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 
 ## Features
 
-- **12 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
+- **18 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
   Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, and Crab — a
   full-screen layout picker lets you choose one to start a game. Picker cards
   show a thumbnail schematic, a win-count trophy badge, and a best-score chip

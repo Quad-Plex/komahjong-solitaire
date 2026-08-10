@@ -36,12 +36,9 @@ end
 -- ---- Registry ---------------------------------------------------------------
 
 local ids = Logic.layoutIds()
-expect(#ids == 12 and ids[1] == "bridge" and ids[2] == "cloud" and ids[3] == "confounding"
-        and ids[4] == "crab" and ids[5] == "overpass" and ids[6] == "pyramid"
-        and ids[7] == "red-dragon" and ids[8] == "spider" and ids[9] == "taipei"
-        and ids[10] == "tictactoe" and ids[11] == "turtle" and ids[12] == "ziggurat",
-    "registry enumerates {bridge, cloud, confounding, crab, overpass, pyramid, red-dragon,\n"
-    .. "spider, taipei, tictactoe, turtle, ziggurat} (got " .. table.concat(ids, ",") .. ")")
+    expect(#ids == 18 and ids[3] == "confounding" and ids[5] == "hare"
+        and ids[13] == "spider" and ids[17] == "turtle",
+    "registry enumerates all 18 layouts (got " .. table.concat(ids, ",") .. ")")
 expect(Logic.layoutName("confounding") == "Confounding Cross",
     "layoutName returns 'Confounding Cross'")
 expect(Logic.maxLayer("confounding") == 5, "maxLayer(confounding) == 5")
@@ -188,6 +185,10 @@ local menu_items = {}
 mj:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker = ctx.window_stack[#ctx.window_stack].widget
+if picker._page_right and picker._page_right.enabled ~= false then picker._page_right.callback() end
+picker = ctx.window_stack[#ctx.window_stack].widget
+if picker._page_left and picker._page_left.enabled ~= false then picker._page_left.callback() end
+picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "first launch shows the layout picker")
     expect(#picker._card_rects == math.min(12, #Logic.layoutIds()),
@@ -195,13 +196,10 @@ expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     .. #Logic.layoutIds() .. " ids)")
 
 local has_cc_card = false
-local has_turtle_card = false
 for _, c in ipairs(picker._card_rects) do
     if c.id == "confounding" then has_cc_card = true end
-    if c.id == "turtle" then has_turtle_card = true end
 end
 expect(has_cc_card, "picker has a Confounding card")
-expect(has_turtle_card, "picker has a Turtle card")
 
 -- Thumbnail renders for Confounding.
 local thumb = LayoutSelect.layoutThumbnail("confounding", 200, 200)

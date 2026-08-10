@@ -981,13 +981,13 @@ function MahjongLogic.runSelfTests()
     }
     MahjongLogic.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = MahjongLogic.layoutIds()
-    check(#toy_ids == 13 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+    check(#toy_ids == 19 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
         and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
-        and toy_ids[5] == "overpass" and toy_ids[6] == "pyramid"
-        and toy_ids[7] == "red-dragon" and toy_ids[8] == "spider"
-        and toy_ids[9] == "taipei" and toy_ids[10] == "tictactoe"
-        and toy_ids[11] == "toy" and toy_ids[12] == "turtle"
-        and toy_ids[13] == "ziggurat",
+        and toy_ids[5] == "hare" and toy_ids[6] == "horse" and toy_ids[7] == "monkey"
+        and toy_ids[8] == "overpass" and toy_ids[9] == "pyramid" and toy_ids[10] == "ram"
+        and toy_ids[11] == "red-dragon" and toy_ids[12] == "rooster" and toy_ids[13] == "spider"
+        and toy_ids[14] == "taipei" and toy_ids[15] == "tictactoe" and toy_ids[16] == "tiger"
+        and toy_ids[17] == "toy" and toy_ids[18] == "turtle" and toy_ids[19] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted")
     check(#MahjongLogic.buildLayout("toy") == 8, "the toy layout has 8 positions")
     check(MahjongLogic.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -1021,9 +1021,10 @@ function MahjongLogic.runSelfTests()
     -- (the registry is module-global, and later assertions count exactly one
     -- id implicitly via the Turtle-specific layout checks above).
     MahjongLogic.deregisterLayout("toy")
-    check(#MahjongLogic.layoutIds() == 12,
-        "deregistering toy restores the {bridge, cloud, confounding, crab, "
-        .. "overpass, pyramid, red-dragon, spider, taipei, tictactoe, turtle, "
+    check(#MahjongLogic.layoutIds() == 18,
+        "deregistering toy restores the built-in registry including animal maps: "
+        .. "{bridge, cloud, confounding, crab, hare, horse, monkey, overpass, "
+        .. "pyramid, ram, red-dragon, rooster, spider, taipei, tictactoe, tiger, turtle, "
         .. "ziggurat} registry")
 
     -- Spider layout (US-15) -----------------------------------------------

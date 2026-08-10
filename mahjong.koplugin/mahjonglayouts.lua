@@ -1,3 +1,4 @@
+-- luacheck: max line length 400
 -- Mahjong Solitaire — pure layout definitions + registry (no KOReader deps).
 --
 -- US-22a: the layout spec tables, the registry, the per-id caches, and the
@@ -631,6 +632,49 @@ local CRAB_SPEC = {
     { layer = 3, kind = "tile", x = 7.5, y = 5 },
 }
 
+-- US-49: compact PySolFC animal maps.  The source stores each tile as a
+-- half-grid x/y pair and uses the first character for a layer span.  Keeping
+-- the screened source strings here avoids duplicating hundreds of coordinates;
+-- the resulting specs are ordinary per-layer point sets consumed by the same
+-- layout builder as every other map.
+local ANIMAL_LAYOUTS = {
+    hare = '0aacaamacabccaceackbcmacobeacecbeebekcembeoofavfcofeofkvfmofobgacgcbgebgkcgmbgoaiabicbiebikbimaioakcakebkhakkakmamebmgbmiamkbogoohboicqfcqhcqjasejsfasgjshasijsjaskCtgCtibuddufduhdujbulovdCvgCviovlbwddwfdwhdwjbwlcyfcyhcyjbAhbCh',
+    horse = '0bafbahbajbcdbchbclaedbefbehbejaelagfaghagjaifhigaihhiiaijakfhkgakhhkiakjbmecmgcmibmkcodcofcohcojcolcqdcqfvqgcqhvqicqjcqlbsbcsfvsgcshvsicsjbsnotbotnbubcudcufvugcuhvuicujculbunbwbcwdcwfcwhcwjcwlbwnbycayfbyhayjbymaAbaAnaCaaCo',
+    tiger = '0baabacbambaobcabccbcmbcobebaeghehaeibenbgbbggbgibgnaibbidcifcihdijbilainakdhkeakfokfhkgakhpkhhkiakjokjhkkaklbmepmfbmgomhbmiomjbmkboeoofbogoohboipojbokbqeoqfbqgpqhbqioqjbqkbsddsfcshcsjbslbubbudbuhbulbunbwbbwibwnbybbygbynbAbbAibAnbCbbCgbCn',
+    ram = '0aacaaeaagaaihbehbghbibccaceoceacgaciociackadaodchdehdihdkheabecaeepeeaeioeiaekafaofchfehfihfkhgabgcageogeaggagiogiagkahahhehhghhibicaieaigaiibkcblgbmcbmeamionehniankanmcocboevoebogaoiooihokhombooopehpiapkapmbqcbqeaqibrgbscbucaueaugauiavahvehvghvihwabwcaweoweawgawiowiawkaxaoxchxehxihxkhyabycayepyeayioyiaykazaozchzehzihzkbAcaAeoAeaAgaAioAiaAkhBehBghBiaCcaCeaCgaCi',
+    monkey = '0aaahabaacoachadaaeaakbcaaceackhclacmocmhcnacoodabeabeoofoagahgbagcaghbgobicbigbiiaimhinaioojgbkcdkebkgvkgdkibkkbkmolgdmebmgvmgdmiongdoebogvogdoiaokholaomaooopghpobqcdqebqgvqgdqiaqooqoorghroasahsbascbsgasmasoauaaughuhauiawihwjawkowkhwlawmbymaAchAdaAeoAehAfvAfaAgoAgCAghAhvAhaAioAiCAihAjvAjaAkoAkhAlaAmaCahCbaCc',
+    rooster = '0aaaaagabchcccceccgadcvdfadiceecegaeohfoageagoogohhoaiehifaigaimaiohjmbkeokfbkgokhbkiakkakmamccmevmfcmgvmhcmiamkanahncCnghoaaocooccoevofcogvohcoiapaopahpchqaaqcoqcbqeoqfbqgvqgoqhbqiaqkaqmaraorahrchrmhsaascbsgoshbsiaskasmasoataotahtohuaaufhugauhauoavabweowfbwgowhbwivxgayabycoydbyeoyfbygoyhbyihzaaAaaAeaAjhAkaAlhBaaCaaCehCfaCgaCl',
+}
+
+local function animalSpec(encoded)
+    local alphabet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    local spec, by_layer = {}, {}
+    for i = 2, #encoded, 3 do
+        local level = alphabet:find(encoded:sub(i, i), 1, true) - 1
+        local x = (alphabet:find(encoded:sub(i + 1, i + 1), 1, true) - 1) / 2
+        local y = (alphabet:find(encoded:sub(i + 2, i + 2), 1, true) - 1) / 2
+        local layer = math.floor(level / 7)
+        local height = level % 7 + 1
+        for current = layer, layer + height - 1 do
+            by_layer[current] = by_layer[current] or {}
+            by_layer[current][#by_layer[current] + 1] = { x = x, y = y }
+        end
+    end
+    for layer = 0, 6 do
+        if by_layer[layer] then
+            spec[#spec + 1] = { layer = layer, kind = "set", points = by_layer[layer] }
+        end
+    end
+    return spec
+end
+
+local HARE_SPEC = animalSpec(ANIMAL_LAYOUTS.hare)
+local HORSE_SPEC = animalSpec(ANIMAL_LAYOUTS.horse)
+local TIGER_SPEC = animalSpec(ANIMAL_LAYOUTS.tiger)
+local RAM_SPEC = animalSpec(ANIMAL_LAYOUTS.ram)
+local MONKEY_SPEC = animalSpec(ANIMAL_LAYOUTS.monkey)
+local ROOSTER_SPEC = animalSpec(ANIMAL_LAYOUTS.rooster)
+
 -- The registry itself: id -> { id=, name=, spec= }. Callers must NOT mutate
 -- the entries (the cached layout tables reference the spec).
 Layouts.layouts = {}
@@ -739,6 +783,12 @@ Layouts.registerLayout{ id = "pyramid", name = "Pyramid's Walls", spec = PYRAMID
 Layouts.registerLayout{ id = "confounding", name = "Confounding Cross", spec = CONFOUNDING_SPEC }
 Layouts.registerLayout{ id = "taipei", name = "Taipei", spec = TAIPEI_SPEC }
 Layouts.registerLayout{ id = "crab", name = "Crab", spec = CRAB_SPEC }
+Layouts.registerLayout{ id = "hare", name = "Hare", spec = HARE_SPEC }
+Layouts.registerLayout{ id = "horse", name = "Horse", spec = HORSE_SPEC }
+Layouts.registerLayout{ id = "tiger", name = "Tiger", spec = TIGER_SPEC }
+Layouts.registerLayout{ id = "ram", name = "Ram", spec = RAM_SPEC }
+Layouts.registerLayout{ id = "monkey", name = "Monkey", spec = MONKEY_SPEC }
+Layouts.registerLayout{ id = "rooster", name = "Rooster", spec = ROOSTER_SPEC }
 
 -- Returns the 144 tile positions of a layout as an array of
 -- { x = .., y = .., layer = .. } tables, bottom layer first (so the UI can
@@ -887,7 +937,7 @@ function Layouts.runSelfTests()
         end
     end
 
-    -- Per-layout shape (US-04/15/16/22/23/24/25/26/27/28/29): Turtle
+    -- Per-layout shape (US-04/15/16/22/23/24/25/26/27/28/29/35/49): Turtle
     -- 87/36/16/4/1, Spider 65/53/25/1, Bridge 88/36/16/4, Ziggurat
     -- 64/20/18/18/14/10, Cloud 79/36/29, Tic-Tac-Toe 40/36/28/20/20, Red Dragon
     -- 82/45/17, Overpass 52/20/16/32/24, Pyramid's Walls 41/34/27/20/13/6/3,
@@ -916,6 +966,18 @@ function Layouts.runSelfTests()
         { x_min = 0, x_max = 10, y_min = 0, y_max = 6 })
     checkShape("crab", { [0] = 77, [1] = 50, [2] = 15, [3] = 2 },
         { x_min = 1, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("hare", { [0] = 59, [1] = 44, [2] = 26, [3] = 11, [4] = 4 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("horse", { [0] = 62, [1] = 49, [2] = 27, [3] = 6 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("tiger", { [0] = 62, [1] = 58, [2] = 18, [3] = 6 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("ram", { [0] = 69, [1] = 52, [2] = 20, [3] = 3 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("monkey", { [0] = 60, [1] = 44, [2] = 23, [3] = 15, [4] = 2 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
+    checkShape("rooster", { [0] = 66, [1] = 44, [2] = 26, [3] = 7, [4] = 1 },
+        { x_min = 0, x_max = 14, y_min = 0, y_max = 7 })
 
     -- maxLayer per layout.
     check(Layouts.maxLayer("turtle") == 4, "maxLayer(turtle) == 4")
@@ -933,15 +995,16 @@ function Layouts.runSelfTests()
     -- Registry behavior (US-14..US-29): the eleven built-ins are enumerated
     -- sorted; memoization is per-id; an unknown id falls back to the id itself.
 local ids = Layouts.layoutIds()
-    check(#ids == 12 and ids[1] == "bridge" and ids[2] == "cloud"
+    check(#ids == 18 and ids[1] == "bridge" and ids[2] == "cloud"
         and ids[3] == "confounding" and ids[4] == "crab"
-        and ids[5] == "overpass" and ids[6] == "pyramid"
-        and ids[7] == "red-dragon" and ids[8] == "spider"
-        and ids[9] == "taipei" and ids[10] == "tictactoe"
-        and ids[11] == "turtle" and ids[12] == "ziggurat",
-        "layoutIds returns exactly {bridge, cloud, confounding, crab, overpass, pyramid,\n"
-        .. "red-dragon, spider, taipei, tictactoe, turtle, ziggurat} (got "
+        and ids[5] == "hare" and ids[6] == "horse" and ids[7] == "monkey"
+        and ids[8] == "overpass" and ids[9] == "pyramid" and ids[10] == "ram"
+        and ids[11] == "red-dragon" and ids[12] == "rooster" and ids[13] == "spider"
+        and ids[14] == "taipei" and ids[15] == "tictactoe" and ids[16] == "tiger"
+        and ids[17] == "turtle" and ids[18] == "ziggurat",
+        "layoutIds returns all 18 built-in layouts (got "
         .. table.concat(ids, ",") .. ")")
+    check(Layouts.layoutName("hare") == "Hare", "layoutName returns Hare's registered name")
     check(Layouts.layoutName("turtle") == "Turtle", "layoutName returns the registered Turtle name")
     check(Layouts.layoutName("spider") == "Spider", "layoutName returns Spider's registered name")
     check(Layouts.layoutName("bridge") == "Bridge", "layoutName returns Bridge's registered name")
@@ -981,13 +1044,13 @@ local ids = Layouts.layoutIds()
     }
     Layouts.registerLayout{ id = "toy", name = "Toy", spec = toy_spec }
     local toy_ids = Layouts.layoutIds()
-    check(#toy_ids == 13 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
+    check(#toy_ids == 19 and toy_ids[1] == "bridge" and toy_ids[2] == "cloud"
         and toy_ids[3] == "confounding" and toy_ids[4] == "crab"
-        and toy_ids[5] == "overpass" and toy_ids[6] == "pyramid"
-        and toy_ids[7] == "red-dragon" and toy_ids[8] == "spider"
-        and toy_ids[9] == "taipei" and toy_ids[10] == "tictactoe"
-        and toy_ids[11] == "toy" and toy_ids[12] == "turtle"
-        and toy_ids[13] == "ziggurat",
+        and toy_ids[5] == "hare" and toy_ids[6] == "horse" and toy_ids[7] == "monkey"
+        and toy_ids[8] == "overpass" and toy_ids[9] == "pyramid" and toy_ids[10] == "ram"
+        and toy_ids[11] == "red-dragon" and toy_ids[12] == "rooster" and toy_ids[13] == "spider"
+        and toy_ids[14] == "taipei" and toy_ids[15] == "tictactoe" and toy_ids[16] == "tiger"
+        and toy_ids[17] == "toy" and toy_ids[18] == "turtle" and toy_ids[19] == "ziggurat",
         "registerLayout adds the id; layoutIds returns them sorted (got " .. table.concat(toy_ids, ",") .. ")")
     check(#Layouts.buildLayout("toy") == 5, "the toy layout has 5 positions")
     check(Layouts.maxLayer("toy") == 1, "the toy layout's max layer is 1")
@@ -1009,10 +1072,10 @@ local ids = Layouts.layoutIds()
     check(Layouts.layoutName("toy") == "Toy2", "re-registering an id replaces its name")
 
     Layouts.deregisterLayout("toy")
-    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 12,
+    check(Layouts.layouts["toy"] == nil and #Layouts.layoutIds() == 18,
         "deregisterLayout removes the entry and restores the built-in registry")
     Layouts.deregisterLayout("toy")
-    check(#Layouts.layoutIds() == 12,
+    check(#Layouts.layoutIds() == 18,
         "deregisterLayout is a no-op for an already-deregistered id")
 
     local function checkError(fn, msg)

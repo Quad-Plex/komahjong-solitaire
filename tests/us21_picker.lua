@@ -56,8 +56,8 @@ expect(picker ~= nil and picker.name == "mahjonglayoutselect",
 
 local ids = Logic.layoutIds()
 local expected_rows = math.max(3, math.ceil(#ids / COLS))
-expect(#picker._card_rects == #ids,
-    "picker lists one card per registered layout (" .. #ids .. " layouts, "
+expect(#picker._card_rects == math.min(12, #ids),
+    "picker lists the active page of registered layouts (" .. #ids .. " layouts, "
     .. #picker._card_rects .. " cards)")
 
 -- The grid uses 3 columns: the first COLS cards share a row (same y) and
@@ -93,7 +93,7 @@ expect(sorted, "cards appear in sorted-id order")
 local card_ids = {}
 for _, c in ipairs(picker._card_rects) do card_ids[#card_ids + 1] = c.id end
 local ids_match = true
-for i = 1, #ids do
+for i = 1, #picker._card_rects do
     if card_ids[i] ~= ids[i] then ids_match = false end
 end
 expect(ids_match, "card ids match sorted registered layout ids")
@@ -101,15 +101,17 @@ expect(ids_match, "card ids match sorted registered layout ids")
 -- Every card has a non-nil thumbnail-backed content (the card was built).
 for _, c in ipairs(picker._card_rects) do
     expect(c.id == "bridge" or c.id == "cloud" or c.id == "confounding"
-            or c.id == "crab" or c.id == "overpass" or c.id == "pyramid"
+            or c.id == "crab" or c.id == "hare" or c.id == "horse" or c.id == "monkey"
+            or c.id == "overpass" or c.id == "pyramid" or c.id == "ram"
             or c.id == "red-dragon" or c.id == "spider" or c.id == "taipei"
-            or c.id == "tictactoe" or c.id == "turtle" or c.id == "ziggurat",
+            or c.id == "tictactoe" or c.id == "tiger" or c.id == "turtle"
+            or c.id == "rooster" or c.id == "ziggurat",
         "card id is a known layout (" .. tostring(c.id) .. ")")
 end
 
 -- ---- Dynamic rows: full 3x4 of 12 built-in layouts ---------------------------
 
--- With the 12 built-in layouts, the grid is a complete 3x4: 4 rows of 3 cards.
+-- Page one is a complete 3x4: 4 rows of 3 cards.
 expect(#picker._card_rects == 12,
     "12 built-in layouts fill a 3x4 grid (got " .. #picker._card_rects .. " cards)")
 expect(picker._card_rects[12].y == picker._card_rects[11].y
@@ -130,6 +132,8 @@ local mi3 = {}
 mj3:addToMainMenu(mi3)
 mi3.mahjong.callback()
 local picker3 = ctx.window_stack[#ctx.window_stack].widget
+picker3._page_right.callback()
+picker3 = ctx.window_stack[#ctx.window_stack].widget
 local turtle_card
 for _, c in ipairs(picker3._card_rects) do
     if c.id == "turtle" then turtle_card = c break end
