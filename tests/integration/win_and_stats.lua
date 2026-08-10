@@ -183,8 +183,8 @@ expect(win_text:find("Congratulations!", 1, true) ~= nil,
 -- The win summary is a centered floating card (mahjongwinsummary.lua). Its
 -- headline is centered (wrapped in a CenterContainer over the content width),
 -- and the rows use a fixed center divider: every row is a HorizontalGroup
--- shaped { label-column span, label, value, trailing span }, so labels end at
--- the midpoint and values begin there.
+-- shaped { label-column span, label, center gap, value, trailing span }, so
+-- labels and values have a small amount of space around the midpoint.
 local win_summary = ctx.last_confirm
 expect(win_summary ~= nil and win_summary.name == "mahjongwinsummary",
     "the win is a centered floating summary card")
@@ -210,12 +210,13 @@ if row_group then
         local row = row_group[(i - 1) * 2 + 1]
         local lead = row and row[1]
         local label = row and row[2]
-        local value = row and row[3]
+        local center_gap = row and row[3]
+        local value = row and row[4]
         -- In the harness every text measures 0 wide, so the value starts at
         -- the same midpoint after the label-column span on every row.
         local x = (lead and lead.width or 0) + (label and label.width or 0)
         if lead_x == nil then lead_x = x end
-        if x ~= lead_x or row == nil or value == nil then aligned = false end
+        if x ~= lead_x or row == nil or center_gap == nil or value == nil then aligned = false end
     end
     expect(aligned, "every row's value TextWidget starts at the same x (left-aligned column)")
 end

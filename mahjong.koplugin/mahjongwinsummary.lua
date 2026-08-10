@@ -84,6 +84,7 @@ function WinSummary:init()
         max_label_w = math.max(max_label_w, measureText(r.label, label_face))
     end
     local row_gap = Screen:scaleBySize(4)
+    local center_gap = Screen:scaleBySize(2)
     local marker_gap = Screen:scaleBySize(4)
     -- The value column's width must account for the marker text too (the
     -- "(New best!)" / trophy+best that rides after a value), so the card is
@@ -145,7 +146,7 @@ function WinSummary:init()
     -- the midpoint is a real divider, rather than centering the natural row
     -- width (which made the labels and values move together as one block).
     local column_w = math.max(max_label_w, max_value_w)
-    local rows_w = 2 * column_w
+    local rows_w = 2 * column_w + 2 * center_gap
     local buttons_w = 2 * btn_w + Screen:scaleBySize(10)
     local content_w = math.min(max_content_w, math.max(rows_w, headline_size.w, buttons_w))
     local headline_h = headline_size.h
@@ -156,16 +157,17 @@ function WinSummary:init()
         local label_w = measureText(r.label, label_face)
         local value_w = measureText(r.value, value_face)
         local row_children = {
-            -- This span ends the label at the exact center of the card.
-            HorizontalSpan:new{ width = math.max(0, half_w - label_w) },
+            -- Leave a small gap on both sides of the center divider.
+            HorizontalSpan:new{ width = math.max(0, half_w - center_gap - label_w) },
             TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
+            HorizontalSpan:new{ width = center_gap },
             TextWidget:new{ text = r.value, padding = 0, face = value_face, bold = true },
         }
         -- A score/time row may carry a marker widget (a "(New best!)" TextWidget
         -- or a trophy+old-best group); render it in the value column after a
         -- small gap. The trailing span keeps every row as wide as the content,
         -- preserving the same center line even when values have different widths.
-        local used_w = half_w + value_w
+        local used_w = half_w + center_gap + value_w
         if r.marker_widget then
             row_children[#row_children + 1] = HorizontalSpan:new{ width = marker_gap }
             row_children[#row_children + 1] = r.marker_widget
