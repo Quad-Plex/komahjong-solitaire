@@ -387,11 +387,11 @@ local area, with a delayed retry only for structural changes that can overlap ra
   cropping behavior; page changes and card selection are tested through the
   picker widget's active-page hit regions.
 
-## Mahjong plugin — current state and key contracts (US-01..US-49 shipped; US-50 planned)
+## Mahjong plugin — current state and key contracts (US-01..US-50 shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
-per user story; `_completed` in the filename marks shipped stories — US-01..US-49
+per user story; `_completed` in the filename marks shipped stories — US-01..US-50
 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
@@ -494,11 +494,16 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    layers), Confounding Cross (`confounding`, per-layer 47/42/27/18/9/1, grid x=0..10, y=0..8)
    and Taipei (`taipei`, per-layer 63/46/19/10/3/2/1, grid x=0..10, y=0..6). US-35 adds Crab
     (`crab`, per-layer 77/50/15/2, grid x=1..14, y=0..7, the classic Microsoft Mahjong Titans
-    crab transcribed from KMahjongg's `crab.layout`). US-49 adds the PySolFC animal layouts Hare
+     crab transcribed from KMahjongg's `crab.layout`). US-49 adds the PySolFC animal layouts Hare
     (59/44/26/11/4), Horse (62/49/27/6), Tiger (62/58/18/6), Ram (69/52/20/3), Monkey
     (60/44/23/15/2), and Rooster (66/44/26/7/1), all on x=0..14, y=0..7. The sorted built-in
-    registry is {bridge, cloud, confounding, crab, hare, horse, monkey, overpass, pyramid, ram,
-    red-dragon, rooster, spider, taipei, tictactoe, tiger, turtle, ziggurat}. Every
+     registry is {bridge, cloud, confounding, crab, hare, horse, monkey, overpass, pyramid, ram,
+     red-dragon, rooster, spider, taipei, tictactoe, tiger, turtle, ziggurat}. US-50 adds Dog
+     (62/47/29/6), Snake (60/58/21/5), Boar (65/43/28/8), Ox (73/44/21/6), Wedges
+     (60/39/26/13/5/1), and Hourglass (74/40/12/10/8), taking the sorted built-in registry to
+     {boar, bridge, cloud, confounding, crab, dog, hare, horse, hourglass, monkey, overpass, ox,
+     pyramid, ram, red-dragon, rooster, snake, spider, taipei, tictactoe, tiger, turtle, wedges,
+     ziggurat}. Every
     layout-dependent function takes a layout id (defaulting to
    `"turtle"` so legacy callers and the self-tests stay byte-identical): `buildLayout(id)`,
    `gridBounds(id)`, `maxLayer(id)`, `isLayoutPosition(x,y,layer,id)`, `newGame(id, rng)`,

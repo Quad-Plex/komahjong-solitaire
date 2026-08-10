@@ -114,7 +114,7 @@ kindle_majong/
 │   ├── US-33_autosolve-lock_completed.md
 │   ├── US-48_paged-layout-picker_completed.md
 │   ├── US-49_zodiac-layouts-one_completed.md
-│   └── US-50_zodiac-layouts-two.md
+│   └── US-50_zodiac-layouts-two_completed.md
 ├── tests/                        # official feature-driven test suite (tests/run.sh)
 │   ├── run.sh                    # syntax/lint/self-tests + manifest suites
 │   ├── manifest.lua              # authoritative deterministic suite list
@@ -173,7 +173,7 @@ kindle_majong/
 ## User stories
 
 Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
-filename marks a shipped story; files without it are planned. Completed: **US-01..US-33, US-22a, US-37, US-48, US-49**.
+filename marks a shipped story; files without it are planned. Completed: **US-01..US-33, US-22a, US-37, US-48..US-50**.
 
 | Story | File | Status |
 |---|---|---|
@@ -214,7 +214,7 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-37 — English/German localization with runtime language selection | [US-37_localization_completed.md](implementation-plan/US-37_localization_completed.md) | ✅ completed |
 | US-48 — Paged layout picker (fixed 3×4 pages) | [US-48_paged-layout-picker_completed.md](implementation-plan/US-48_paged-layout-picker_completed.md) | ✅ completed |
 | US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one_completed.md](implementation-plan/US-49_zodiac-layouts-one_completed.md) | ✅ completed |
-| US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two.md](implementation-plan/US-50_zodiac-layouts-two.md) | planned |
+| US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two_completed.md](implementation-plan/US-50_zodiac-layouts-two_completed.md) | ✅ completed |
 | US-51 — Feature-driven test-suite transformation | [US-51_test-suite-transformation.md](implementation-plan/US-51_test-suite-transformation.md) | planned |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
@@ -231,10 +231,9 @@ table above). The stories must be read in order — later stories assume the ear
 contracts.
 
 US-48 replaces US-21's scrollable picker with a fixed, Help-style paged picker before further
-maps are added. US-49 adds six compact, multi-layer, 144-tile layouts from PySolFC rather than
-revisiting the already-exhausted GNOME source. The built-in collection now has 18 layouts: the
-first twelve sorted maps remain page one, while the six US-49 maps occupy the beginning of page
-two. US-50 is planned and will fill the remaining page-two slots.
+maps are added. US-49 and US-50 add twelve compact, multi-layer, 144-tile layouts from PySolFC
+rather than revisiting the already-exhausted GNOME source. The built-in collection now has 24
+layouts: the first twelve sorted maps occupy page one and the remaining twelve occupy page two.
 
 US-51 transforms the historical story-oriented harness collection into a
 feature-driven suite. `tests/manifest.lua` is the executable inventory and

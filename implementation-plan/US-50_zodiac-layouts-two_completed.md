@@ -71,3 +71,8 @@ slot; the final page indicator is `2/2` with its right arrow disabled.
 - No third picker page, deck-size variants, new tile assets or rules changes.
 - No changes to scores, stats, save format or board projection; the existing
   layout-id plumbing supplies those behaviors.
+
+## Status
+
+Implemented. The six exact PySolFC layouts are registered, localized, covered
+by shared layout contracts, and fill the second fixed picker page.

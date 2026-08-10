@@ -12,8 +12,8 @@ grow without a known bound, but it is inferior for the e-ink target: scrolling
 is less discoverable than paging, card height changes as layouts are added,
 and the card grid can run below the screen.
 
-US-49 adds six layouts to the current twelve built-ins, and US-50 is planned to
-add six more. The picker has a fixed **3 columns x 4 rows** page capacity. Page
+US-49 and US-50 add twelve layouts to the current twelve built-ins. The picker
+has a fixed **3 columns x 4 rows** page capacity. Page
 one remains the current sorted first twelve maps; additional maps occupy page
 two in sorted order. The
 registry remains the single source of ordering (`MahjongLogic.layoutIds()`).

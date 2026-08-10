@@ -4,10 +4,11 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 
 ## Features
 
-- **18 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
+- **24 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
   Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, Crab, Hare,
-  Horse, Tiger, Ram, Monkey, and Rooster. The first twelve are GNOME Mahjongg
-  maps and the six animal layouts are from PySolFC. A full-screen paged layout
+  Horse, Tiger, Ram, Monkey, Rooster, Dog, Snake, Boar, Ox, Wedges, and
+  Hourglass. The first twelve are GNOME Mahjongg maps and the twelve compact
+  multi-layer layouts are from PySolFC. A full-screen paged layout
   picker lets you choose one to start a game. Picker cards
   show a thumbnail schematic, a win-count trophy badge, and a best-score chip
   per layout.
