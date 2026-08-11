@@ -1,4 +1,4 @@
--- US-37 - English/German localization and picker settings entry point.
+-- Localization and picker settings entry point.
 
 local mock = require("mock")
 local ctx = mock.newContext()
@@ -15,7 +15,7 @@ expect(I18n.t("toolbar.hint") == "Hint", "English is the default language")
 local supported = I18n.supportedLanguages()
 local files = I18n.languageFiles()
 expect(#supported == #files, "every language file is available for selection")
-expect(supported[1] == "de" and supported[2] == "en", "language files are discovered in deterministic order")
+expect(supported[1] == "de" and supported[2] == "en" and supported[3] == "es", "language files are discovered in deterministic order")
 expect(I18n.languageName("en") == "English" and I18n.languageName("de") == "Deutsch",
     "language names come from language definitions")
 I18n.setLanguage("de")
@@ -28,7 +28,8 @@ expect(I18n.getLanguage() == "en", "invalid language falls back to English")
 
 expect(I18n.languageForLocale("de_DE") == "de", "German KOReader locale is detected")
 expect(I18n.languageForLocale("de-DE") == "de", "German locale with a hyphen is detected")
-expect(I18n.languageForLocale("fr_FR") == "en", "non-German locales fall back to English")
+expect(I18n.languageForLocale("es_MX") == "es", "Spanish KOReader locale is detected")
+expect(I18n.languageForLocale("fr_FR") == "en", "unsupported locales fall back to English")
 
 local mj = Mahjong:new()
 local menu = {}
@@ -45,33 +46,33 @@ expect(settings.name == "mahjongsettings", "picker settings button opens setting
 expect(settings._rows.language.text == "English", "language row defaults to English")
 
 settings._rows.language.callback()
-expect(settings.changes.language == "de", "language row cycles to German")
+expect(settings.changes.language == "es", "language row cycles to Spanish")
 settings:save()
 
 local german_picker = ctx.window_stack[#ctx.window_stack].widget
-expect(mj:getSetting("language", "en") == "de", "German language preference is persisted")
-expect(I18n.getLanguage() == "de", "saving language changes the active locale")
+expect(mj:getSetting("language", "en") == "es", "Spanish language preference is persisted")
+expect(I18n.getLanguage() == "es", "saving language changes the active locale")
 expect(german_picker.name == "mahjonglayoutselect", "picker is rebuilt after language change")
-local saw_german_title = false
+local saw_spanish_title = false
 local function inspect_picker(node)
     if type(node) ~= "table" then return end
-    if node.text == I18n.t("picker.title") then saw_german_title = true end
+    if node.text == I18n.t("picker.title") then saw_spanish_title = true end
     for _, child in ipairs(node) do inspect_picker(child) end
 end
 inspect_picker(german_picker)
-expect(saw_german_title, "rebuilt picker has German title")
+expect(saw_spanish_title, "rebuilt picker has Spanish title")
 
 if german_picker._help_btn then german_picker._help_btn.callback() end
 local help = ctx.window_stack[#ctx.window_stack].widget
 expect(help.name == "mahjonghelp", "help still opens above the localized picker")
-local saw_german = false
+local saw_spanish = false
 local function inspect(node)
     if type(node) ~= "table" then return end
-    if node.text == "Spielanleitung" then saw_german = true end
+    if node.text == "Cómo jugar" then saw_spanish = true end
     for _, child in ipairs(node) do inspect(child) end
 end
 inspect(help)
-expect(saw_german, "help content is localized")
+expect(saw_spanish, "help content is localized")
 
 if failures > 0 then os.exit(1) end
 print("US-37 localization suite passed")

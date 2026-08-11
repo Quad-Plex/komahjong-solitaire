@@ -23,7 +23,7 @@ return {
         ["settings.timer_update"] = "Timer update",
         ["settings.timer_interval"] = "Timer interval", ["settings.reset"] = "Reset",
         ["settings.save"] = "Save", ["settings.title"] = "Settings",
-        ["language.en"] = "English", ["language.de"] = "Deutsch",
+        ["language.en"] = "English", ["language.de"] = "Deutsch", ["language.es"] = "Español",
         ["picker.title"] = "Choose a Layout",
         ["pause.title"] = "Paused", ["pause.body"] = "The game is paused.",
         ["pause.resume"] = "Resume",

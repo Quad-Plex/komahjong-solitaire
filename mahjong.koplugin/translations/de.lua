@@ -18,7 +18,7 @@ return {
         ["settings.deselect_on_empty"] = "Bei Leer-Tipp abwählen",
         ["settings.timer_update"] = "Timer-Aktualisierung", ["settings.timer_interval"] = "Timer-Intervall",
         ["settings.reset"] = "Zurücksetzen", ["settings.save"] = "Speichern", ["settings.title"] = "Einstellungen",
-        ["language.en"] = "English", ["language.de"] = "Deutsch", ["picker.title"] = "Layout wählen",
+        ["language.en"] = "English", ["language.de"] = "Deutsch", ["language.es"] = "Español", ["picker.title"] = "Layout wählen",
         ["pause.title"] = "Pausiert", ["pause.body"] = "Das Spiel ist pausiert.", ["pause.resume"] = "Fortsetzen",
         ["stats.games_played"] = "Gespielt", ["stats.games_won"] = "Gewonnen",
         ["stats.win_rate"] = "Siegquote", ["stats.best_score"] = "Höchstpunktzahl",
