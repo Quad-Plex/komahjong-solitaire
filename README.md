@@ -33,6 +33,15 @@ KOReader and its plugins.
 
 ## Quick Install
 
+### Install a release
+
+1. Open the project's [latest release](https://github.com/Quad-Plex/komahjong-solitaire/releases/latest).
+2. Download the `mahjong.koplugin-vX.Y.zip` asset from the release.
+3. Unzip it directly into KOReader's `plugins/` directory. The archive already contains the
+   complete `mahjong.koplugin/` directory.
+4. Fully restart KOReader. Plugins are loaded at startup.
+5. Open **Tools -> Mahjong Solitaire**.
+
 ### Manual installation
 
 1. Download or clone this repository.

@@ -35,9 +35,19 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 
 ## Installation
 
-1. Copy the `mahjong.koplugin` directory into your KOReader `plugins/` folder on your device.
-2. Fully restart KOReader.
-3. Launch the game from the menu: **Tools → Mahjong Solitaire**.
+### Install a release
+
+1. Download the latest `mahjong.koplugin-vX.Y.zip` from the project's
+   [GitHub releases](https://github.com/Quad-Plex/komahjong-solitaire/releases/latest).
+2. Unzip it directly into your KOReader `plugins/` folder. The archive already contains the
+   complete `mahjong.koplugin/` directory.
+3. Fully restart KOReader.
+4. Launch the game from the menu: **Tools → Mahjong Solitaire**.
+
+### Manual installation
+
+Copy the complete `mahjong.koplugin` directory into your KOReader `plugins/` folder on your
+device, then fully restart KOReader.
 
 ## Rules
 
