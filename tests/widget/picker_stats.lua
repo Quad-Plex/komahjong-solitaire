@@ -109,6 +109,9 @@ expect(ctx.window_stack[#ctx.window_stack].widget == picker,
     "the picker is still on top after closing stats")
 -- Clean up (no game behind this picker): the close X dismisses it.
 picker._close_btn.callback()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "closing the first-launch picker asks for exit confirmation")
+ctx.last_confirm.ok_callback()
 expect(mj._timer_running == false, "closing the first-launch picker stays paused")
 expect(mj.board == nil, "closing the first-launch picker deals no board")
 

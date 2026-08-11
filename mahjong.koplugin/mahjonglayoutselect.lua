@@ -697,8 +697,9 @@ end
 
 -- Closes the picker and notifies the owner (the close X — empty-space taps
 -- are ignored, see onTapSelect). The owner resumes the paused timer (or does
--- nothing on the first-launch path where no game was running). Clears a
--- pending pick so a deferred deal can never fire after the picker is gone.
+-- nothing on the first-launch path where no game was running). An owner may
+-- return false to keep the picker open while showing a confirmation dialog.
+-- Clears a pending pick so a deferred deal can never fire after the picker is gone.
 --
 -- The close MUST request a full-screen refresh ("full"). A bare
 -- UIManager:close(self) flags the uncovered widgets for repaint but enqueues
@@ -710,8 +711,11 @@ end
 -- and the picker's own onShow (UIManager:setDirty(self, "full")).
 function LayoutSelect:closeDialog()
     self._pending_pick = nil
-    if self.onClose then self.onClose() end
-    UIManager:close(self, "full")
+    local close_picker = true
+    if self.onClose and self.onClose() == false then
+        close_picker = false
+    end
+    if close_picker then UIManager:close(self, "full") end
 end
 
 -- US-30: tap feedback. Darkens the tapped card's background + border so the

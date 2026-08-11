@@ -568,23 +568,45 @@ function Mahjong:showLayoutPicker()
         -- An active (un-won) board under the picker means the title-row close
         -- button renders as a return arrow (see mahjonglayoutselect.lua) and
         -- the stats card keeps its Map column for the running game.
-        game_in_background = self.board ~= nil and not MahjongLogic.isWin(self.board),
-        onClose = function()
-            self._picker_dlg = nil
-            if self.board and not MahjongLogic.isWin(self.board) then
-                -- Active board under the picker (New Game / dead-board path):
+         game_in_background = self.board ~= nil and not MahjongLogic.isWin(self.board),
+         onClose = function()
+             if self.board and not MahjongLogic.isWin(self.board) then
+                 self._picker_dlg = nil
+                 -- Active board under the picker (New Game / dead-board path):
                 -- closing the picker resumes the running game.
                 Awake.acquire(self)
                 self:startTimer()
                 self:updateTimerDisplay()
-            elseif self.board then
-                -- Won (empty) board under the picker (the Play-again flow):
-                -- closing the picker must EXIT the game — the board is already
-                -- cleared, so returning to it would strand the player on an
-                -- empty board. The picker's own close (also "full") merges
-                -- with this refresh.
-                UIManager:close(self, "full")
-            end
+             elseif self.board then
+                 -- Won (empty) board under the picker (the Play-again flow):
+                 -- ask before exiting, just like the gameplay HUD X. Keep the
+                 -- picker underneath so cancelling does not return to the
+                 -- empty board or drop the user out of Mahjong unexpectedly.
+                 local picker = self._picker_dlg
+                 UIManager:show(ConfirmBox:new{
+                     text = t("game.exit_confirm"),
+                     ok_text = t("toolbar.exit"),
+                     ok_callback = function()
+                         self._picker_dlg = nil
+                         UIManager:close(self, "ui", self.dimensions)
+                         UIManager:close(picker, "full")
+                     end,
+                 })
+                 return false
+             else
+                 -- Match the gameplay HUD X on first launch. Keep the picker
+                 -- underneath the confirmation so Cancel returns here.
+                 local picker = self._picker_dlg
+                 UIManager:show(ConfirmBox:new{
+                     text = t("game.exit_confirm"),
+                     ok_text = t("toolbar.exit"),
+                     ok_callback = function()
+                         self._picker_dlg = nil
+                         UIManager:close(picker, "ui", self.dimensions)
+                     end,
+                 })
+                 return false
+             end
         end,
     }
     self._picker_dlg:show()

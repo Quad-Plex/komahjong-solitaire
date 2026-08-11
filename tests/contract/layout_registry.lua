@@ -330,13 +330,13 @@ expect(picker3_still, "a tap outside any card does NOT close the picker")
 expect(mj3.board == nil, "ignoring the tap deals no board")
 -- Clean up: only the close X cancels the picker.
 picker3:closeDialog()
--- A bare UIManager:close would leave the e-ink panel stale when the picker is
--- the topmost full-screen widget (no active board underneath) — the close must
--- request a full refresh so the underlying screen actually repaints.
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "closeDialog opens the exit confirmation on first launch")
+ctx.last_confirm.ok_callback()
 local last_close3 = ctx.close_calls[#ctx.close_calls]
 expect(last_close3 and last_close3.widget == picker3
-        and last_close3.refreshtype == "full",
-    "closeDialog requests a full-screen refresh (got "
+        and last_close3.refreshtype == "ui",
+    "confirming close requests a UI refresh (got "
     .. tostring(last_close3 and last_close3.refreshtype) .. ")")
 
 -- The close X button also cancels.
@@ -346,15 +346,29 @@ mj4:addToMainMenu(menu_items)
 menu_items.mahjong.callback()
 local picker4 = ctx.window_stack[#ctx.window_stack].widget
 picker4._close_btn.callback()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "the picker close X opens the same exit confirmation")
+local picker4_still = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker4 then picker4_still = true end
+end
+expect(picker4_still, "the picker remains behind the exit confirmation")
+ctx.last_confirm.onClose(ctx.last_confirm)
+local picker4_after_cancel = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker4 then picker4_after_cancel = true end
+end
+expect(picker4_after_cancel, "cancelling the exit confirmation keeps the picker open")
+ctx.last_confirm.ok_callback()
 local picker4_gone = true
 for _, e in ipairs(ctx.window_stack) do
     if e.widget == picker4 then picker4_gone = false end
 end
-expect(picker4_gone, "the close X closes the picker")
+expect(picker4_gone, "confirming the exit closes the picker")
 local last_close4 = ctx.close_calls[#ctx.close_calls]
 expect(last_close4 and last_close4.widget == picker4
-        and last_close4.refreshtype == "full",
-    "the close X requests a full-screen refresh (got "
+        and last_close4.refreshtype == "ui",
+    "confirming exit requests a UI refresh (got "
     .. tostring(last_close4 and last_close4.refreshtype) .. ")")
 
 -- ---- A restored game keeps its layout (no picker) ---------------------------

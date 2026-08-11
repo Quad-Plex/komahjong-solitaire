@@ -151,11 +151,25 @@ mj4:addToMainMenu(mi4)
 mi4.mahjong.callback()
 local picker4 = ctx.window_stack[#ctx.window_stack].widget
 picker4._close_btn.callback()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "close X opens the exit confirmation")
+local still4 = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker4 then still4 = true end
+end
+expect(still4, "the picker stays behind the exit confirmation")
+ctx.last_confirm.onClose(ctx.last_confirm)
 local gone4 = true
 for _, e in ipairs(ctx.window_stack) do
     if e.widget == picker4 then gone4 = false end
 end
-expect(gone4, "close X dismisses the picker")
+expect(gone4 == false, "canceling the exit confirmation keeps the picker")
+ctx.last_confirm.ok_callback()
+gone4 = true
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker4 then gone4 = false end
+end
+expect(gone4, "confirming exit dismisses the picker")
 expect(mj4.board == nil, "canceling the picker deals no board")
 
 -- ---- Tap outside (empty space) is ignored ---------------------------------------

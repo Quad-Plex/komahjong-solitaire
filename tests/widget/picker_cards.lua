@@ -218,12 +218,13 @@ for _, c in ipairs(picker4._card_rects) do
         "the thumbnail for '" .. c.id .. "' has one tile per layout position")
 end
 
--- ---- Win-case close X exits the game (never returns to an empty board) ---------
+-- ---- Win-case close X confirms before exiting (never returns to an empty board) --
 
 -- After a win, "Select Layout" shows the picker over the WON (empty) board. Tapping
--- the picker's X must EXIT the game entirely — a bare close would land the player
--- on the empty board (reported bug). The real ConfirmBox auto-closes itself after
--- ok_callback runs, so mimic that before driving the picker's close X.
+-- the picker's X must show the same exit confirmation as the gameplay HUD X. A
+-- confirmed exit must still close the game entirely — returning to the empty board
+-- is invalid. The real ConfirmBox auto-closes itself after ok_callback runs, so
+-- mimic that before driving the picker's close X.
 store.game = nil
 local mj5 = Mahjong:new()
 mj5.board = { [pk(2, 2, 0)] = "d2", [pk(4, 2, 0)] = "d2" }
@@ -243,10 +244,24 @@ local picker5 = ctx.window_stack[#ctx.window_stack].widget
 expect(picker5 ~= nil and picker5.name == "mahjonglayoutselect",
     "win 'Select Layout' re-opens the layout picker")
 picker5:closeDialog() -- the close X
--- The flow fix: closing the picker over a WON board must close the game itself,
--- never return the player to the empty board. (The harness drives games without
--- UIManager:show(self), so the stack never held the game; the close_calls record
--- proves the Mahjong widget was actually closed.)
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "the win-case close X opens the exit confirmation")
+local picker5_still = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker5 then picker5_still = true end
+end
+expect(picker5_still, "the won-game picker stays open behind the confirmation")
+ctx.last_confirm.onClose(ctx.last_confirm)
+local picker5_after_cancel = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker5 then picker5_after_cancel = true end
+end
+expect(picker5_after_cancel, "cancelling the win-case exit keeps the picker open")
+ctx.last_confirm.ok_callback()
+-- The confirmed flow closes the game itself, never returns the player to the
+-- empty board. (The harness drives games without UIManager:show(self), so the
+-- stack never held the game; the close_calls record proves the Mahjong widget
+-- was actually closed.)
 local mj5_closed = false
 for _, c in ipairs(ctx.close_calls) do
     if c.widget == mj5 then mj5_closed = true break end
@@ -259,7 +274,7 @@ expect(store.game == nil,
 local last_close5 = ctx.close_calls[#ctx.close_calls]
 expect(last_close5 and last_close5.widget == picker5
         and last_close5.refreshtype == "full",
-    "the win-case close X requests a full-screen refresh (got "
+    "the confirmed win-case exit requests a full-screen refresh (got "
     .. tostring(last_close5 and last_close5.refreshtype) .. ")")
 
 if failures == 0 then
