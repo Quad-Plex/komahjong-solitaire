@@ -48,7 +48,34 @@ end
 
 local function icon(name, size)
     size = Screen:scaleBySize(size or 30)
-    return IconWidget:new{ icon = "mahjong/" .. name, width = size, height = size }
+    -- Keep the group's existing footprint while showing the same outward
+    -- depth used by the board's independently rendered tile bevels.
+    local bw = math.max(1, math.floor(size * 0.10 + 0.5))
+    local bh = math.max(1, math.floor(size * 0.10 + 0.5))
+    local tile = OverlapGroup:new{
+        IconWidget:new{
+            icon = "mahjong/" .. name,
+            width = size - bw,
+            height = size - bh,
+            alpha = true,
+        },
+        IconWidget:new{
+            icon = "mahjong/bevel_right",
+            width = size,
+            height = size,
+            overlap_offset = { 0, 0 },
+            alpha = true,
+        },
+        IconWidget:new{
+            icon = "mahjong/bevel_bottom",
+            width = size,
+            height = size,
+            overlap_offset = { 0, 0 },
+            alpha = true,
+        },
+        dimen = Geometry:new{ w = size, h = size },
+    }
+    return tile
 end
 
 local function icon_group(names, description, group_size, max_width)

@@ -59,6 +59,8 @@ expect(saw_icon["mahjong/c1"] and saw_icon["mahjong/east"]
         and saw_icon["mahjong/season1"] and saw_icon["mahjong/season2"]
         and saw_icon["mahjong/season3"] and saw_icon["mahjong/season4"],
     "help renders every requested tile-group example")
+expect(saw_icon["mahjong/bevel_right"] and saw_icon["mahjong/bevel_bottom"],
+    "help tile-group examples include outward bevels")
 expect(not saw_auto_solve, "help does not mention the hidden auto-solve feature")
 expect(saw_text["X"], "help marks blocked tiles with X")
 
