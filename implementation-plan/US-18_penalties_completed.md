@@ -4,6 +4,8 @@ As a player, I want hints and shuffles to cost points, so using them is a real t
 
 - `mahjonglogic.lua`: add `HINT_PENALTY` (5) and `SHUFFLE_PENALTY` (10) constants and a pure
   `applyPenalty(score, amount)` that floors at 0 (score can't go negative).
+  This historical requirement was superseded after release: penalties now may reduce the score
+  below zero so help always has its full cost.
 - `main.lua`:
   - `showHint()` deducts `HINT_PENALTY` when a hint is actually shown (the dead-board shuffle offer
     is not a hint and does not penalize).
@@ -17,6 +19,8 @@ As a player, I want hints and shuffles to cost points, so using them is a real t
 - `tests/us18_penalties.lua` (registered in `tests/run.sh`): constants + floor at 0; a hint
   deducts once per real hint; a shuffle deducts once (not per auto-repeat); undo doesn't restore
   penalties; the counters increment and survive a save/restore.
+  The current feature-owned suite is `tests/unit/penalties.lua` and asserts the superseding
+  negative-score behavior.
 
 **Acceptance:** Manual — use a hint and shuffle, watch the Score chip drop; the win summary
 reflects the net score.

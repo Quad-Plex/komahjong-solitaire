@@ -566,12 +566,12 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
    same-group `CHAIN_BONUS` is intentionally unaffected (that reward is about consecutive
    groups, which a hint helps track rather than skip). **US-18 penalties:** a hint shown
    costs `HINT_PENALTY` (5) and a user-initiated shuffle costs `SHUFFLE_PENALTY` (10), applied at
-   use time via `MahjongLogic.applyPenalty(score, amount)` (floors at 0); the bounded auto-repeat
+   use time via `MahjongLogic.applyPenalty(score, amount)` (may reduce the score below 0); the bounded auto-repeat
    re-shuffles and the auto-solver's mid-solve shuffles never re-charge. **US-20:** the hint
    penalty is charged once per *hint session* — a session runs from the first hint after a pair
    was cleared until the next pair is cleared (`applyMatch` resets `_last_hint`), so cycling
    presses and re-hints on the same board are free; only the press that starts a session pays.
-   Penalties are NOT in the pair history, so `undo()` subtracts only the pair's points (floored)
+   Penalties are NOT in the pair history, so `undo()` subtracts only the pair's points
    and never refunds a penalty. Per-game `hints_used` / `shuffles_used` counters are persisted in
    the game state (`serializeGameState`/`deserializeGameState` fields `hints`/`shuffles`,
    absent = 0) and shown in the win summary when non-zero. A no-moves shuffle

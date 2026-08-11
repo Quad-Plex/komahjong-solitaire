@@ -52,7 +52,8 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
 
 - **Base Score:** 10 points per matched pair.
 - **Chain Bonus:** +50 when consecutive matches are of the same tile group.
-- **Penalties:** 5 per hint session, 10 per manual shuffle (floor at 0, not refunded by undo).
+- **Penalties:** 5 per hint session and 10 per manual shuffle. Penalties may
+  reduce the score below zero and are not refunded by undo.
 
 ## License
 

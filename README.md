@@ -82,8 +82,8 @@ Features:
   after a flower, any season after a season. The chain spans shuffles and
   survives undo correctly. This chain scoring is always enabled.
 - **Penalties:** a hint shown costs 5 (`HINT_PENALTY`) and a user-initiated
-  shuffle costs 10 (`SHUFFLE_PENALTY`), floored at 0 and never refunded by
-  undo. The hint penalty is charged once per hint session (until the next pair
+  shuffle costs 10 (`SHUFFLE_PENALTY`), may reduce the score below zero, and is
+  never refunded by undo. The hint penalty is charged once per hint session (until the next pair
   is cleared), so re-hints are free. Auto-solve and auto-repeat shuffles never
   re-charge.
 - **Timer bonus:** not implemented (no time-based scoring).

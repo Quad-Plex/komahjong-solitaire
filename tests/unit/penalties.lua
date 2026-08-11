@@ -1,7 +1,7 @@
 -- US-18 hint/shuffle-penalty suite: hints and reshuffles cost points.
 --
 -- Checks:
---   * HINT_PENALTY / SHUFFLE_PENALTY constants and applyPenalty flooring at 0;
+--   * HINT_PENALTY / SHUFFLE_PENALTY constants and negative-score penalties;
 --   * a hint deducts HINT_PENALTY once per hint session (cycling presses within
 --     the same session are free until a pair is cleared), and increments
 --     hints_used;
@@ -12,7 +12,7 @@
 --   * the bounded auto-repeat re-shuffles that guarantee a playable board do
 --     NOT re-charge (a board that can never pair still charges once);
 --   * undo restores only the pair's points — a penalty is never refunded, and
---     the score is floored at 0;
+--     the score may become negative;
 --   * the hints_used / shuffles_used counters survive a save/restore.
 
 local mock = require("mock")

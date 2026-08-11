@@ -224,6 +224,7 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one_completed.md](implementation-plan/US-49_zodiac-layouts-one_completed.md) | ✅ completed |
 | US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two_completed.md](implementation-plan/US-50_zodiac-layouts-two_completed.md) | ✅ completed |
 | US-51 — Feature-driven test-suite transformation | [US-51_test-suite-transformation.md](implementation-plan/US-51_test-suite-transformation.md) | planned |
+| US-52 — Reliability, maintainability, and device-awake policy | [US-52_reliability-maintainability-and-awake-policy.md](implementation-plan/US-52_reliability-maintainability-and-awake-policy.md) | planned |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) had shipped. A full git checkout of the GNOME
@@ -292,13 +293,12 @@ they are not lost. Revisited after US-10/11 — see status below.
 
 ---
 
-## Later / optional enhancements (not in the current scope)
+## Later / optional enhancements
 
 - Half-tile-offset rendering for a true "stacked" look.
 - Keyboard/d-pad navigation for non-touch Kindles.
 - Dark/night-mode theme (KOReader night mode inverts the framebuffer; a proper dark theme needs
   dark tile SVGs + a theme setting).
-- Keep the device awake during play (inhibit KOReader auto-suspend while the game is open).
 - Additional languages beyond English and German.
 
 ## Retrospectives (post-completion notes)
@@ -311,6 +311,14 @@ shipping, that cleanup landed too: the setting default, its settings-dialog togg
 and all test references to it were removed (the persistence feature suite's dialog
 section was rewritten to exercise toggle/Cancel/Reset via `hints` and `deselect_on_empty`
 instead). `confirm_new_game` no longer exists anywhere in code, config, or tests.
+
+### US-18 retrospective — penalties may reduce the score below zero
+
+US-18 originally required hint and shuffle penalties to stop at zero. The rule
+was deliberately changed later: `MahjongLogic.applyPenalty()` permits negative
+scores so help always has its full cost. The current implementation and
+feature-owned penalty tests are authoritative; the original story text remains
+above only as historical context.
 
 ---
 
