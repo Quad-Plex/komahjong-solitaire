@@ -91,7 +91,7 @@ local CATALOG = {
         ["app.name"] = "Mahjong Solitaire", ["app.description"] = "Mahjong-Solitaire-Spiel für KOReader.",
         ["toolbar.hint"] = "Tipp", ["toolbar.pause"] = "Pause", ["toolbar.undo"] = "Rückgängig",
         ["toolbar.shuffle"] = "Mischen", ["toolbar.new_game"] = "Neues Spiel", ["toolbar.exit"] = "Beenden",
-         ["toolbar.close"] = "Schliessen", ["toolbar.play_again"] = "Nochmal spielen",
+         ["toolbar.close"] = "Schliessen", ["toolbar.play_again"] = "Spiel wiederholen",
          ["toolbar.select_layout"] = "Layout wählen",
         ["toolbar.settings"] = "Einstellungen", ["toolbar.stats"] = "Statistik", ["toolbar.help"] = "Hilfe",
         ["hud.pairs"] = "Paare", ["hud.free"] = "Frei", ["hud.score"] = "Punkte",
