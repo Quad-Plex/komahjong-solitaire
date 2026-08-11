@@ -162,7 +162,12 @@ kindle_majong/
 │   └── us33_autosolve_lock.lua   # uninterruptible auto-solve (US-33)
 └── mahjong.koplugin/             # the deliverable
     ├── _meta.lua
-    ├── main.lua                  # plugin class: menu, dispatch, full-screen shell
+    ├── main.lua                  # lifecycle facade: plugin/menu/dispatch, UI composition,
+    │                             #   persistence/dialogs, public controller-method delegates
+    ├── mahjongtimer.lua          # timer lifecycle, polling, and stable timer-region refresh
+    ├── mahjonggameplay.lua       # selection/match/undo/hint/shuffle controller boundary
+    ├── mahjongtransitions.lua    # guarded deferred terminal-transition boundary
+    ├── mahjongchrome.lua         # lower-chrome batching, baking, and settle retry boundary
     ├── mahjonglogic.lua          # pure logic: deck, free-tiles, match, win, shuffle, scoring,
     │                             #   persistence; re-exports the layout API (US-22a)
     ├── mahjonglayouts.lua        # pure layout module (US-22a): board specs + registry +
@@ -225,7 +230,7 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two_completed.md](implementation-plan/US-50_zodiac-layouts-two_completed.md) | ✅ completed |
 | US-51 — Feature-driven test-suite transformation | [US-51_test-suite-transformation.md](implementation-plan/US-51_test-suite-transformation.md) | planned |
 | US-52 — Reliability, maintainability, and device-awake policy | [US-52_reliability-maintainability-and-awake-policy.md](implementation-plan/US-52_reliability-maintainability-and-awake-policy.md) | completed |
-| US-53 — Incremental game-controller module extraction | [US-53_controller-module-extraction.md](implementation-plan/US-53_controller-module-extraction.md) | planned |
+| US-53 — Incremental game-controller module extraction | [US-53_controller-module-extraction_completed.md](implementation-plan/US-53_controller-module-extraction_completed.md) | completed |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) had shipped. A full git checkout of the GNOME

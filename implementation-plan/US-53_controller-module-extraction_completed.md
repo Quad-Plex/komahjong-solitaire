@@ -7,9 +7,13 @@ lifecycle regressions.
 
 ## Status
 
-Planned. This is the deliberately deferred refactor portion of US-52. US-52
-completed persistence hardening, solvable-deal proof, awake policy, and test
-signal improvements, but did not move controller code out of `main.lua`.
+Completed. This was the deliberately deferred refactor portion of US-52. The
+implementation keeps `main.lua` as the lifecycle/public-method facade and adds
+`mahjongtimer.lua`, `mahjonggameplay.lua`, `mahjongtransitions.lua`, and
+`mahjongchrome.lua`. Timer and chrome logic moved into their controllers;
+gameplay and transition public boundaries delegate through their controllers to
+private owner implementations, preserving callback shapes and token/identity
+guards without introducing a second stateful controller.
 
 ## Goal and non-goal
 

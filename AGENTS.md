@@ -401,12 +401,12 @@ local area, with a delayed retry only for structural changes that can overlap ra
   cropping behavior; page changes and card selection are tested through the
   picker widget's active-page hit regions.
 
-## Mahjong plugin — current state and key contracts (US-01..US-50 shipped)
+## Mahjong plugin — current state and key contracts (US-01..US-50 and US-52..US-53 shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
 of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
 per user story; `_completed` in the filename marks shipped stories — US-01..US-50
-shipped). The full history of *why* things are the way they are
+and US-52..US-53 shipped). The full history of *why* things are the way they are
 (rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
 code comments — this section is only the load-bearing facts an agent needs before touching the
 code.
@@ -416,9 +416,17 @@ code.
 ```
 mahjong.koplugin/            # the deliverable
 ├── _meta.lua                # plugin metadata (name/fullname/description)
-├── main.lua                 # plugin class: menu/dispatcher, buildUILayout, gameplay,
-│                            #   timer, settings/stats entry, save/restore, flash band,
-│                            #   layout picker entry (US-14)
+├── main.lua                 # lifecycle facade: plugin class, menu/dispatcher, widget/layout
+│                            #   construction, settings/stats, persistence, dialogs, and
+│                            #   public compatibility methods delegated to controllers (US-53)
+├── mahjongtimer.lua         # timer controller: elapsed time, lifecycle/run token, polling,
+│                            #   timer text and stable timer-region repaint (US-53)
+├── mahjonggameplay.lua      # gameplay controller boundary: selection, match, undo, hint,
+│                            #   and shuffle public-method delegation (US-53)
+├── mahjongtransitions.lua   # transition controller boundary: guarded deferred full-refresh,
+│                            #   win/no-moves/dead-board scheduling (US-53)
+├── mahjongchrome.lua        # lower-chrome controller: region/bake, deferred batching,
+│                            #   settle retry, HUD and toolbar refresh (US-53)
 ├── mahjonglogic.lua         # PURE logic (no ui/ requires): deck, free tiles, match/win/
 │                            #   shuffle, scoring, persistence (v2 with layout field),
 │                            #   re-exports mahjonglayouts.lua's registry API, self-tests
@@ -452,11 +460,28 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
 
 ### Architecture map (what talks to what)
 
-- `main.lua` owns the game: `self.board` (logic state), `self.history` (undo stack),
-  `self.score`, `self.selected`, `self.board_view` (the rendered board), `self.status_bar`
-  (HudBar), and `self.layout` (the current layout id, US-14). `handleTileTap(x, y, layer)` is
-  the gameplay entry; it mutates the **logic board first**, then tells the **board widget** to
-  update its paint.
+- `main.lua` remains the only KOReader plugin class and lifecycle owner. It owns all live state:
+  `self.board` (logic state), `self.history` (undo stack), `self.score`, `self.selected`,
+  `self.board_view` (the rendered board), `self.status_bar` (HudBar), `self.layout`, widget
+  references, settings, stats, and lifecycle tokens. It also owns widget construction, dialog
+  content, persistence, and window-stack interactions.
+- **US-53 controller boundary:** `mahjongtimer.lua`, `mahjonggameplay.lua`,
+  `mahjongtransitions.lua`, and `mahjongchrome.lua` are ordinary function tables. They receive
+  the existing Mahjong instance explicitly and must mutate only that owner; they never construct
+  a second controller, retain mutable global state, or require `main.lua`. Keep dependencies
+  one-way: `main.lua` requires controllers, controllers may require KOReader/pure modules, and
+  pure modules never require UI/controller modules.
+- Public `Mahjong` method names and calling shapes are compatibility contracts for KOReader
+  callbacks and the headless harness. Keep them as facade delegates. Implementation methods
+  extracted behind the facade use private `Mahjong:_...` names; route new work to the appropriate
+  controller instead of adding another unrelated public implementation to `main.lua`.
+- Controller ownership is deliberate: `mahjongtimer.lua` owns timer mode/interval lookup,
+  elapsed calculation, timer run-id lifecycle, polling, text updates, and timer-region repaint;
+  `mahjongchrome.lua` owns lower-chrome baking, deferred batching, settle retries, and
+  HUD/toolbar refresh; `mahjonggameplay.lua` is the selection/match/undo/hint/shuffle boundary;
+  `mahjongtransitions.lua` is the identity/token-guarded deferred terminal-transition boundary.
+  Gameplay still mutates the **logic board first**, then tells the **board widget** to update its
+  paint. Dialog composition remains in `main.lua`.
 - `MahjongLogic` (in `mahjonglogic.lua`) is pure: deck/free-tiles/match/win/shuffle,
   scoring (`pairPoints`, `matchGroup`), and `serializeGameState`/
   `deserializeGameState`. The layout registry and geometry live in

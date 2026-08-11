@@ -34,6 +34,10 @@ local LayoutSelect = require("mahjonglayoutselect")
 local HelpWidget = require("mahjonghelp")
 local WinSummary = require("mahjongwinsummary")
 local MahjongUI = require("mahjongui")
+local Timer = require("mahjongtimer")
+local Gameplay = require("mahjonggameplay")
+local Transitions = require("mahjongtransitions")
+local Chrome = require("mahjongchrome")
 
 local BACKGROUND_COLOR = Blitbuffer.COLOR_WHITE
 
@@ -353,6 +357,8 @@ local Mahjong = FrameContainer:extend{
     layout = "turtle", -- current layout id (US-14); saved with the game state
     _picker_dlg = nil, -- the layout picker while it is up (US-14)
     _help_dlg = nil, -- gameplay help above the layout picker
+    _timer_defaults = SETTINGS_DEFAULTS,
+    _timer_min_interval = MIN_TIMER_INTERVAL,
 }
 
 function Mahjong:init()
@@ -704,7 +710,7 @@ end
 --
 -- Guarded by a board identity so a closed/replaced game (or a second restart
 -- arriving before the tick) can never fire a stale refresh into a new window.
-function Mahjong:scheduleFullScreenRefresh()
+function Mahjong:_scheduleFullScreenRefresh()
     if not UIManager.tickAfterNext then return end
     if self._full_screen_refresh_scheduled then return end
     self._full_screen_refresh_scheduled = true
@@ -787,129 +793,15 @@ end
 -- Each start bumps a run-id token; stopTimer() invalidates the pending tick,
 -- so a stale timer can never fire after close/new-game.
 
-function Mahjong:timerMode()
-    return self:getSetting("timer_update", SETTINGS_DEFAULTS.timer_update)
-end
-
-function Mahjong:timerInterval()
-    local v = tonumber(self:getSetting("timer_interval", SETTINGS_DEFAULTS.timer_interval))
-    if not v or v < MIN_TIMER_INTERVAL then
-        return SETTINGS_DEFAULTS.timer_interval
-    end
-    return v
-end
-
-function Mahjong:getElapsed()
-    if self._timer_running and self._timer_started_at then
-        return self.elapsed_base + os.difftime(os.time(), self._timer_started_at)
-    end
-    return self.elapsed_base
-end
-
-function Mahjong:startTimer()
-    self._timer_run_id = self._timer_run_id + 1
-    local run_id = self._timer_run_id
-    self._timer_started_at = os.time()
-    self._timer_running = true
-    -- US-34: resume the hint's boldness pulse too (only when a hint is active).
-    -- The pulse is an animation loop just like the polling loop below, so it
-    -- must not run while the board is covered by an overlay: every stopTimer
-    -- site (pause/settings/stats/picker/dialogs/close) stops it and every
-    -- startTimer site (resume/new-game/restore) restarts it — mirroring the
-    -- polling loop's lifecycle so a pulse can never repaint behind a panel.
-    if self._last_hint and self.board_view then
-        self:startHintPulse(self._last_hint)
-    end
-    if self:timerMode() ~= "interval" then
-        -- "move" mode: no polling loop; interactions refresh the display.
-        return
-    end
-    local interval = self:timerInterval()
-    local tick
-    tick = function()
-        if self._timer_running and self._timer_run_id == run_id then
-            -- US-41: when a pair was just cleared its structural tile refresh
-            -- (and any coalesced retry) is still pending in the refresh queue.
-            -- Defer this periodic repaint by one interval so the timer refill
-            -- cannot be enqueued into the same framebuffer batch as the board
-            -- mutation — that race left the board half-rendered on e-ink.
-            if self.board_view and self.board_view.has_pending_refresh_retry
-                    and self.board_view:has_pending_refresh_retry() then
-                UIManager:scheduleIn(interval, tick)
-                return
-            end
-            self:refreshTimerDisplay()
-            UIManager:scheduleIn(interval, tick)
-        end
-    end
-    UIManager:nextTick(tick)
-end
-
-function Mahjong:stopTimer()
-    if self._timer_running then
-        self.elapsed_base = self:getElapsed()
-    end
-    self._timer_running = false
-    self._timer_run_id = self._timer_run_id + 1
-    -- US-34: stop the hint's boldness pulse (see startTimer). Bumping the token
-    -- invalidates any pending pulse tick so it can't repaint behind a floating
-    -- overlay or a closed widget.
-    self._hint_pulse_token = self._hint_pulse_token + 1
-end
-
-function Mahjong:resetTimer()
-    self:stopTimer()
-    self.elapsed_base = 0
-    self:startTimer()
-end
-
--- Pure text update: sets the mm:ss string without enqueuing any repaint.
--- Used by interaction handlers in "interval" mode, so the widget's text is
--- always current for the next periodic repaint without the interaction
--- racing a regional refresh into the same batch as the board mutation.
-function Mahjong:updateTimerText()
-    if not self.timer_text then return end
-    self.timer_text:setText(MahjongLogic.formatElapsed(self:getElapsed()))
-    if self.timer_text.resetLayout then self.timer_text:resetLayout() end
-end
-
--- Text update + a regional repaint of the timer slot. This is the ONLY
--- regional refresh source per timer mode: the periodic polling loop in
--- "interval" mode, or the interaction handlers in "move" mode (via
--- updateTimerDisplay). Keeping one source per mode is what prevents the
--- timer refill from racing a structural board refresh.
-function Mahjong:refreshTimerDisplay()
-    if not self.timer_text then return end
-    self:updateTimerText()
-    -- Use the known feedback-band region even before KOReader has painted the
-    -- child and populated timer_text.dimen.
-    UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
-    -- Bake the chrome before the refresh drains so the EPDC reads current
-    -- pixels (never a stale/blank toolbar row — see bakeLowerChrome).
-    self:bakeLowerChrome()
-end
-
--- Interaction entry point: repaints the timer region ONLY in "move" mode.
--- In "interval" mode the periodic loop is the sole repaint source, so an
--- interaction updates the text (see updateTimerText) but enqueues no timer
--- refresh — it must not piggyback a regional refresh onto the same batch as
--- a pair clear / undo / shuffle mutation. US-47: inside a pair-clear callback
--- (applyMatch sets _defer_chrome_refresh) the move-mode repaint itself moves
--- to a single next-tick pass so it cannot merge with the board's tile rect.
-function Mahjong:updateTimerDisplay()
-    self:updateTimerText()
-    if self:timerMode() == "move" then
-        local do_refresh = function()
-            UIManager:setDirty(self, "ui", self.timer_region or self.flash_region or self.timer_text.dimen)
-            self:bakeLowerChrome()
-        end
-        if self._defer_chrome_refresh then
-            self:deferChromeRefresh(do_refresh)
-        else
-            do_refresh()
-        end
-    end
-end
+function Mahjong:timerMode() return Timer.mode(self) end
+function Mahjong:timerInterval() return Timer.interval(self) end
+function Mahjong:getElapsed() return Timer.elapsed(self) end
+function Mahjong:startTimer() return Timer.start(self) end
+function Mahjong:stopTimer() return Timer.stop(self) end
+function Mahjong:resetTimer() return Timer.reset(self) end
+function Mahjong:updateTimerText() return Timer.updateText(self) end
+function Mahjong:refreshTimerDisplay() return Timer.refreshDisplay(self) end
+function Mahjong:updateTimerDisplay() return Timer.updateDisplay(self) end
 
 -- Settings dialog (US-10) ---------------------------------------------------
 
@@ -1373,7 +1265,7 @@ end
 --     a win / a dead board;
 --   * tapping a different, non-matching free tile -> switch the selection.
 
-function Mahjong:handleTileTap(x, y, layer)
+function Mahjong:_handleTileTap(x, y, layer)
     -- US-33: a board tap while the auto-solver is running is consumed and
     -- ignored — the solver owns the board until it finishes. (US-19's old
     -- "interrupt the solve" behavior is gone: an interrupt let a close/
@@ -1441,7 +1333,7 @@ end
 -- `extra_rects` (optional) are already-deferred overlay locations (e.g. a
 -- hint dismissed by the tap) folded into the SAME refresh/retry pass as the
 -- pair removal (US-47).
-function Mahjong:applyMatch(a, b, extra_rects)
+function Mahjong:_applyMatch(a, b, extra_rects)
     local ok, ka, kb = MahjongLogic.removePair(self.board, a, b)
     if not ok then return false end
     self.selected = nil
@@ -1510,7 +1402,7 @@ function Mahjong:applyMatch(a, b, extra_rects)
     return true
 end
 
-function Mahjong:setSelection(x, y, layer, kind, extra_rects)
+function Mahjong:_setSelection(x, y, layer, kind, extra_rects)
     -- US-47: switch the highlight through ONE batched transition (clear the
     -- old overlay + paint the new) instead of clearOverlay then setOverlay
     -- firing two regional updates that could race the old-highlight clear and
@@ -1521,7 +1413,7 @@ function Mahjong:setSelection(x, y, layer, kind, extra_rects)
     self:updateTimerDisplay()
 end
 
-function Mahjong:clearSelection()
+function Mahjong:_clearSelection()
     if self.selected then
         self.board_view:clearOverlay(self.selected.x, self.selected.y, self.selected.layer)
         self.selected = nil
@@ -1531,7 +1423,7 @@ end
 
 -- True only while the game is the visible top-level window. Board retries and
 -- delayed terminal transitions use this to avoid refreshing beneath a modal.
-function Mahjong:isBoardRefreshActive(board_view)
+function Mahjong:_isBoardRefreshActive(board_view)
     if board_view and self.board_view ~= board_view then return false end
     -- Direct board construction in the headless harness has no UI repaint loop
     -- or window stack. Preserve that synchronous path while requiring a real
@@ -1546,7 +1438,7 @@ end
 -- every match), showHint's dead branch, and startGame's restore branch.
 -- If the board is provably dead the loss dialog skips the shuffle offer
 -- entirely; otherwise the existing shuffle prompt still runs.
-function Mahjong:handleNoMoves()
+function Mahjong:_handleNoMoves()
     -- A direct caller (notably Hint) supersedes a pending post-match callback.
     -- The transition token makes that older callback inert instead of stacking a
     -- second dialog over this one.
@@ -1577,7 +1469,7 @@ end
 -- Shown when isPermanentlyDead is true, or when the shuffle/auto-solve
 -- retry loops exhaust with no moves. The dialog pauses the clock (like the
 -- win dialog) so the polling loop does not flash behind the modal.
-function Mahjong:showDeadBoardDialog()
+function Mahjong:_showDeadBoardDialog()
     self._render_transition_token = self._render_transition_token + 1
     self:stopTimer()
     Awake.release(self)
@@ -1615,7 +1507,7 @@ end
 -- After every removal: win dialog when the board is empty, otherwise an
 -- offer to reshuffle when no move remains (US-08).  US-32: provably-dead
 -- boards skip the shuffle offer and show the loss dialog instead.
-function Mahjong:checkGameState()
+function Mahjong:_checkGameState()
     if MahjongLogic.isWin(self.board) then
         self:scheduleWinDialog()
         return
@@ -1648,7 +1540,7 @@ end
 -- retry settle before drawing the full-screen win card over it. This applies to
 -- both human play and auto-solve; keeping the transition in one place prevents
 -- either path from racing a modal against stale tile pixels.
-function Mahjong:scheduleWinDialog()
+function Mahjong:_scheduleWinDialog()
     -- Direct logic/UI construction is used by the headless harness and has no
     -- framebuffer race to settle. On-device, only defer when this game is an
     -- actual window underneath the pending card.
@@ -1855,7 +1747,7 @@ end
 
 -- US-08: Undo, hint, and shuffle ---------------------------------------------
 
-function Mahjong:undo()
+function Mahjong:_undo()
     -- US-33: Undo is dead while the auto-solver runs (the solve must run to
     -- completion; an undo mid-solve could un-solve a tile and keep its score).
     if self._auto_solve_active then return end
@@ -1890,7 +1782,7 @@ end
 -- over, and on new-game/restore (the board rebuild drops the overlays anyway).
 -- A no-op when no hint is up. The token bump makes any pending pulse tick a
 -- no-op, so a stale animation can never repaint after a clear.
-function Mahjong:clearHint()
+function Mahjong:_clearHint()
     self._hint_pulse_token = self._hint_pulse_token + 1
     if self._last_hint and self.board_view then
         local h = self._last_hint
@@ -1912,7 +1804,7 @@ end
 -- the hint-clear and the action as two racing regional updates in one
 -- callback. Returns the rects table (when no `out_rects` is given, a fresh
 -- one is used and returned), which is EMPTY when no hint was up.
-function Mahjong:clearHintBatched(out_rects)
+function Mahjong:_clearHintBatched(out_rects)
     self._hint_pulse_token = self._hint_pulse_token + 1
     local rects = out_rects or {}
     if self._last_hint and self.board_view then
@@ -1933,7 +1825,7 @@ end
 -- then stays highlighted at bold until the player acts (clearHint). Guarded by
 -- a monotonic token plus _last_hint, so a restart (new hint press, resume) or
 -- a clear can never leave a stale tick repainting.
-function Mahjong:startHintPulse(pair, refresh_rects)
+function Mahjong:_startHintPulse(pair, refresh_rects)
     self._hint_pulse_token = self._hint_pulse_token + 1
     local token = self._hint_pulse_token
     local board_view = self.board_view
@@ -1968,7 +1860,7 @@ end
 -- always highlighting the same first one (the highlight stays on each pair —
 -- it no longer times out (US-34) — so the next press moves to the pair AFTER
 -- it, wrapping around).
-function Mahjong:showHint()
+function Mahjong:_showHint()
     -- US-33: the Hint button is dead while the auto-solver runs (a hint would
     -- be redundant — the solver highlights pairs as it plays).
     if self._auto_solve_active then return end
@@ -2054,7 +1946,7 @@ end
 -- re-shuffles that guarantee a playable board pass false, so they never
 -- re-charge. (The auto-solver's mid-solve shuffles call MahjongLogic directly
 -- and never charge — only the player pays.)
-function Mahjong:shuffleBestDeadBoard(attempts, charge)
+function Mahjong:_shuffleBestDeadBoard(attempts, charge)
     if self._shuffle_active then return end
     self._shuffle_active = true
     self._shuffle_token = self._shuffle_token + 1
@@ -2116,7 +2008,7 @@ function Mahjong:shuffleBestDeadBoard(attempts, charge)
     UIManager:scheduleIn(DEAD_BOARD_SHUFFLE_STEP_SECONDS, evaluate)
 end
 
-function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
+function Mahjong:_shuffleBoard(force, attempts, charge, optimize_dead_board)
     -- US-33: the Shuffle button is dead while the auto-solver runs (the solver
     -- shuffles via MahjongLogic.shuffleBoard directly when it needs to).
     if self._auto_solve_active or self._shuffle_active then return end
@@ -2182,7 +2074,7 @@ end
 -- A full board rebuild is much larger than a pair clear. Never cover its
 -- pending repaint with a terminal modal: wait through an intervening UI paint,
 -- then prove that the same active board is still genuinely dead.
-function Mahjong:scheduleDeadBoardDialog(shuffle_token)
+function Mahjong:_scheduleDeadBoardDialog(shuffle_token)
     -- Pure headless construction has no framebuffer or EPDC to settle, and
     -- existing logic harnesses intentionally exercise this path synchronously.
     if not UIManager._repaint then
@@ -2434,43 +2326,21 @@ end
 --     refresh (no repaint — the fb is already painted) to heal a half-applied
 --     dribble from same-batch racing.
 
-function Mahjong:lowerChromeRegion()
-    return self.lower_band_region or self.toolbar_region or self.flash_region
-end
+function Mahjong:lowerChromeRegion() return Chrome.region(self) end
 
 -- Paint the banner + toolbar sub-trees into the framebuffer right now, before
 -- the queued refresh drains. Stock ReaderFooter does the same
 -- (`widgetRepaint(self.view.footer, 0, 0)` before its regional setDirty); it
 -- guarantees that whatever region the EPDC samples already holds the NEW
 -- pixels. No-op on the headless harness (no widgetRepaint stub).
-function Mahjong:bakeLowerChrome()
-    if not UIManager.widgetRepaint then return end
-    if not self.toolbar_region or not self.flash_region then return end
-    if self.flash_band then
-        UIManager:widgetRepaint(self.flash_band, 0, self.flash_region.y)
-    end
-    if self.toolbar_widget then
-        UIManager:widgetRepaint(self.toolbar_widget, 0, self.toolbar_region.y)
-    end
-end
+function Mahjong:bakeLowerChrome() return Chrome.bake(self) end
 
 -- One deferred, pure-refresh re-request of the lower chrome (no repaint: the
 -- framebuffer is already current). Used after toolbar structural changes
 -- (counter pills) so a same-batch merge that the EPDC half-applied gets a
 -- second stab at the strip on the next tick. Single-shot guarded so closed
 -- or rebuilt games never schedule twice.
-function Mahjong:settleLowerChrome()
-    if not UIManager.tickAfterNext then return end
-    local pending = self._chrome_settle
-    self._chrome_settle = true
-    if pending then return end
-    UIManager:tickAfterNext(function()
-        self._chrome_settle = false
-        -- A closed/replaced game must never drive a refresh into a new window.
-        if not self.toolbar_widget or not self.board_view then return end
-        UIManager:setDirty(nil, "ui", self:lowerChromeRegion())
-    end)
-end
+function Mahjong:settleLowerChrome() return Chrome.settle(self) end
 
 -- US-47: defer a chrome repaint (HUD / toolbar / move-mode timer / flash band)
 -- OUT of a pair-clear's framebuffer batch. The board's structural tile refresh
@@ -2482,86 +2352,33 @@ end
 -- _defer_chrome_refresh around its chrome updates; the widget TEXT is updated
 -- immediately by the callers, only the enqueued repaint defers). Guarded by
 -- board identity so a stale deferred pass can never refresh a replaced board.
-function Mahjong:deferChromeRefresh(fn)
-    if not UIManager.tickAfterNext then
-        if fn then fn() end
-        return
-    end
-    local board = self.board
-    local fns = self._deferred_chrome_fns
-    if not fns then
-        fns = {}
-        self._deferred_chrome_fns = fns
-    end
-    fns[#fns + 1] = fn
-    if #fns ~= 1 then return end -- a pass is already scheduled; just append
-    UIManager:tickAfterNext(function()
-        local pending = self._deferred_chrome_fns
-        self._deferred_chrome_fns = nil
-        if self.board ~= board then return end
-        for i = 1, #pending do
-            local deferred = pending[i]
-            if deferred then deferred() end
-        end
-        -- Paint the chrome sub-trees into the framebuffer BEFORE the refreshed
-        -- rects drain, so the EPDC samples current pixels (stock idiom).
-        self:bakeLowerChrome()
-    end)
-end
+function Mahjong:deferChromeRefresh(fn) return Chrome.defer(self, fn) end
 
 -- The HUD bar reflects the pairs left, the number of currently-matching free
 -- pairs (legal moves available to tap), and the score — each in its own chip.
-function Mahjong:updateStatus()
-    if not self.status_bar then return end
-    local pairs = math.floor(MahjongLogic.tileCount(self.board) / 2)
-    local free = MahjongLogic.countFreePairs(self.board, self.layout)
-    self.status_bar:setStats(pairs, free, self.score)
-    -- Keep the toolbar Hint / Shuffle count pills in sync (they mirror the
-    -- persisted hints_used / shuffles_used counters the win summary reports).
-    local toolbar_structural = false
-    if self.hint_counter_badge then
-        local txt = tostring(self.hints_used or 0)
-        toolbar_structural = toolbar_structural or self.hint_counter_badge.text ~= txt
-        self.hint_counter_badge:setText(txt)
-    end
-    if self.shuffle_counter_badge then
-        local txt = tostring(self.shuffles_used or 0)
-        toolbar_structural = toolbar_structural or self.shuffle_counter_badge.text ~= txt
-        self.shuffle_counter_badge:setText(txt)
-    end
-    -- status_bar is a subwidget, so flag the window-level widget, but keep the
-    -- refresh regional. A regionless request here refreshes the entire game
-    -- window after every pair removal. Keep the toolbar's own refresh tight
-    -- (regional, not the whole lower strip): when the banner (flash/timer)
-    -- refreshes in the same batch, KOReader's open-range merge folds the two
-    -- edge-adjacent rects — and the board's tile rect just above the banner —
-    -- into one ioctl anyway. That big merged rect is where the "band repainted,
-    -- buttons blank" report comes from: the EPDC half-applies it and the
-    -- action-button row ends up out of the final drive. US-47: inside a
-    -- pair-clear callback (applyMatch sets _defer_chrome_refresh) both the
-    -- status and toolbar repaints defer to a single next-tick pass so the board
-    -- mutation's batch stays board-only. Bake the chrome into the framebuffer
-    -- NOW (stock ReaderFooter idiom) so whichever rect the EPDC samples holds
-    -- the just-built toolbar content, and re-drive the strip on a later tick
-    -- when it genuinely changed.
-    local do_refresh = function()
-        UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)
-        if self.toolbar_region then
-            UIManager:setDirty(self, "ui", self.toolbar_region)
-            self:bakeLowerChrome()
-        end
-    end
-    if self._defer_chrome_refresh then
-        self:deferChromeRefresh(do_refresh)
-    else
-        do_refresh()
-    end
-    -- A count pill changed (a genuine toolbar structural change): re-drive the
-    -- strip once on a later tick, pure-refresh, to heal a half-applied merge.
-    if toolbar_structural then
-        self:settleLowerChrome()
-    end
-end
+function Mahjong:updateStatus() return Chrome.updateStatus(self) end
+
+-- US-53 compatibility facade. Public controller methods stay on Mahjong so
+-- existing callbacks and harnesses retain their calling shapes; controller
+-- modules receive the live owner explicitly and never duplicate its state.
+function Mahjong:scheduleFullScreenRefresh(...) return Transitions.scheduleFullScreenRefresh(self, ...) end
+function Mahjong:handleTileTap(...) return Gameplay.handleTileTap(self, ...) end
+function Mahjong:applyMatch(...) return Gameplay.applyMatch(self, ...) end
+function Mahjong:setSelection(...) return Gameplay.setSelection(self, ...) end
+function Mahjong:clearSelection(...) return Gameplay.clearSelection(self, ...) end
+function Mahjong:isBoardRefreshActive(...) return Transitions.isBoardRefreshActive(self, ...) end
+function Mahjong:handleNoMoves(...) return Transitions.handleNoMoves(self, ...) end
+function Mahjong:showDeadBoardDialog(...) return Transitions.showDeadBoardDialog(self, ...) end
+function Mahjong:checkGameState(...) return Transitions.checkGameState(self, ...) end
+function Mahjong:scheduleWinDialog(...) return Transitions.scheduleWinDialog(self, ...) end
+function Mahjong:undo(...) return Gameplay.undo(self, ...) end
+function Mahjong:clearHint(...) return Gameplay.clearHint(self, ...) end
+function Mahjong:clearHintBatched(...) return Gameplay.clearHintBatched(self, ...) end
+function Mahjong:startHintPulse(...) return Gameplay.startHintPulse(self, ...) end
+function Mahjong:showHint(...) return Gameplay.showHint(self, ...) end
+function Mahjong:shuffleBestDeadBoard(...) return Gameplay.shuffleBestDeadBoard(self, ...) end
+function Mahjong:shuffleBoard(...) return Gameplay.shuffleBoard(self, ...) end
+function Mahjong:scheduleDeadBoardDialog(...) return Transitions.scheduleDeadBoardDialog(self, ...) end
 
 function Mahjong:onCloseWidget()
     self._win_dialog_pending = false

@@ -15,8 +15,9 @@ A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch
 
 ## Status
 
-All user stories through **US-50** are shipped (`US-01..US-31`, `US-22a`,
-`US-32`, `US-33`, `US-37`, `US-48..US-50`); `IMPLEMENTATION_PLAN.md` and the story files under
+All user stories through **US-50**, plus **US-52** and **US-53**, are shipped
+(`US-01..US-31`, `US-22a`, `US-32`, `US-33`, `US-37`, `US-48..US-50`,
+`US-52..US-53`); `IMPLEMENTATION_PLAN.md` and the story files under
 `implementation-plan/` are the source of truth for design decisions and the
 per-story history.
 
@@ -104,6 +105,11 @@ official feature-driven suite with `tests/run.sh` (syntax check, `luacheck`,
 logic self-tests, and the deterministic suites listed in
 `tests/manifest.lua`). Shared files under `tests/support/` are fixtures, not
 executable suites.
+
+`main.lua` is the only KOReader plugin/lifecycle owner and compatibility facade.
+Controller details are split into `mahjongtimer.lua`, `mahjonggameplay.lua`,
+`mahjongtransitions.lua`, and `mahjongchrome.lua`; see `AGENTS.md` for their
+strict ownership and callback/refresh contracts before changing game flow.
 
 ### Icon tooling (`tools/`)
 
