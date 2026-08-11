@@ -5,8 +5,8 @@ plugin for jailbroken e-ink readers. It is designed for the small, grayscale scr
 Kindles, including the Kindle Touch, while also adapting to larger KOReader screens.
 
 The game is single-player: remove matching pairs of free tiles until the 144-tile board is
-empty. It includes multiple 3D layouts, local e-ink-friendly redraws, persistent games and
-settings, scoring, hints, undo, shuffle, statistics, and an optional long-press auto-solver.
+empty. It includes 24 different 3D layouts, local e-ink-friendly redraws, persistent games and
+settings, scoring, hints, undo, shuffle and per-layout aswell as global statistics.
 
 ## Features at a glance
 
@@ -41,52 +41,6 @@ KOReader and its plugins.
    complete `mahjong.koplugin/` directory.
 4. Fully restart KOReader. Plugins are loaded at startup.
 5. Open **Tools -> Mahjong Solitaire**.
-
-### Manual installation
-
-1. Download or clone this repository.
-2. Copy the complete `mahjong.koplugin` directory into KOReader's `plugins/` directory. On a
-   typical Kindle installation, the destination is:
-
-   ```text
-   /mnt/us/koreader/plugins/mahjong.koplugin/
-   ```
-
-3. Fully restart KOReader. Plugins are loaded at startup.
-4. Open **Tools -> Mahjong Solitaire**.
-
-Do not copy only the Lua files inside the directory. The `.koplugin` directory, including
-`_meta.lua`, `main.lua`, and the `icons/` directory, must remain intact.
-
-### Kindle helper script
-
-From a Linux or WSL checkout, the repository includes `install_plugin.sh`:
-
-```bash
-./install_plugin.sh
-```
-
-The script first tries SSH to `root@192.168.2.213`, which matches the development Kindle setup.
-If SSH is unavailable, it falls back to a Kindle exposed as Windows drive `D:` and mounted by
-WSL at `/mnt/d`. The SSH path stops and relaunches KOReader automatically; the USB path requires
-a manual KOReader restart.
-
-For the USB fallback, use:
-
-```bash
-./install_plugin.sh --unmount
-```
-
-The helper assumes the paths and network address documented in the script. If your Kindle has a
-different IP address, KOReader location, drive letter, or mount point, edit the configuration at
-the top of `install_plugin.sh` or install manually. The SSH path requires `sshpass`:
-
-```bash
-sudo apt-get install sshpass
-```
-
-The script is intended for this repository's Kindle/WSL workflow; manual copying is the most
-portable installation method.
 
 ## How to Play
 
