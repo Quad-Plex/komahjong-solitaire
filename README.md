@@ -68,20 +68,20 @@ same face. There are no computer opponents.
 
 The picker currently includes these 24 layouts:
 
-| Layouts | Layouts |
+| Layouts |  |
 | --- | --- |
-| Turtle | Spider |
-| Bridge | Ziggurat |
-| Cloud | Tic-Tac-Toe |
-| Red Dragon | Overpass |
-| Pyramid's Walls | Confounding Cross |
-| Taipei | Crab |
-| Hare | Horse |
-| Tiger | Ram |
-| Monkey | Rooster |
-| Dog | Snake |
-| Boar | Ox |
-| Wedges | Hourglass |
+| Bridge | Hare |
+| Cloud | Horse |
+| Confounding Cross | Tiger |
+| Crab | Ram |
+| Overpass | Monkey |
+| Pyramid's Walls | Rooster |
+| Red Dragon | Dog |
+| Spider | Snake |
+| Taipei | Boar |
+| Tic-Tac-Toe | Ox |
+| Turtle | Wedges |
+| Ziggurat | Hourglass |
 
 The first twelve layouts are transcriptions of GNOME Mahjongg maps. The compact multi-layer
 layouts are based on PySolFC layouts. Every layout contains the standard 144 tiles, but the
