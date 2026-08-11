@@ -84,8 +84,9 @@ captured from `example_app/casualkochess.koplugin`.
 ```
 kindle_majong/
 ├── AGENTS.md                     # this repo's plugin-writing guide (already written)
-├── IMPLEMENTATION_PLAN.md        # this file — the overview (design + story index)
-├── implementation-plan/          # one file per user story (US-01..50, US-22a)
+├── development/
+│   ├── IMPLEMENTATION_PLAN.md    # this file — the overview + story index
+│   └── implementation-plan/       # one file per user story (US-01..50, US-22a)
 │   ├── US-01_plugin-skeleton_completed.md
 │   ├── US-02_game-shell_completed.md
 │   ├── US-03_tile-deck_completed.md
@@ -185,7 +186,7 @@ kindle_majong/
 
 ## User stories
 
-Each story has its own file under `implementation-plan/`. A `_completed` suffix in the
+Each story has its own file under `development/implementation-plan/`. A `_completed` suffix in the
 filename marks a shipped story; files without it are planned. Completed: **US-01..US-33, US-22a, US-37, US-48..US-50**.
 
 | Story | File | Status |

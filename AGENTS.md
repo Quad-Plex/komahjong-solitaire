@@ -403,13 +403,14 @@ local area, with a delayed retry only for structural changes that can overlap ra
 
 ## Mahjong plugin — current state and key contracts (US-01..US-50 and US-52..US-53 shipped)
 
-This repo builds `mahjong.koplugin` (Mahjong Solitaire). `IMPLEMENTATION_PLAN.md` is the source
-of truth for the locked design; the per-story detail lives in `implementation-plan/` (one file
+This repo builds `mahjong.koplugin` (Mahjong Solitaire). `development/IMPLEMENTATION_PLAN.md` is
+the source of truth for the locked design; the per-story detail lives in
+`development/implementation-plan/` (one file
 per user story; `_completed` in the filename marks shipped stories — US-01..US-50
 and US-52..US-53 shipped). The full history of *why* things are the way they are
-(rejected designs, shipped bugs) lives in `IMPLEMENTATION_PLAN.md`, the story files, and the
-code comments — this section is only the load-bearing facts an agent needs before touching the
-code.
+(rejected designs, shipped bugs) lives in `development/IMPLEMENTATION_PLAN.md`, the story files,
+and the code comments — this section is only the load-bearing facts an agent needs before touching
+the code.
 
 ### Repo layout
 

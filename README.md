@@ -1,129 +1,218 @@
-# komahjong-solitaire
+# Mahjong Solitaire for KOReader
 
-A Mahjong Solitaire plugin for KOReader, optimized to run on an old Kindle Touch.
+Mahjong Solitaire (also known as Shanghai) as a native [KOReader](https://koreader.rocks/)
+plugin for jailbroken e-ink readers. It is designed for the small, grayscale screens of older
+Kindles, including the Kindle Touch, while also adapting to larger KOReader screens.
 
-## Layout
+The game is single-player: remove matching pairs of free tiles until the 144-tile board is
+empty. It includes multiple 3D layouts, local e-ink-friendly redraws, persistent games and
+settings, scoring, hints, undo, shuffle, statistics, and an optional long-press auto-solver.
 
-- `mahjong.koplugin/` — the plugin deliverable (see the module map in `AGENTS.md`)
-- `example_app/casualkochess.koplugin/` — reference plugin used as a pattern
-- `install_plugin.sh` — syncs the plugin to a Kindle mounted at `D:\`
-- `tools/` — icon generator + icon QA tools (see Development)
-- `tests/` — official headless test suite (`tests/run.sh`)
-- `IMPLEMENTATION_PLAN.md` — locked design overview + story index
-- `implementation-plan/` — one file per user story (`_completed` = shipped)
-- `AGENTS.md` — KOReader plugin development notes
+## Features at a glance
 
-## Status
+- 24 layouts, selected from a paged layout picker.
+- A stepped 3D board with portrait tile faces and outward bevels.
+- Classic free-tile rules, including cross-matching flowers and seasons.
+- Undo, hints, manual shuffle, dead-board detection, and recovery shuffles.
+- Score chains, fast-clear combo bonuses, and hint/shuffle penalties.
+- Pause, elapsed timer, save-and-resume, and corrupt-save protection.
+- Long-press Hint to auto-solve a board when you want to watch it finish.
+- Win summaries, lifetime statistics, per-layout wins, best scores, and best times.
+- English and German UI translations, with automatic German selection for German KOReader locales.
+- Layout and board sizing that adapt to the reader's screen.
 
-All user stories through **US-50**, plus **US-52** and **US-53**, are shipped
-(`US-01..US-31`, `US-22a`, `US-32`, `US-33`, `US-37`, `US-48..US-50`,
-`US-52..US-53`); `IMPLEMENTATION_PLAN.md` and the story files under
-`implementation-plan/` are the source of truth for design decisions and the
-per-story history.
+## Requirements
 
-The plugin launches "Mahjong Solitaire" from the **Tools** menu. Core gameplay:
-tap two matching free tiles to remove them, win when the board is clear. The
-board renders as an outward-bevel 3D stack of 144 tiles.
+- A jailbroken Kindle or another device supported by KOReader.
+- KOReader installed and working on the device.
+- A way to copy files to the device, such as USB mass storage or SSH.
 
-Features:
+This is a KOReader plugin, not a Kindle-native application. It does not run from the standard
+Kindle home screen and it does not require Amazon's Kindle UI to be modified beyond installing
+KOReader and its plugins.
 
-- **24 layouts:** Turtle, Spider, Bridge, Ziggurat, Cloud, Tic-Tac-Toe, Red
-  Dragon, Overpass, Pyramid's Walls, Confounding Cross, Taipei, Crab, Hare, Horse,
-  Tiger, Ram, Monkey, Rooster, Dog, Snake, Boar, Ox, Wedges, and Hourglass. The
-  first twelve are transcriptions of the GNOME Mahjongg maps; the twelve compact
-  multi-layer layouts come from PySolFC. Choosing a layout from the full-screen
-  **layout picker** is how you start a New Game; picker
-  cards show a thumbnail schematic, a per-layout win-count trophy badge, and a
-  per-layout best-score chip (when a human win has recorded one). US-48 replaces
-  picker scrolling with fixed 3x4 pages; the twelve compact 144-tile PySolFC
-  layouts from US-49 and US-50 fill the second page.
-- **3D board:** portrait tiles on a shared grid, each upper layer shifted
-  up-left by exactly one bevel so raised tiles' bevels step cleanly onto the
-  tiles beneath; dynamic bevel restoration when neighbours are removed. Local
-  updates are clipped to the board canvas and terminal dialogs wait for a final
-  structural repaint to settle, avoiding stale or garbled e-ink frames.
-- **Scoring:** 10 points per pair plus a +50 chain bonus for consecutive matches
-  of the same group (suited/wind/dragon kind, or flower→flower / season→season),
-  with escalating fast-clear combo bonuses. **Penalties (US-18):** a hint costs 5
-  and a manual shuffle costs 10, charged once per hint *session* (US-20) and
-  never refunded by undo. Per-game `hints_used` / `shuffles_used` are shown in
-  the win summary.
-- **Undo / Hint / Shuffle:** undo restores the pair, score, and chain state; a
-  hint highlights a matching free pair (long-press the Hint button to
-  **auto-solve** the whole board, US-19/33); shuffle is confirm-gated and
-  dead boards evaluate 15 background shuffles and keep the arrangement with
-  the most available matching free pairs, with bounded auto-repeat if needed.
-- **Failure recognition (US-32):** a provably-dead board (e.g. the last two
-  copies of a kind stacked in one column) triggers a loss dialog with
-  New Game / Close / Undo instead of an endless shuffle loop; a retries-exhausted
-  fallback catches exotic deadlocks. The no-moves shuffle prompt pauses the
-  clock until a playable shuffle is found.
-- **Pause (US-17):** a bottom-toolbar button freezes the clock behind a
-  tap-consuming overlay; the clock restarts exactly once on resume.
-- **Timer:** elapsed seconds always accrue; the mode controls only when the
-  mm:ss repaints (`interval` poll vs. on-interaction).
-- **Persistence:** game state and settings live in one `LuaSettings` file;
-  a won board is not saved, corrupt/tainted saves start fresh (a save tainted
-  by a mid-solve close auto-resumes the solver). Settings include the
-  `deselect_on_empty` toggle: when enabled, tapping empty board space clears
-  the selected tile; when disabled, the selection remains until it is matched
-  or replaced by another viable tile.
-- **Win summary + stats (US-12/13):** a win dialog plus a lifetime-stats screen
-  (games won, average time per win, and the rest of the `MahjongStats` record)
-  with a confirm-gated reset.
-- **Localization:** English and German are supported. On first launch, the
-  plugin detects KOReader's locale and selects German for German locales;
-  English is used for English and all other locales. The language can then be
-  changed from Mahjong's Settings.
+## Quick Install
 
-## Scoring rules
+### Manual installation
 
-- **Base:** 10 points for every matched pair.
-- **Chain bonus:** +50 when the new pair belongs to the same tile group as the
-  immediately previous match — same suited/wind/dragon kind, or any flower
-  after a flower, any season after a season. The chain spans shuffles and
-  survives undo correctly. This chain scoring is always enabled.
-- **Penalties:** a hint shown costs 5 (`HINT_PENALTY`) and a user-initiated
-  shuffle costs 10 (`SHUFFLE_PENALTY`), may reduce the score below zero, and is
-  never refunded by undo. The hint penalty is charged once per hint session (until the next pair
-  is cleared), so re-hints are free. Auto-solve and auto-repeat shuffles never
-  re-charge.
-- **Timer bonus:** not implemented (no time-based scoring).
+1. Download or clone this repository.
+2. Copy the complete `mahjong.koplugin` directory into KOReader's `plugins/` directory. On a
+   typical Kindle installation, the destination is:
 
-## Install on a Kindle
+   ```text
+   /mnt/us/koreader/plugins/mahjong.koplugin/
+   ```
 
-```
-./install_plugin.sh           # mount D: if needed, rsync, verify
-./install_plugin.sh --unmount # install, then unmount D:
+3. Fully restart KOReader. Plugins are loaded at startup.
+4. Open **Tools -> Mahjong Solitaire**.
+
+Do not copy only the Lua files inside the directory. The `.koplugin` directory, including
+`_meta.lua`, `main.lua`, and the `icons/` directory, must remain intact.
+
+### Kindle helper script
+
+From a Linux or WSL checkout, the repository includes `install_plugin.sh`:
+
+```bash
+./install_plugin.sh
 ```
 
-Then fully restart KOReader and open **Tools → Mahjong Solitaire**.
+The script first tries SSH to `root@192.168.2.213`, which matches the development Kindle setup.
+If SSH is unavailable, it falls back to a Kindle exposed as Windows drive `D:` and mounted by
+WSL at `/mnt/d`. The SSH path stops and relaunches KOReader automatically; the USB path requires
+a manual KOReader restart.
+
+For the USB fallback, use:
+
+```bash
+./install_plugin.sh --unmount
+```
+
+The helper assumes the paths and network address documented in the script. If your Kindle has a
+different IP address, KOReader location, drive letter, or mount point, edit the configuration at
+the top of `install_plugin.sh` or install manually. The SSH path requires `sshpass`:
+
+```bash
+sudo apt-get install sshpass
+```
+
+The script is intended for this repository's Kindle/WSL workflow; manual copying is the most
+portable installation method.
+
+## How to Play
+
+1. Open **Tools -> Mahjong Solitaire** in KOReader.
+2. Choose a layout from the picker. Selecting a card starts a new game.
+3. Tap a free tile, then tap a matching free tile to remove the pair.
+4. Clear all 144 tiles to win.
+
+A tile is free when no tile overlaps it from above and at least one horizontal side is open.
+Tap a selected tile again to deselect it. Tapping empty board space clears the selection by
+default; this can be changed in Settings.
+
+Flowers match any other flower, and seasons match any other season. Other tiles must match the
+same face. There are no computer opponents.
+
+## Layouts
+
+The picker currently includes these 24 layouts:
+
+| Layouts | Layouts |
+| --- | --- |
+| Turtle | Spider |
+| Bridge | Ziggurat |
+| Cloud | Tic-Tac-Toe |
+| Red Dragon | Overpass |
+| Pyramid's Walls | Confounding Cross |
+| Taipei | Crab |
+| Hare | Horse |
+| Tiger | Ram |
+| Monkey | Rooster |
+| Dog | Snake |
+| Boar | Ox |
+| Wedges | Hourglass |
+
+The first twelve layouts are transcriptions of GNOME Mahjongg maps. The compact multi-layer
+layouts are based on PySolFC layouts. Every layout contains the standard 144 tiles, but the
+shape, number of layers, and difficulty vary.
+
+The full-screen picker uses fixed three-column by four-row pages. Each card includes a schematic
+thumbnail, human win count, and, when available, per-layout best score and fastest time.
+
+## Scoring
+
+- Each pair is worth 10 points.
+- A same-group chain awards a 50-point bonus. Groups include suits, winds, dragons, flowers,
+  and seasons.
+- Fast consecutive clears award escalating combo bonuses.
+- Showing a hint costs 5 points once per hint session.
+- A user-initiated shuffle costs 10 points.
+- Penalties can reduce the score below zero and are not refunded by Undo.
+- Automatic recovery shuffles and auto-solve do not charge shuffle penalties.
+- Time does not add a score bonus.
+
+The win summary reports the current result alongside overall and per-layout records. Auto-solved
+wins are not recorded as human high scores or lifetime wins.
+
+## Game Controls
+
+- **Undo:** restore the most recently removed pair, including its board position and pair score.
+- **Hint:** highlight an available matching pair. Repeated hints in the same session do not keep
+  charging the hint penalty.
+- **Shuffle:** manually rearrange the remaining tiles after confirmation.
+- **Pause:** freeze the clock behind a tap-consuming pause overlay.
+- **New Game:** open the layout picker and choose the next layout.
+- **Auto-solve:** hold the Hint button for about 10 seconds. Once started, the solver runs to
+  completion and ignores normal game input.
+
+When no matching free pair remains, the plugin evaluates candidate shuffles and chooses one with
+the most available moves. Provably dead boards show a recovery dialog instead of retrying
+forever. A saved auto-solve game resumes the solver after restart.
+
+## Saving and Statistics
+
+The plugin stores its game state, settings, and lifetime statistics in KOReader's settings
+directory, in `mahjong.lua`. A running game is saved when KOReader closes the plugin. Won boards
+are not saved, so starting Mahjong after a completed game opens the layout picker.
+
+Saved games include the selected layout, remaining tiles, score, undo history, hint/shuffle
+counters, and auto-solve state. Invalid or incompatible saves are discarded and replaced with a
+fresh game rather than preventing the plugin from launching.
+
+The Statistics screen includes games played and won, timing records, streaks, overall records,
+and per-layout records. Resetting statistics requires confirmation.
+
+## Settings and Localization
+
+The Settings panel includes:
+
+- English or German interface language.
+- Whether an empty-board tap clears the current selection.
+- Timer display mode: periodic interval or on interaction.
+- Timer update interval when interval mode is selected.
+
+The timer always measures elapsed time while a game is running. The display mode only controls
+how often the visible `mm:ss` value is repainted.
+
+## E-Ink Design
+
+The board is rendered as a 3D stack rather than a flat grid. Upper layers shift up and left by
+one bevel thickness, allowing the right and bottom bevels to form clean steps onto the tiles
+beneath them. Tile faces and bevel segments are rendered independently.
+
+After a pair is removed, only the changed face, bevel, and affected local edges are refreshed.
+Terminal dialogs wait for structural board repaint work to settle. These details reduce large
+screen flashes and help avoid stale pixels on e-ink displays.
 
 ## Development
 
-Game-logic modules are pure Lua so they can be tested headlessly. Run the
-official feature-driven suite with `tests/run.sh` (syntax check, `luacheck`,
-logic self-tests, and the deterministic suites listed in
-`tests/manifest.lua`). Shared files under `tests/support/` are fixtures, not
-executable suites.
+The plugin deliverable is `mahjong.koplugin/`. Game rules, layouts, scoring, persistence
+serialization, and statistics are kept in pure Lua modules so they can be tested without
+KOReader.
 
-`main.lua` is the only KOReader plugin/lifecycle owner and compatibility facade.
-Controller details are split into `mahjongtimer.lua`, `mahjonggameplay.lua`,
-`mahjongtransitions.lua`, and `mahjongchrome.lua`; see `AGENTS.md` for their
-strict ownership and callback/refresh contracts before changing game flow.
+Run the repository's checks with:
 
-### Icon tooling (`tools/`)
-
-The tile SVGs are **generated**, not hand-edited, so the set stays consistent.
-Edit `tools/gen_icons.py` to redesign tiles, then regenerate and verify:
-
-```
-python3 tools/gen_icons.py            # rewrite mahjong.koplugin/icons/*.svg
-python3 tools/gen_icons.py --check    # exit 1 if committed icons are stale
-python3 tools/check_icons.py          # QA: XML valid, icons match generator,
-                                      #   tiles touch with no gaps, symbols not clipped
-python3 tools/preview.py              # render a board+strip PNG to eyeball changes
+```bash
+tests/run.sh
 ```
 
-`check_icons.py` and `preview.py` need `lua` and `rsvg-convert` on PATH; the
-rest is dependency-free.
+This runs Lua syntax checks, `luacheck`, pure-module self-tests, and the feature-driven headless
+test suites. Icon assets are generated rather than hand-edited:
+
+```bash
+python3 tools/gen_icons.py
+python3 tools/gen_icons.py --check
+python3 tools/check_icons.py
+python3 tools/preview.py
+```
+
+The icon QA and preview tools require `lua` and `rsvg-convert` on `PATH`.
+
+Repository documentation for plugin architecture and KOReader-specific constraints is in
+`AGENTS.md`. The implementation history and design decisions are in
+[`development/IMPLEMENTATION_PLAN.md`](development/IMPLEMENTATION_PLAN.md) and
+[`development/implementation-plan/`](development/implementation-plan/).
+
+## License
+
+GNU General Public License v3.0 or later.
