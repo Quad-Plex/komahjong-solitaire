@@ -21,6 +21,8 @@ expect(I18n.languageName("en") == "English" and I18n.languageName("de") == "Deut
 I18n.setLanguage("de")
 expect(I18n.t("toolbar.hint") == "Tipp", "German catalog translates toolbar text")
 expect(I18n.t("game.combo", 10) == "KOMBO +10", "German catalog formats placeholders")
+expect(I18n.t("game.layout_record") == "Layout-Rekord!" and I18n.t("game.global_record") == "Globaler Rekord!",
+    "German catalog localizes record provenance labels")
 I18n.setLanguage("invalid")
 expect(I18n.getLanguage() == "en", "invalid language falls back to English")
 

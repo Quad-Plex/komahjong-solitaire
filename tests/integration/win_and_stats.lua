@@ -9,7 +9,8 @@
 --     fresh plugin instance (the "game" key is untouched);
 --   * The win dialog is a multi-line summary containing score / time / pairs /
 --     best score / best time / current streak;
---   * The first records are marked "New best!", later equal or worse wins are
+--   * New global/layout records are marked with their record provenance, later
+--     equal or worse wins are
 --     not, and a later better win is;
 --   * A human win records games_won / bests / streaks and sets game_won;
 --   * Play again starts a fresh game and keeps the winning streak;
@@ -135,7 +136,7 @@ expect(mj0b.stats.games_played == 5 and mj0b.stats.best_score == 120
 -- Start the gameplay section from a clean stats record.
 store.stats = nil
 
--- ---- The win dialog is a summary with bests + New best! markers ---------------
+-- ---- The win dialog is a summary with global/layout record markers ------------
 
 local mj1 = Mahjong:new()
 setBoard(mj1, {
@@ -149,26 +150,26 @@ expect(ctx.last_confirm ~= nil, "a win shows the win dialog")
 local win_text = ctx.summaryText(ctx.last_confirm)
 expect(win_text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil,
     "a first win headlines a new overall best score and best time")
-expect(win_text:find("Score: 80 (New best!)", 1, true) ~= nil,
-    "a first win marks the score row with New best!")
+expect(win_text:find("Score: 80 (Global Record!)", 1, true) ~= nil,
+    "a first win marks the score row with Global Record!")
 expect(win_text:find("Layout: Turtle", 1, true) ~= nil,
     "the summary shows the layout above the score")
-expect(win_text:find("Time: 00:45 (New best!)", 1, true) ~= nil,
-    "a first win marks the time row with New best!")
--- A new-best marker is rendered as a TextWidget ("(New best!)"), distinct from the
+expect(win_text:find("Time: 00:45 (Global Record!)", 1, true) ~= nil,
+    "a first win marks the time row with Global Record!")
+-- A record marker is rendered as a TextWidget ("(Global Record!)"), distinct from the
 -- trophy marker shown when no record is broken.
 local win_summary_first = ctx.last_confirm
 local nb_score = win_summary_first.win_rows and win_summary_first.win_rows[2].marker_widget
-expect(nb_score ~= nil and nb_score.text == "(New best!)",
-    "the score row's new-best marker is a TextWidget (not a trophy)")
+expect(nb_score ~= nil and nb_score.text == "(Global Record!)",
+    "the score row's global record marker is a TextWidget (not a trophy)")
 expect(win_text:find("Pairs matched", 1, true) == nil,
     "the summary omits the always-72 pairs matched stat")
 expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
     "the summary shows zero shuffles on a clean win")
-expect(win_text:find("Best combo: 1 (+10) (New best!)", 1, true) ~= nil,
-    "the summary shows the per-game best combo and marks its first record")
+expect(win_text:find("Best combo: 1 (+10) (Global Record!)", 1, true) ~= nil,
+    "the summary shows the per-game best combo and marks its global record")
 expect(win_text:find("Overall best score: 80", 1, true) == nil,
     "the session summary no longer lists the global overall best score")
 expect(win_text:find("Overall best time: 00:45", 1, true) == nil,
@@ -259,8 +260,8 @@ expect(win_text:find("Hints used: 2", 1, true) ~= nil,
     "the summary shows the number of hints used")
 expect(win_text:find("Shuffles: 1", 1, true) ~= nil,
     "the summary shows the number of shuffles used")
-expect(win_text:find("New best!", 1, true) == nil,
-    "a win that beats no record shows no New best! marker")
+expect(win_text:find("Record!", 1, true) == nil,
+    "a win that beats no record shows no record marker")
 expect(win_text:find("You cleared the board!", 1, true) ~= nil,
     "a win that breaks no record falls back to the plain headline")
 expect(mj1.stats.games_won == 2 and mj1.stats.current_streak == 2,
@@ -399,8 +400,8 @@ expect(mj2.stats.games_won == 3 and mj2.stats.best_score == 155
     "an auto-solve win leaves the loaded lifetime stats untouched")
 expect(mj2.game_won == false, "an auto-solve win does not set the game_won flag")
 win_text = ctx.summaryText(ctx.last_confirm)
-expect(win_text:find("New best!", 1, true) == nil,
-    "an auto-solve win never marks a New best!")
+expect(win_text:find("Record!", 1, true) == nil,
+    "an auto-solve win never marks a record")
 -- US-12: an auto-solve win doesn't record a new best, so its score/time rows
 -- instead show the prior best (this layout's) as a trophy — exactly the
 -- "did not beat the record, compare to the best" case.
@@ -442,6 +443,10 @@ expect(win_text:find("Congratulations! New best score and time on this layout!",
     "a win that breaks only THIS layout's records headlines that layout")
 expect(win_text:find("Congratulations! New overall", 1, true) == nil,
     "a layout-only record win does not headline the overall records")
+expect(win_text:find("Score: 80 (Layout Record!)", 1, true) ~= nil,
+    "a layout-only score record is labeled Layout Record!")
+expect(win_text:find("Time: 00:25 (Layout Record!)", 1, true) ~= nil,
+    "a layout-only time record is labeled Layout Record!")
 expect(win_text:find("Turtle best score: 35", 1, true) == nil,
     "the session summary omits the layout score line")
 expect(win_text:find("Overall best score: 100", 1, true) == nil,

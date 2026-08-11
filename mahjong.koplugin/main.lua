@@ -1646,14 +1646,16 @@ function Mahjong:showWinDialog()
     -- celebrates) are NOT listed here as their own rows, so the card stays
     -- focused on what was achieved in this session.
     --
-    -- US-12: the score/time rows still reach for the best, though — a win that
-    -- breaks the overall or this-layout record gets a "(New best!)" text marker
+    -- US-12: the score/time/combo rows still reach for the best, though — a win
+    -- that breaks the overall or this-layout record gets a provenance-specific
+    -- text marker
     -- next to its value; a win that does NOT break a record instead shows the
     -- current best on that layout as a trophy icon + the best figure, so the
     -- player can compare this run against the best on the layout just played.
     -- The marker is carried as a text string (`marker`, for the harness) and a
     -- parallel widget (`marker_widget`) that the dialog renders after the value;
-    -- the harness appends `marker` to `value`. A first win is always a new best
+    -- the harness appends `marker` to `value`. Global takes precedence when a
+    -- win sets both the global and layout record. A first win is always a new best
     -- (recordWin/recordLayoutWin raise the best from 0/nil), so the trophy branch
     -- only fires when a prior best already exists.
     local layout = self.layout
@@ -1680,14 +1682,21 @@ function Mahjong:showWinDialog()
             TextWidget:new{ text = ")", padding = 0, face = value_face, bold = true },
         }
     end
-    -- Returns (marker_text, marker_widget) for a value row: "(New best!)" + a
-    -- TextWidget when the row broke the record, a trophy icon + best figure when
+    -- Returns (marker_text, marker_widget) for a value row: a provenance-specific
+    -- record label + TextWidget when the row broke the record, a trophy icon + best figure when
     -- it did not (best_str is the prior best as a string), or nil/nil when there
     -- is no best to show.
-    local function marker_for(is_new_best, best_str)
-        if is_new_best then
-            return t("game.new_best"), TextWidget:new{
-                text = t("game.new_best"), padding = 0, face = value_face, bold = true,
+    local function marker_for(global_record, layout_record, best_str)
+        local record_label
+        if global_record then
+            record_label = t("game.global_record")
+        elseif layout_record then
+            record_label = t("game.layout_record")
+        end
+        if record_label then
+            local marker = "(" .. record_label .. ")"
+            return marker, TextWidget:new{
+                text = marker, padding = 0, face = value_face, bold = true,
             }
         end
         if best_str then
@@ -1704,15 +1713,15 @@ function Mahjong:showWinDialog()
     if not time_is_new_best and layout_best_time then
         time_best_str = MahjongLogic.formatElapsed(layout_best_time)
     end
-    local score_marker, score_marker_widget = marker_for(score_is_new_best, score_best_str)
-    local time_marker, time_marker_widget = marker_for(time_is_new_best, time_best_str)
+    local score_marker, score_marker_widget = marker_for(new_best_score, new_layout_score, score_best_str)
+    local time_marker, time_marker_widget = marker_for(new_best_time, new_layout_time, time_best_str)
     local combo_is_new_best = new_best_combo or new_layout_combo
     local combo_best_str
     if not combo_is_new_best and layout_best_combo then
         combo_best_str = string.format("%d (+%d)", layout_best_combo.chain,
             layout_best_combo.points)
     end
-    local combo_marker, combo_marker_widget = marker_for(combo_is_new_best, combo_best_str)
+    local combo_marker, combo_marker_widget = marker_for(new_best_combo, new_layout_combo, combo_best_str)
 
     local win_rows = {
         { label = t("game.layout"),         value = t("layout." .. layout) },

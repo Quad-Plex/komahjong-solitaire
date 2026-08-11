@@ -39,6 +39,7 @@ return {
         ["game.congrats_layout_time"] = "Glückwunsch! Neue Bestzeit für dieses Layout!",
         ["game.cleared"] = "Du hast das Brett geleert!", ["game.new_best"] = "(Rekord!)",
         ["game.layout"] = "Layout", ["game.time"] = "Zeit", ["game.best_combo"] = "Beste Combo",
+        ["game.layout_record"] = "Layout-Rekord!", ["game.global_record"] = "Globaler Rekord!",
         ["game.overall_best_score"] = "Bester Gesamtpunktestand", ["game.overall_best_time"] = "Beste Gesamtzeit",
         ["game.current_streak"] = "Aktuelle Serie", ["game.hints_used"] = "Verwendete Hinweise",
         ["game.shuffles"] = "Mischungen", ["game.auto_solve_arming"] = "Weiter halten zum Auto-Lösen…",
