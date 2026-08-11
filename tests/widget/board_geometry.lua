@@ -56,7 +56,8 @@ local function tileCount()
     return n
 end
 expect(tileCount() == 144, "all 144 tiles are drawn (got " .. tileCount() .. ")")
-expect(#b[1][1] == 144, "OverlapGroup holds 144 icon widgets")
+expect(tileCount() == 144, "face widget map holds 144 tile faces")
+expect(#b[1][1] > 144, "OverlapGroup includes independently rendered bevel widgets")
 
 local layer_sizes = {}
 for l = 0, Logic.MAX_LAYER do layer_sizes[l] = #b.tiles_by_layer[l] end
@@ -78,6 +79,7 @@ expect(all_inside, "all tiles fit inside the widget area")
 -- Z-order: children are appended by layer and diagonal depth, so lower layers
 -- paint first and diagonal half-overlaps land on top.
 local children = b[1][1]
+local function pk(x, y, l) return Logic.posKey(x, y, l) end
 local zi = 1
 local z_order_ok = true
 local ordered = {}
@@ -91,17 +93,27 @@ table.sort(ordered, function(a, b)
     if a.y ~= b.y then return a.y < b.y end
     return a.x < b.x
 end)
+local child_index = 1
 for _, p in ipairs(ordered) do
     if Logic.tileAt(board, p.x, p.y, p.layer) then
         local px, py = b:tilePos(p.x, p.y, p.layer)
-        local c = children[zi]
-        if not c or c.overlap_offset[1] ~= px or c.overlap_offset[2] ~= py then
+        local face = b.tile_widgets[pk(p.x, p.y, p.layer)]
+        local c = children[child_index]
+        if c ~= face or c.overlap_offset[1] ~= px or c.overlap_offset[2] ~= py then
             z_order_ok = false
+        end
+        child_index = child_index + 1
+        for _, segment in ipairs(b.tile_bevels[pk(p.x, p.y, p.layer)] or {}) do
+            if children[child_index] ~= b.bevel_widgets[pk(p.x, p.y, p.layer) .. ":" .. segment] then
+                z_order_ok = false
+            end
+            child_index = child_index + 1
         end
         zi = zi + 1
     end
 end
-expect(zi - 1 == 144 and z_order_ok, "children use diagonal depth order (bottom layer first)")
+expect(zi - 1 == 144 and child_index - 1 == #children and z_order_ok,
+    "faces and bevels use diagonal depth order (bottom layer first)")
 
 -- Layer offset: each layer L is shifted up-left by L*bw / L*bh (the outward
 -- bevel thickness), so a raised tile's face is inset from the tile directly
@@ -117,12 +129,15 @@ expect(b.bw > 0 and b.bh > 0, "outward bevel thickness computed (" .. b.bw .. "x
 expect(b.tile_w == b.tw + b.bw and b.tile_h == b.th + b.bh,
     "icon widget dimen is face + bevel (tile_w/tile_h)")
 local icon_widget = b.tile_widgets[Logic.posKey(2, 2, 0)]
-expect(icon_widget.width == b.tile_w and icon_widget.height == b.tile_h,
-    "IconWidgets are sized face + bevel so the bevels overhang neighbours")
+expect(icon_widget.width == b.tw and icon_widget.height == b.th,
+    "face IconWidgets are sized to the grid pitch")
+local bevel_widget = next(b.bevel_widgets)
+expect(bevel_widget ~= nil and b.bevel_widgets[bevel_widget].width == b.tile_w
+        and b.bevel_widgets[bevel_widget].height == b.tile_h,
+    "bevel IconWidgets use the face-plus-bevel canvas")
 
 -- ---- Hit-testing: topmost tile at a point wins ---------------------------------
 
-local function pk(x, y, l) return Logic.posKey(x, y, l) end
 local proj = {}
 proj[pk(5, 3, 0)] = "b1"
 proj[pk(5, 3, 1)] = "c2"

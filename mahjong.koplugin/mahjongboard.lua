@@ -10,9 +10,9 @@
 -- sits at the bottom-right and the pyramid rises toward the top-left. Lower
 -- layers are painted first so the raised tiles land on top of them.
 --
--- The bevel bands live in the tile artwork (right #78909c, bottom #546e7a,
--- 10% of each axis, see tools/gen_icons.py); each icon widget is sized
--- (tw + bw) x (th + bh) so the rendered face is exactly the grid pitch.
+-- Faces and bevel segments are separate generated assets. Each tile still
+-- contributes face -> bevel children in paint order, but a bevel transition
+-- never replaces the tile face or dirties its entire neighboring rectangle.
 --
 -- Instead of a ButtonTable, the board paints IconWidgets absolutely
 -- positioned via an OverlapGroup's `overlap_offset`, and hit-tests taps
@@ -44,6 +44,32 @@ local TILE_ASPECT = 1.4
 local BEVEL_FRAC = 0.10
 -- Empty board padding inside the widget.
 local MARGIN = 6
+
+local function segmentKey(key, segment)
+    return key .. ":" .. segment
+end
+
+-- Bounds are relative to a tile widget's top-left. The bevel SVGs use the
+-- shared 110x154 viewBox, while these rectangles describe only their inked
+-- extension. They are used for exact regional refreshes.
+local function segmentBounds(board, segment)
+    if segment == "right" then
+        return board.tw, 0, board.bw, board.tile_h
+    elseif segment == "right_top" then
+        return board.tw, 0, board.bw, math.floor(board.tile_h * 84 / 154 + 0.5)
+    elseif segment == "right_bottom" then
+        local y = math.floor(board.tile_h * 70 / 154 + 0.5)
+        return board.tw, y, board.bw, board.tile_h - y
+    elseif segment == "bottom" then
+        return 0, board.th, board.tile_w, board.bh
+    elseif segment == "bottom_left" then
+        -- The receding diagonal overlaps ten viewBox units into the other
+        -- half so it can mesh with an intersecting side/bevel edge.
+        return 0, board.th, math.floor(board.tile_w * 60 / 110 + 0.5), board.bh
+    end
+    local x = math.floor(board.tile_w * 50 / 110 + 0.5)
+    return x, board.th, board.tile_w - x, board.bh
+end
 
 -- Unit-space extents of a layout, including the 0.10-unit outward bevel
 -- overhang on the east/south edges AND the up-left layer shift on the
@@ -95,11 +121,13 @@ local Board = InputContainer:extend{
     origin_x = 0,    -- widget-local position of grid cell (x_min, y_min)
     origin_y = 0,
     tiles_by_layer = nil, -- [layer] -> array of {x, y, layer, kind, px, py, w, h}
-    tile_widgets = nil,   -- posKey -> IconWidget (for O(1) incremental removal)
+    tile_widgets = nil,   -- posKey -> face IconWidget
+    bevel_widgets = nil,  -- posKey .. ":" .. segment -> bevel IconWidget
+    tile_bevels = nil,    -- posKey -> ordered visible bevel segment names
     overlap = nil,        -- the painted OverlapGroup (self[1][1])
     overlays = nil,       -- posKey -> IconWidget overlay (select/hint), painted on top
     paused = false,        -- render empty faces while the pause modal is open
-    empty_board = nil,     -- full-layout placeholder used for empty bevel variants
+    empty_board = nil,     -- full-layout placeholder used for paused faces/bevels
 }
 
 function Board:init()
@@ -167,10 +195,46 @@ function Board:tilePos(x, y, layer)
     return math.floor(px), math.floor(py)
 end
 
--- (Re)builds the visible tile widgets from the current board state. Called on
--- init and whenever the board changes structurally (new game, shuffle). After
--- a pair removal, prefer removeTile/removePair so only the removed tiles are
--- dropped instead of recreating all 144 IconWidgets.
+function Board:faceWidget(x, y, layer, kind)
+    local px, py = self:tilePos(x, y, layer)
+    return IconWidget:new{
+        icon = "mahjong/" .. MahjongLogic.iconForKind(kind),
+        width = self.tw,
+        height = self.th,
+        overlap_offset = { px, py },
+        alpha = true,
+    }
+end
+
+function Board:bevelWidget(x, y, layer, segment)
+    local px, py = self:tilePos(x, y, layer)
+    return IconWidget:new{
+        icon = "mahjong/bevel_" .. segment,
+        width = self.tile_w,
+        height = self.tile_h,
+        overlap_offset = { px, py },
+        alpha = true,
+    }
+end
+
+function Board:desiredBevels(x, y, layer)
+    local icon_board = self.paused and self.empty_board or self.board
+    return MahjongLogic.visibleBevelSegments(icon_board, x, y, layer)
+end
+
+function Board:appendTileChildren(children, x, y, layer)
+    local key = MahjongLogic.posKey(x, y, layer)
+    local face = self.tile_widgets[key]
+    if face then children[#children + 1] = face end
+    for _, segment in ipairs(self.tile_bevels[key] or {}) do
+        local bevel = self.bevel_widgets[segmentKey(key, segment)]
+        if bevel then children[#children + 1] = bevel end
+    end
+end
+
+-- (Re)builds the visible face and bevel widgets from the current board state.
+-- Called on init and full structural changes. Pair removal uses the incremental
+-- methods below, which preserve all unaffected IconWidget instances.
 function Board:rebuildTiles()
     if self[1] then
         self[1]:free()
@@ -178,6 +242,8 @@ function Board:rebuildTiles()
     end
     self.overlap = nil
     self.tile_widgets = {}
+    self.bevel_widgets = {}
+    self.tile_bevels = {}
     self.overlays = {}
 
     local by_layer = {}
@@ -192,20 +258,15 @@ function Board:rebuildTiles()
             or MahjongLogic.tileAt(self.board, p.x, p.y, p.layer)
         if kind then
             local px, py = self:tilePos(p.x, p.y, p.layer)
-            local icon_kind
-            if self.paused then
-                icon_kind = MahjongLogic.iconForTile(self.empty_board, p.x, p.y, p.layer)
-            else
-                icon_kind = MahjongLogic.iconForTile(self.board, p.x, p.y, p.layer)
-            end
-            local w = IconWidget:new{
-                icon = "mahjong/" .. icon_kind,
-                width = self.tile_w,
-                height = self.tile_h,
-                overlap_offset = { px, py },
-                alpha = true,
-            }
+            local w = self:faceWidget(p.x, p.y, p.layer, kind)
+            local key = MahjongLogic.posKey(p.x, p.y, p.layer)
             self.tile_widgets[MahjongLogic.posKey(p.x, p.y, p.layer)] = w
+            local segments = self:desiredBevels(p.x, p.y, p.layer)
+            self.tile_bevels[key] = segments
+            for _, segment in ipairs(segments) do
+                self.bevel_widgets[segmentKey(key, segment)] =
+                    self:bevelWidget(p.x, p.y, p.layer, segment)
+            end
             by_layer[p.layer][#by_layer[p.layer] + 1] = {
                 x = p.x, y = p.y, layer = p.layer, kind = kind,
                 px = px, py = py, w = self.tw, h = self.th,
@@ -227,7 +288,7 @@ function Board:rebuildTiles()
     end
     for layer = 0, max_layer do
         for _, t in ipairs(by_layer[layer]) do
-            children[#children + 1] = self.tile_widgets[MahjongLogic.posKey(t.x, t.y, t.layer)]
+            self:appendTileChildren(children, t.x, t.y, t.layer)
         end
     end
 
@@ -274,11 +335,38 @@ end
 -- US-07 removes from the logic board first, then calls removePair here so only
 -- the two affected widgets are freed and the hit-test table is updated.
 
--- Drops a single rendered tile (widget, hit-test entry, and any overlay
--- sitting on it) WITHOUT refreshing neighbours or syncing the overlap group —
--- removeTile / removePair batch those so a pair's widgets are dropped before
--- any neighbour icon is recomputed. The logic board must already be updated
--- by the caller. Returns true if the tile was present.
+local function removeChild(overlap, widget)
+    for i = #(overlap or {}), 1, -1 do
+        if overlap[i] == widget then
+            table.remove(overlap, i)
+            break
+        end
+    end
+end
+
+local function containsSegment(segments, wanted)
+    for _, segment in ipairs(segments or {}) do
+        if segment == wanted then return true end
+    end
+    return false
+end
+
+local function appendSegmentRects(rects, x, y, layer, segments)
+    for _, segment in ipairs(segments or {}) do
+        rects[#rects + 1] = { x = x, y = y, layer = layer, segment = segment }
+    end
+end
+
+local function appendRefreshRects(rects, additions)
+    for _, r in ipairs(additions or {}) do
+        rects[#rects + 1] = r
+    end
+    return rects
+end
+
+-- Drops a single rendered tile, its bevel widgets, hit-test entry, and any
+-- overlay sitting on it WITHOUT refreshing neighbours or syncing the overlap
+-- group. Returns the old bevel segments so their ink can be invalidated.
 function Board:dropTileWidget(x, y, layer)
     local key = MahjongLogic.posKey(x, y, layer)
     local w = self.tile_widgets[key]
@@ -286,13 +374,20 @@ function Board:dropTileWidget(x, y, layer)
 
     -- drop the tile widget from the paint stack
     self.tile_widgets[key] = nil
-    for i = #(self.overlap or {}), 1, -1 do
-        if self.overlap[i] == w then
-            table.remove(self.overlap, i)
-            break
+    removeChild(self.overlap, w)
+    w:free()
+
+    local old_segments = self.tile_bevels[key] or {}
+    for _, segment in ipairs(old_segments) do
+        local bevel_key = segmentKey(key, segment)
+        local bevel = self.bevel_widgets[bevel_key]
+        if bevel then
+            self.bevel_widgets[bevel_key] = nil
+            removeChild(self.overlap, bevel)
+            bevel:free()
         end
     end
-    w:free()
+    self.tile_bevels[key] = nil
 
     -- drop the tile from the hit-test table
     local by = self.tiles_by_layer[layer]
@@ -309,84 +404,69 @@ function Board:dropTileWidget(x, y, layer)
     local ov = self.overlays[key]
     if ov then
         self.overlays[key] = nil
-        for i = #(self.overlap or {}), 1, -1 do
-            if self.overlap[i] == ov then
-                table.remove(self.overlap, i)
-                break
-            end
-        end
+        removeChild(self.overlap, ov)
         ov:free()
     end
-    return true
+    return true, old_segments
 end
 
--- Recomputes the icons of a tile's same-layer west/north neighbours: the only
--- tiles whose bevels can change when this tile is removed (its removal exposes
--- their right/bottom bevels) or added (it hides them). Returns only locations
--- whose widget actually changed, so the EPDC never refreshes a speculative
--- neighbour-sized cluster around every removed tile. The tile itself may
--- already be gone — refreshTileIcon skips tiles without a widget.
+-- Recomputes only the bevel widgets of same-layer west/north neighbours. A
+-- change returns old/new segment locations, not the complete neighbor tile.
 function Board:refreshWestNorthNeighbours(x, y, layer)
     local changed = {}
     for dy = -0.5, 0.5, 0.5 do
-        if self:refreshTileIcon(x - 1, y + dy, layer) then
-            changed[#changed + 1] = { x = x - 1, y = y + dy, layer = layer }
-        end
+        local records = self:refreshTileBevels(x - 1, y + dy, layer)
+        appendRefreshRects(changed, records)
     end
     for dx = -0.5, 0.5, 0.5 do
-        if self:refreshTileIcon(x + dx, y - 1, layer) then
-            changed[#changed + 1] = { x = x + dx, y = y - 1, layer = layer }
-        end
+        local records = self:refreshTileBevels(x + dx, y - 1, layer)
+        appendRefreshRects(changed, records)
     end
     return changed
-end
-
-local function appendRefreshRects(rects, additions)
-    for _, r in ipairs(additions or {}) do
-        rects[#rects + 1] = r
-    end
-    return rects
 end
 
 -- Removes a single rendered tile. Returns true if it was present. Any overlay
 -- sitting on the tile is dropped too. Repaints the board.
 function Board:removeTile(x, y, layer)
-    if not self:dropTileWidget(x, y, layer) then return false end
+    local removed, old_segments = self:dropTileWidget(x, y, layer)
+    if not removed then return false end
     local rects = { { x = x, y = y, layer = layer } }
+    appendSegmentRects(rects, x, y, layer, old_segments)
     appendRefreshRects(rects, self:refreshWestNorthNeighbours(x, y, layer))
     self:syncOverlapGroup(rects)
     return true
 end
 
--- Re-resolves the icon for the tile at (x, y, layer) and replaces its widget
--- if the icon (i.e. its bevel variants) has changed. Used after a neighbor
--- is removed or added. A widget whose tile is no longer on the board (e.g. a
--- half-removed pair) is skipped: removeTile/removePair batch the drops, so
--- the widget has already been freed.
-function Board:refreshTileIcon(x, y, layer)
+-- Reconciles only the bevel widgets for an existing tile. The face widget is
+-- intentionally never replaced when neighboring occlusion changes.
+function Board:refreshTileBevels(x, y, layer)
     local key = MahjongLogic.posKey(x, y, layer)
-    local w = self.tile_widgets[key]
-    if not w then return false end
+    if not self.tile_widgets[key] then return {} end
 
-    local icon_board = self.paused and self.empty_board or self.board
-    local icon = MahjongLogic.iconForTile(icon_board, x, y, layer)
-    if not icon then return false end
-    local new_icon = "mahjong/" .. icon
-    if w.icon == new_icon then return false end
-
-    local px, py = self:tilePos(x, y, layer)
-    local new_w = IconWidget:new{
-        icon = new_icon,
-        width = self.tile_w,
-        height = self.tile_h,
-        overlap_offset = { px, py },
-        alpha = true,
-    }
-
-    -- Swap in the map
-    self.tile_widgets[key] = new_w
-    w:free()
-    return true
+    local old_segments = self.tile_bevels[key] or {}
+    local new_segments = self:desiredBevels(x, y, layer)
+    local changed = {}
+    for _, segment in ipairs(old_segments) do
+        if not containsSegment(new_segments, segment) then
+            local bevel_key = segmentKey(key, segment)
+            local bevel = self.bevel_widgets[bevel_key]
+            if bevel then
+                self.bevel_widgets[bevel_key] = nil
+                removeChild(self.overlap, bevel)
+                bevel:free()
+            end
+            changed[#changed + 1] = { x = x, y = y, layer = layer, segment = segment }
+        end
+    end
+    for _, segment in ipairs(new_segments) do
+        if not containsSegment(old_segments, segment) then
+            self.bevel_widgets[segmentKey(key, segment)] =
+                self:bevelWidget(x, y, layer, segment)
+            changed[#changed + 1] = { x = x, y = y, layer = layer, segment = segment }
+        end
+    end
+    self.tile_bevels[key] = new_segments
+    return changed
 end
 
 -- Synchronizes the OverlapGroup children with tiles_by_layer and overlays,
@@ -413,6 +493,12 @@ function Board:requestRefresh(rects)
             local m = 1
             if r.x % 1 ~= 0 or r.y % 1 ~= 0 then m = 2 end
             local x, y = self:tilePos(r.x, r.y, r.layer)
+            local offset_x, offset_y, content_w, content_h
+            if r.segment then
+                offset_x, offset_y, content_w, content_h = segmentBounds(self, r.segment)
+            else
+                offset_x, offset_y, content_w, content_h = 0, 0, self.tw, self.th
+            end
             -- Keep the anti-aliasing margin inside the board canvas. A tile on
             -- the board edge must not touch the status/feedback bands: KOReader
             -- deliberately merges edge-adjacent regions, which would turn this
@@ -421,10 +507,10 @@ function Board:requestRefresh(rects)
             local min_y = self.refresh_origin_y or 0
             local max_x = min_x + self.width
             local max_y = min_y + self.height
-            local left = math.max(min_x, min_x + x - m)
-            local top = math.max(min_y, min_y + y - m)
-            local region_right = math.min(max_x, min_x + x + self.tile_w + m)
-            local region_bottom = math.min(max_y, min_y + y + self.tile_h + m)
+            local left = math.max(min_x, min_x + x + offset_x - m)
+            local top = math.max(min_y, min_y + y + offset_y - m)
+            local region_right = math.min(max_x, min_x + x + offset_x + content_w + m)
+            local region_bottom = math.min(max_y, min_y + y + offset_y + content_h + m)
             local region = {
                 x = left,
                 y = top,
@@ -476,7 +562,7 @@ function Board:queueStructuralRefreshRetry(rects)
     self._refresh_retry_rects = self._refresh_retry_rects or {}
     for _, r in ipairs(rects or {}) do
         self._refresh_retry_rects[#self._refresh_retry_rects + 1] = {
-            x = r.x, y = r.y, layer = r.layer,
+            x = r.x, y = r.y, layer = r.layer, segment = r.segment,
         }
     end
     if self._refresh_retry_scheduled then return end
@@ -535,10 +621,7 @@ function Board:syncOverlapGroup(refresh_rects)
             return a.x < b.x
         end)
         for _, t in ipairs(tiles) do
-            local w = self.tile_widgets[MahjongLogic.posKey(t.x, t.y, t.layer)]
-            if w then
-                self.overlap[#self.overlap + 1] = w
-            end
+            self:appendTileChildren(self.overlap, t.x, t.y, t.layer)
         end
     end
     -- Add overlays
@@ -557,28 +640,27 @@ function Board:addTile(x, y, layer, kind, defer_sync)
     if self.tile_widgets[key] then return false end
 
     local px, py = self:tilePos(x, y, layer)
-    local icon_name = MahjongLogic.iconForTile(self.board, x, y, layer)
-    local w = IconWidget:new{
-        icon = "mahjong/" .. icon_name,
-        width = self.tile_w,
-        height = self.tile_h,
-        overlap_offset = { px, py },
-        alpha = true,
-    }
+    local w = self:faceWidget(x, y, layer, kind)
 
     self.tile_widgets[key] = w
+    local segments = self:desiredBevels(x, y, layer)
+    self.tile_bevels[key] = segments
+    for _, segment in ipairs(segments) do
+        self.bevel_widgets[segmentKey(key, segment)] =
+            self:bevelWidget(x, y, layer, segment)
+    end
     table.insert(self.tiles_by_layer[layer], {
         x = x, y = y, layer = layer, kind = kind,
         px = px, py = py, w = self.tw, h = self.th,
     })
 
     -- Update same-layer neighbors whose bevels might now be occluded.
-    local changed = self:refreshWestNorthNeighbours(x, y, layer)
+    local changed = {}
+    appendSegmentRects(changed, x, y, layer, segments)
+    appendRefreshRects(changed, self:refreshWestNorthNeighbours(x, y, layer))
 
     if not defer_sync then
-        local rects = { { x = x, y = y, layer = layer } }
-        appendRefreshRects(rects, changed)
-        self:syncOverlapGroup(rects)
+        self:syncOverlapGroup(changed)
     end
     return true, changed
 end
@@ -602,12 +684,9 @@ end
 -- call, keeping z-order. Returns true if both tiles were present. The logic
 -- board is expected to have been updated by the caller before this.
 --
--- Both widgets are dropped BEFORE any neighbour icon is refreshed: by the time
--- this runs the logic board no longer has the pair, so if the two tiles are
--- adjacent (one west/north of the other) the first removal's neighbour refresh
--- would find the second tile's still-present widget with a nil kind and crash
--- on "mahjong/" .. nil. Batching the drops keeps every refreshTileIcon call on
--- a tile that is genuinely on the board.
+-- Both faces and their bevels are dropped BEFORE any neighbour bevel is
+-- refreshed: by the time this runs the logic board no longer has the pair, so
+-- adjacent removals cannot leave a stale rendered component to reconcile.
 --
 -- `extra_rects` (optional) are additional { x, y, layer } locations folded
 -- into the SAME refresh/retry pass as the pair removal — used to batch a
@@ -615,14 +694,20 @@ end
 -- so the hint-clear and the tile-clear cannot race as two separate regional
 -- updates.
 function Board:removePair(a, b, extra_rects)
-    local ra = self:dropTileWidget(a.x, a.y, a.layer)
-    local rb = self:dropTileWidget(b.x, b.y, b.layer)
+    local ra, old_a = self:dropTileWidget(a.x, a.y, a.layer)
+    local rb, old_b = self:dropTileWidget(b.x, b.y, b.layer)
     local rects = {
         { x = a.x, y = a.y, layer = a.layer },
         { x = b.x, y = b.y, layer = b.layer },
     }
-    if ra then appendRefreshRects(rects, self:refreshWestNorthNeighbours(a.x, a.y, a.layer)) end
-    if rb then appendRefreshRects(rects, self:refreshWestNorthNeighbours(b.x, b.y, b.layer)) end
+    if ra then
+        appendSegmentRects(rects, a.x, a.y, a.layer, old_a)
+        appendRefreshRects(rects, self:refreshWestNorthNeighbours(a.x, a.y, a.layer))
+    end
+    if rb then
+        appendSegmentRects(rects, b.x, b.y, b.layer, old_b)
+        appendRefreshRects(rects, self:refreshWestNorthNeighbours(b.x, b.y, b.layer))
+    end
     appendRefreshRects(rects, extra_rects)
     self:syncOverlapGroup(rects)
     self:queueStructuralRefreshRetry(rects)

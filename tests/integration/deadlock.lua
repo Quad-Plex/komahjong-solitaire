@@ -461,7 +461,12 @@ expect(#ctx.scheduled > scheduled_before,
     "confirmed ordinary shuffle defers its board rebuild")
 ctx.runScheduled()
 ctx.runScheduled()
-expect(mj_confirm.board_view and #mj_confirm.board_view.overlap == 144,
+local rendered_faces = 0
+for _ in pairs(mj_confirm.board_view and mj_confirm.board_view.tile_widgets or {}) do
+    rendered_faces = rendered_faces + 1
+end
+expect(mj_confirm.board_view and rendered_faces == 144
+        and #mj_confirm.board_view.overlap > rendered_faces,
     "deferred ordinary shuffle leaves a complete rendered board")
 
 if failures == 0 then

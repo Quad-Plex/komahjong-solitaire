@@ -33,11 +33,11 @@ def svg_content(icon_dir, name):
 
 def board_tiles(tile_w):
     """Screen positions of every tile on a seeded board, via mahjonglogic.
-    Returns (tiles, (W, H)) with W/H sized to the real layout bounds (incl. the
-    outward-bevel overhang and the up-left layer shift) + margin. Each tile
-    carries its bevel-variant icon name (MahjongLogic.iconForTile). Layer L is
-    shifted up-left by L*BW/L*BH — the bevel thickness — so a raised tile's
-    bevels land exactly on the edges of the tile directly beneath it."""
+     Returns (tiles, (W, H)) with W/H sized to the real layout bounds (incl. the
+     outward-bevel overhang and the up-left layer shift) + margin. Each tile
+     carries its face kind and independently rendered bevel segments. Layer L
+     is shifted up-left by L*BW/L*BH — the bevel thickness — so a raised tile's
+     bevels land exactly on the edges of the tile directly beneath it."""
     lua = r'''
 package.path = "%s/?.lua;" .. package.path
 local Logic = require("mahjonglogic")
@@ -61,10 +61,10 @@ local board = Logic.newGame(42)
 for _, p in ipairs(Logic.buildLayout()) do
     local kind = Logic.tileAt(board, p.x, p.y, p.layer)
     if kind then
-        local icon = Logic.iconForTile(board, p.x, p.y, p.layer)
-        local px = math.floor(ox + (p.x - g.x_min) * TW - p.layer * BW)
-        local py = math.floor(oy + (p.y - g.y_min) * TH - p.layer * BH)
-        io.write(string.format("%%s %%d %%d\n", icon, px, py))
+         local segments = Logic.visibleBevelSegments(board, p.x, p.y, p.layer)
+         local px = math.floor(ox + (p.x - g.x_min) * TW - p.layer * BW)
+         local py = math.floor(oy + (p.y - g.y_min) * TH - p.layer * BH)
+         io.write(string.format("%%s %%d %%d %%s\n", kind, px, py, table.concat(segments, ",")))
     end
 end
 io.write(string.format("BOUNDS %%d %%d\n",
@@ -78,7 +78,8 @@ io.write(string.format("BOUNDS %%d %%d\n",
         if parts[0] == "BOUNDS":
             bounds = (int(parts[1]), int(parts[2]))
         else:
-            tiles.append((parts[0], int(parts[1]), int(parts[2])))
+             tiles.append((parts[0], int(parts[1]), int(parts[2]),
+                           parts[3].split(",") if len(parts) > 3 and parts[3] else []))
     return tiles, bounds
 
 
@@ -110,16 +111,19 @@ def main():
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{tot_h}" '
              f'viewBox="0 0 {W} {tot_h}">',
              f'<rect width="{W}" height="{tot_h}" fill="#ffffff"/>']
-    for kind, px, py in tiles:
-        body = svg_content(args.icons, kind + ".svg")
-        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="154" viewBox="0 0 110 154">', '').replace('</svg>', '')
-        parts.append(f'<g transform="translate({px},{py}) scale({tw / 100},{th / 140})">{body}</g>')
+    def svg_body(name):
+        content = svg_content(args.icons, name + ".svg")
+        return content[content.find(">") + 1:content.rfind("</svg>")]
+    for kind, px, py, segments in tiles:
+        transform = f'translate({px},{py}) scale({tw / 100},{th / 140})'
+        parts.append(f'<g transform="{transform}">{svg_body(kind)}</g>')
+        for segment in segments:
+            parts.append(f'<g transform="{transform}">{svg_body("bevel_" + segment)}</g>')
     parts.append(f'<g transform="translate({strip_margin},{H + 20})">')
     for i, kind in enumerate(kinds):
         col = i % strip_cols
         row = i // strip_cols
-        body = svg_content(args.icons, kind + ".svg")
-        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="154" viewBox="0 0 110 154">', '').replace('</svg>', '')
+        body = svg_body(kind)
         parts.append(f'<g transform="translate({col * strip_gap},{row * (th + bh + 2)}) scale({tw / 100},{th / 140})">{body}</g>')
     parts.append('</g></svg>')
 

@@ -98,7 +98,7 @@ local function icon_group(names, description, group_size, max_width)
     return VerticalGroup:new(group)
 end
 
-local function board_tile(board, x, y, layer, marker, px, py, tw, th)
+local function board_tile(board, x, y, layer, marker, px, py, tw, th, tile_w, tile_h)
     local marker_widget = TextWidget:new{
         text = marker, padding = 0, bold = true,
         face = Font:getFace("tfont", Screen:scaleBySize(26)),
@@ -110,16 +110,23 @@ local function board_tile(board, x, y, layer, marker, px, py, tw, th)
     marker_layer.getSize = function()
         return Geometry:new{ w = tw, h = th }
     end
-    local icon_name = MahjongLogic.iconForTile(board, x, y, layer)
-    local bevel = icon_name:match("(_n[rb]?)$") or ""
-    local tile = OverlapGroup:new{
+    local segments = MahjongLogic.visibleBevelSegments(board, x, y, layer)
+    local children = {
         IconWidget:new{
-            icon = "mahjong/empty" .. bevel,
-            width = tw, height = th, alpha = true,
+            icon = "mahjong/empty", width = tw, height = th, alpha = true,
         },
-        marker_layer,
-        dimen = Geometry:new{ w = tw, h = th },
     }
+    for _, segment in ipairs(segments) do
+        children[#children + 1] = IconWidget:new{
+            icon = "mahjong/bevel_" .. segment,
+            width = tile_w, height = tile_h,
+            overlap_offset = { 0, 0 }, alpha = true,
+        }
+    end
+    children[#children + 1] = marker_layer
+    local tile_options = { dimen = Geometry:new{ w = tile_w, h = tile_h } }
+    for i, child in ipairs(children) do tile_options[i] = child end
+    local tile = OverlapGroup:new(tile_options)
     tile.overlap_offset = { px, py }
     return tile
 end
@@ -152,7 +159,7 @@ local function example_board(max_width)
         local py = math.floor(p.y * th - p.layer * bh)
         local marker = MahjongLogic.isFree(board, p.x, p.y, p.layer) and "✓" or "X"
         children[#children + 1] = board_tile(board, p.x, p.y, p.layer,
-            marker, px, py, tw + bw, th + bh)
+            marker, px, py, tw, th, tw + bw, th + bh)
     end
     children.dimen = Geometry:new{
         w = board_width, h = math.max(Screen:scaleBySize(70), th + Screen:scaleBySize(8)),

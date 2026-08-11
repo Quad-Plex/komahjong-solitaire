@@ -122,12 +122,12 @@ expect(covered(p, { x = 10, y = 6, layer = 0 })
 
 ctx.dirty_calls = {}
 p:requestRefresh({ { x = 5, y = 3, layer = 0 } })
-expect(ctx.dirty_calls[1].region.w == p.tile_w + 2,
-    "integer-grid tiles keep the 1 px raster margin")
+expect(ctx.dirty_calls[1].region.w == p.tw + 2,
+    "integer-grid face tiles keep the 1 px raster margin")
 ctx.dirty_calls = {}
 p:requestRefresh({ { x = 2.5, y = 3, layer = 0 } })
-expect(ctx.dirty_calls[1].region.w == p.tile_w + 4,
-    "half-grid tiles get a wider (2 px) raster margin to cover the sub-pixel floor")
+expect(ctx.dirty_calls[1].region.w == p.tw + 4,
+    "half-grid face tiles get a wider (2 px) raster margin to cover the sub-pixel floor")
 
 -- ---- Mahjong:setSelection switch is ONE combined refresh ----------------------
 

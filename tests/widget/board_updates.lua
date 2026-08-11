@@ -49,11 +49,13 @@ proj[pk(9, 6, 0)] = "east"
 
 local p = Board:new{ board = proj, width = 600, height = 400 }
 expect(mapCount(p.tile_widgets) == 4, "tile_widgets map has one entry per tile")
-expect(#p.overlap == 4, "OverlapGroup holds the 4 tile widgets")
+expect(#p.overlap > 4 and mapCount(p.bevel_widgets) > 0,
+    "OverlapGroup includes separate bevel widgets")
 
 local removed = p:removeTile(5, 3, 2)
 expect(removed == true, "removeTile returns true for a present tile")
-expect(tilesOf(p) == 3 and #p.overlap == 3, "removeTile drops the widget from paint stack and map")
+expect(tilesOf(p) == 3 and #p.overlap == tilesOf(p) + mapCount(p.bevel_widgets),
+    "removeTile drops the face and bevel widgets from paint stack and maps")
 local lpx, lpy = p:tilePos(5, 3, 2)
 expect(p:hitTest(lpx + 2, lpy + 2) == nil,
     "removed top tile's spot is empty (the L1 tile below is offset up-left by the bevel)")
@@ -72,8 +74,9 @@ proj2[pk(9, 6, 0)] = "east"
 proj2[pk(2, 2, 0)] = "west"
 local p2 = Board:new{ board = proj2, width = 600, height = 400 }
 local ok = p2:removePair({ x = 5, y = 3, layer = 0 }, { x = 9, y = 6, layer = 0 })
-expect(ok == true and tilesOf(p2) == 1 and #p2.overlap == 1,
-    "removePair removes both tiles and leaves the third")
+expect(ok == true and tilesOf(p2) == 1
+        and #p2.overlap == tilesOf(p2) + mapCount(p2.bevel_widgets),
+    "removePair removes both faces and their bevels, leaving the third")
 local rpx, rpy = p2:tilePos(2, 2, 0)
 expect(p2:hitTest(rpx + 1, rpy + 1).kind == "west", "remaining tile still hit-tests")
 
@@ -94,6 +97,7 @@ bevel[pk(4, 3, 0)] = "b1"
 bevel[pk(5, 3, 0)] = "b1"
 bevel[pk(10, 6, 0)] = "c1"
 local bevel_board = Board:new{ board = bevel, width = 600, height = 400 }
+local retained_west_face = bevel_board.tile_widgets[pk(4, 3, 0)]
 ctx.dirty_calls = {}
 -- The board view is deliberately updated after the logic board, as main.lua
 -- does before invoking Board:removePair.
@@ -102,16 +106,25 @@ bevel[pk(10, 6, 0)] = nil
 bevel_board:removePair({ x = 5, y = 3, layer = 0 }, { x = 10, y = 6, layer = 0 })
 local west_x, west_y = bevel_board:tilePos(4, 3, 0)
 local refreshed_west_neighbour = false
+local refreshed_west_face = false
 for _, call in ipairs(ctx.dirty_calls) do
     local region = call.region
-    if region and west_x >= region.x and west_x < region.x + region.w
+    if region and west_x + bevel_board.tw >= region.x
+            and west_x + bevel_board.tw < region.x + region.w
             and west_y >= region.y and west_y < region.y + region.h then
         refreshed_west_neighbour = true
-        break
+    end
+    if region and region.x <= west_x and region.x + region.w > west_x
+            and region.y <= west_y and region.y + region.h > west_y then
+        refreshed_west_face = true
     end
 end
 expect(refreshed_west_neighbour,
     "pair clear includes a neighbour only when its exposed bevel changes")
+expect(not refreshed_west_face,
+    "exposed bevel refresh does not dirty the neighboring tile face")
+expect(bevel_board.tile_widgets[pk(4, 3, 0)] == retained_west_face,
+    "exposing a bevel preserves the neighboring face widget")
 
 -- ---- Overlays ---------------------------------------------------------------
 
@@ -119,27 +132,37 @@ local p3 = Board:new{ board = proj2, width = 600, height = 400 }
 local ox, oy = p3:tilePos(5, 3, 0)
 
 expect(p3:setOverlay(5, 3, 0, "select") == true, "setOverlay succeeds on a present tile")
-expect(mapCount(p3.overlays) == 1 and #p3.overlap == 4, "overlay registered on top of the tiles")
+expect(mapCount(p3.overlays) == 1
+        and #p3.overlap == tilesOf(p3) + mapCount(p3.bevel_widgets) + 1,
+    "overlay registered on top of the tiles")
 expect(p3:hitTest(ox + 2, oy + 2).kind == "b1", "overlay does not shadow hit-testing")
 
 expect(p3:setOverlay(1, 1, 0, "select") == false, "setOverlay fails on a missing tile")
 
 p3:setOverlay(5, 3, 0, "hint")
-expect(mapCount(p3.overlays) == 1 and #p3.overlap == 4, "setOverlay replaces an existing overlay")
+expect(mapCount(p3.overlays) == 1
+        and #p3.overlap == tilesOf(p3) + mapCount(p3.bevel_widgets) + 1,
+    "setOverlay replaces an existing overlay")
 
 expect(p3:clearOverlay(5, 3, 0) == true, "clearOverlay returns true when an overlay existed")
-expect(mapCount(p3.overlays) == 0 and #p3.overlap == 3, "clearOverlay removes the overlay widget")
+expect(mapCount(p3.overlays) == 0
+        and #p3.overlap == tilesOf(p3) + mapCount(p3.bevel_widgets),
+    "clearOverlay removes the overlay widget")
 expect(p3:clearOverlay(5, 3, 0) == false, "clearOverlay returns false when none existed")
 
 p3:setOverlay(5, 3, 0, "select")
 p3:setOverlay(9, 6, 0, "select")
 p3:clearAllOverlays()
-expect(mapCount(p3.overlays) == 0 and #p3.overlap == 3, "clearAllOverlays removes every overlay")
+expect(mapCount(p3.overlays) == 0
+        and #p3.overlap == tilesOf(p3) + mapCount(p3.bevel_widgets),
+    "clearAllOverlays removes every overlay")
 
 -- removing a tile drops an overlay that was sitting on it
 p3:setOverlay(5, 3, 0, "select")
 p3:removeTile(5, 3, 0)
-expect(mapCount(p3.overlays) == 0 and #p3.overlap == 2, "removeTile drops the tile's overlay too")
+expect(mapCount(p3.overlays) == 0
+        and #p3.overlap == tilesOf(p3) + mapCount(p3.bevel_widgets),
+    "removeTile drops the tile's overlay too")
 
 -- ---- updateBoard (full rebuild) resets maps and overlays ---------------------
 
@@ -148,7 +171,9 @@ for k, v in pairs(proj2) do proj3[k] = v end
 proj3[pk(3, 2, 0)] = "red"
 p3.board = proj3
 p3:updateBoard()
-expect(tilesOf(p3) == 4 and #p3.overlap == 4 and mapCount(p3.overlays) == 0,
+expect(tilesOf(p3) == 4
+        and #p3.overlap == tilesOf(p3) + mapCount(p3.bevel_widgets)
+        and mapCount(p3.overlays) == 0,
     "updateBoard rebuilds tiles and clears stale overlays")
 
 -- ---- Window-level repaint regression --------------------------------------
@@ -190,9 +215,9 @@ p4:requestRefresh({
     { x = 10, y = 7, layer = 0 },
 })
 expect(#ctx.dirty_calls == 2, "disjoint board changes enqueue separate refresh regions")
-expect(ctx.dirty_calls[1].region.w > p4.tile_w
-        and ctx.dirty_calls[2].region.w > p4.tile_w,
-    "separate board refreshes include a small edge margin")
+expect(ctx.dirty_calls[1].region.w == p4.tw + 2
+        and ctx.dirty_calls[2].region.w == p4.tw + 2,
+    "separate face refreshes include only a small edge margin")
 
 ctx.dirty_calls = {}
 p4:requestRefresh({

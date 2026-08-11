@@ -22,13 +22,11 @@ Design goals (locked in by the 2.5D redesign + the v2 traditional-art pass):
      tile's bevels land exactly on the edges of the tile directly beneath it
      and the bevel never overlaps the tiles to its east/south. The artwork
      only supplies the outward bevel bands; the shift is a board concern.
-  2. Every variant shares one 110x154 viewBox: the face at [0,0]-[100,140]
-     and the bevels in the extension bands [100,110]x[0,154] (right side) and
-     [0,100]x[140,154] (base). A variant simply leaves the absent bevel band
-     transparent, so the board can give every tile widget the same dimen and
-     the face is always anchored at the widget's top-left. The board sets the
-     widget dimen to (tw + bw, th + bh) with bw/bh = 10% of the tile size, so
-     the rendered face is exactly the grid pitch.
+   2. Faces and bevels are separate render assets. Faces use a 100x140 viewBox;
+      bevel segments use a shared transparent 110x154 viewBox and are
+      composited after their tile face in board z-order. This lets the board
+      invalidate only an exposed bevel segment instead of replacing a complete
+      tile face.
   3. E-INK-FRIENDLY 3-TONE PALETTE. A real mahjong set uses green bamboo, red
      中, blue coins, etc.; on a grayscale e-ink screen those colors drop to
      indistinguishable mid-grays. The redesign keeps silhouettes in FULL
@@ -45,13 +43,9 @@ Design goals (locked in by the 2.5D redesign + the v2 traditional-art pass):
                  hollow rings), never as a face background (that stays #fff).
      Hues are communicated by SHAPE complexity + density, not by color, so
      suits stay distinct in monochrome.
-  4. Bevels appear ONLY on exposed edges. Each kind ships in four variants
-     (base / "_nb" / "_nr" / "_n", see VARIANTS): a same-layer neighbour to
-     the right or below blocks that bevel (it would read as a fake seam inside
-     an otherwise solid layer). The board picks the variant per tile via
-     MahjongLogic.iconForTile, which also handles the Turtle's half-grid
-     head/tail (an edge covered by two half-overlapping neighbours has no
-     bevel either).
+   4. Bevels appear ONLY on exposed edges. The board requests shared full-edge
+      or half-edge assets according to the pure visibility model in
+      MahjongLogic.visibleBevelSegments. Tile kind no longer affects bevel art.
   5. TRADITIONAL RECOGNIZABILITY (v2). The first draft drew abstract count
      sticks / line numerals; the v2 set uses real mahjong iconography so a
      player instantly reads it as mahjong and not as dots-and-sticks:
@@ -83,17 +77,16 @@ import xml.etree.ElementTree as ET
 ICONS_DIR = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "mahjong.koplugin", "icons"))
 
-# Canvas: face + outward bevels. The FACE is [0,0]-[100,140] (portrait,
-# matching the board's TILE_ASPECT); the bevel bands hang OFF the face, so a
-# tile with visible bevels is larger than a bare face. Every variant uses the
-# SAME 110x154 viewBox — absent bevels are just left transparent — which lets
-# the board give every tile widget one uniform dimen.
+# Canvas: the face is [0,0]-[100,140] (portrait, matching the board's
+# TILE_ASPECT); bevel bands hang OFF the face, so a tile with visible bevels is
+# larger than a bare face. Face assets use only the face canvas. Bevel assets
+# use the shared 110x154 viewBox so each segment keeps exact board coordinates.
 VB_W, VB_H = 110, 154
 FACE_W, FACE_H = 100, 140
 
-# The tile body: the white face fills the whole 100x140 area and the two
+# The tile body: the white face fills the whole 100x140 area. The separate
 # depth-bevel bands extend OUTSIDE it — a 10-wide right side and a 14-tall
-# base (10% of each axis). They are drawn first so the face sits on top.
+# base (10% of each axis). The board paints them after their face.
 #
 # The face is outlined by a medium-gray ring (FACE_STROKE, ~1 viewBox unit —
 # about 1 device px on the target screen) drawn INSIDE the face box, so it
@@ -104,13 +97,9 @@ FACE_W, FACE_H = 100, 140
 # e-ink. The tone matches the right-side bevel so an exposed edge still reads
 # as one continuous tile side (face -> border -> bevel).
 #
-# Bevel variants: a tile's right/bottom bevel is only drawn when that edge is
-# exposed — a same-layer neighbour to the right/below blocks it (the bevel
-# would read as a fake seam inside an otherwise solid layer). Each kind is
-# generated in four variants (see VARIANTS): base (both bevels), "_nb" (no
-# bottom bevel), "_nr" (no right bevel), "_n" (neither). The bevel band is
-# transparent on the hidden side, so hidden edges mesh seamlessly with the
-# neighbouring tile.
+# Bevel segments: a tile's right/bottom bevel is only drawn where that edge is
+# exposed. Full and half-edge assets are shared by every tile kind; the pure
+# logic layer decides which segment names the board installs.
 #
 # The step between layers comes from the board, not the artwork: mahjongboard
 # shifts each layer up-left by exactly the bevel thickness, so a raised tile's
@@ -119,14 +108,19 @@ FACE_W, FACE_H = 100, 140
 # outward bevel bands. The symbols use the 3-TONE ink palette (above) for
 # maximum contrast on e-ink; the bevels keep their gray tones for the 3D
 # depth.
-FACE_BEVEL_RIGHT = '<path d="M100 0 L110 14 L110 154 L100 140 Z" fill="#78909c"/>'
-FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"/>'
+FACE_BEVEL_RIGHT = ('<path d="M100 0 L110 14 L110 154 L100 140 Z" '
+                    'fill="#78909c" stroke="#78909c" stroke-width="2" '
+                    'stroke-linejoin="round"/>')
+FACE_BEVEL_BOTTOM = ('<path d="M0 140 L100 140 L110 154 L10 154 Z" '
+                     'fill="#546e7a" stroke="#546e7a" stroke-width="2" '
+                     'stroke-linejoin="round"/>')
 
 # Corner-diagonal bevels: the right face is a parallelogram, with diagonals at
 # both its upper and lower edges. The upper diagonal closes the silhouette of a
 # single-tile tower; the lower diagonal meets the bottom face as one receding
 # point instead of a square L. The bottom face mirrors that diagonal on its left
-# edge so single-bevel variants still mesh with neighboring bottom bevels.
+# edge so independently rendered edge segments still mesh with neighboring
+# bottom bevels.
 #
 # The bottom bevel also carries a mirrored diagonal on its LEFT edge (0,140) to
 # (10,154): the board shifts each upper layer up-left by the bevel thickness, so
@@ -134,12 +128,10 @@ FACE_BEVEL_BOTTOM = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"
 # square corner there breaks the continuous diagonal that the tower's west face
 # would otherwise trace down the stack (right side diagonal, then left-side
 # diagonal of the tile below, and so on). Mirrored diagonals keep the stacking
-# edge crisp on the deeper multi-layer boards. Single-bevel variants (only one
-# exposed edge) keep the bevel band straight on the covered side: the "_nr"
-# bottom bevel's right edge is a seam against a same-layer neighbour's face,
-# while its left edge stays a receding corner like the base variant's.
-FACE_BEVEL_RIGHT_CORNER = '<path d="M100 0 L110 14 L110 154 L100 140 Z" fill="#78909c"/>'
-FACE_BEVEL_BOTTOM_CORNER = '<path d="M0 140 L100 140 L110 154 L10 154 Z" fill="#546e7a"/>'
+# edge crisp on the deeper multi-layer boards. The shared bottom asset keeps the
+# same receding corner whether its opposite edge is exposed or occluded.
+FACE_BEVEL_RIGHT_CORNER = FACE_BEVEL_RIGHT
+FACE_BEVEL_BOTTOM_CORNER = FACE_BEVEL_BOTTOM
 
 # Face outline: thin medium-gray ring inside the white face box, ~1 viewBox
 # unit (~1 device px on the target screen). Same tone as the side bevel. See
@@ -206,6 +198,38 @@ def svg(body, bottom=True, right=True):
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{VB_W}" height="{VB_H}" '
             f'viewBox="0 0 {VB_W} {VB_H}">{face(bottom, right)}'
             f'<g transform="translate(0,20)">{body}</g></svg>')
+
+
+def face_svg(body):
+    """Return a face-only tile asset at the face's native 100x140 size."""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{FACE_W}" height="{FACE_H}" '
+            f'viewBox="0 0 {FACE_W} {FACE_H}">{face(False, False)}'
+            f'<g transform="translate(0,20)">{body}</g></svg>')
+
+
+def bevel_svg(segment):
+    """Return one transparent bevel segment in shared tile coordinates."""
+    # Keep these as explicit polygons rather than SVG clipPaths. KOReader's
+    # e-ink SVG rasterizer treats clip regions inconsistently and can turn a
+    # clipped transparent canvas into a solid rectangle.
+    paths = {
+        "right": FACE_BEVEL_RIGHT_CORNER,
+        # Half segments retain receding diagonals at both ends. The diagonals
+        # overlap the occluding face/bevel instead of ending in a flat cut,
+        # which prevents white raster seams where two pseudo-3D edges meet.
+        "right_top": ('<path d="M100 0 L110 14 L110 84 L100 70 Z" fill="#78909c" '
+                      'stroke="#78909c" stroke-width="2" stroke-linejoin="round"/>'),
+        "right_bottom": ('<path d="M100 70 L110 84 L110 154 L100 140 Z" fill="#78909c" '
+                         'stroke="#78909c" stroke-width="2" stroke-linejoin="round"/>'),
+        "bottom": FACE_BEVEL_BOTTOM_CORNER,
+        "bottom_left": ('<path d="M0 140 L50 140 L60 154 L10 154 Z" fill="#546e7a" '
+                        'stroke="#546e7a" stroke-width="2" stroke-linejoin="round"/>'),
+        "bottom_right": ('<path d="M50 140 L100 140 L110 154 L60 154 Z" fill="#546e7a" '
+                         'stroke="#546e7a" stroke-width="2" stroke-linejoin="round"/>'),
+    }
+    path = paths[segment]
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{VB_W}" height="{VB_H}" '
+            f'viewBox="0 0 {VB_W} {VB_H}">{path}</svg>')
 
 
 # ---------------------------------------------------------------------------
@@ -736,15 +760,10 @@ def season_body(n):
     return avatar_sigils()[elements[n - 1]] + index_pips(n)
 
 
-# Bevel variants per kind, in the order the board expects (see
-# MahjongLogic.iconForTile): "" both bevels, "_nb" no bottom, "_nr" no right,
-# "_n" neither. base name <-> (bottom, right).
-VARIANTS = [
-    ("",     True,  True),
-    ("_nb",  False, True),
-    ("_nr",  True,  False),
-    ("_n",   False, False),
-]
+BEVEL_SEGMENTS = (
+    "right", "right_top", "right_bottom",
+    "bottom", "bottom_left", "bottom_right",
+)
 
 
 def generate():
@@ -754,28 +773,23 @@ def generate():
         body_b = bamboo_body(n)
         body_d = dot_body(n)
         body_c = char_body(n)
-        for suffix, bottom, right in VARIANTS:
-            written[f"b{n}{suffix}.svg"] = svg(body_b, bottom, right)
-            written[f"d{n}{suffix}.svg"] = svg(body_d, bottom, right)
-            written[f"c{n}{suffix}.svg"] = svg(body_c, bottom, right)
+        written[f"b{n}.svg"] = face_svg(body_b)
+        written[f"d{n}.svg"] = face_svg(body_d)
+        written[f"c{n}.svg"] = face_svg(body_c)
     for name in ("east", "south", "west", "north"):
         body = wind_body(name)
-        for suffix, bottom, right in VARIANTS:
-            written[f"{name}{suffix}.svg"] = svg(body, bottom, right)
+        written[f"{name}.svg"] = face_svg(body)
     for name in ("red", "green", "white"):
         body = dragon_body(name)
-        for suffix, bottom, right in VARIANTS:
-            written[f"{name}{suffix}.svg"] = svg(body, bottom, right)
+        written[f"{name}.svg"] = face_svg(body)
     for n in range(1, 5):
         body_f = flower_body(n)
         body_s = season_body(n)
-        for suffix, bottom, right in VARIANTS:
-            written[f"flower{n}{suffix}.svg"] = svg(body_f, bottom, right)
-            written[f"season{n}{suffix}.svg"] = svg(body_s, bottom, right)
-    # Blank 2.5D faces are used by the help screen's instructional board. They
-    # retain the generated bevel geometry without competing with its markers.
-    for suffix, bottom, right in VARIANTS:
-        written[f"empty{suffix}.svg"] = svg("", bottom, right)
+        written[f"flower{n}.svg"] = face_svg(body_f)
+        written[f"season{n}.svg"] = face_svg(body_s)
+    written["empty.svg"] = face_svg("")
+    for segment in BEVEL_SEGMENTS:
+        written[f"bevel_{segment}.svg"] = bevel_svg(segment)
     # Overlays + empty face (no face rect). Portrait, matching the tile box so
     # the highlight covers the whole face. Dark strokes so the selection / hint
     # highlights read on the (white) tile faces.
@@ -880,7 +894,12 @@ def generate():
 
 def build(out_dir):
     os.makedirs(out_dir, exist_ok=True)
-    for name, content in sorted(generate().items()):
+    generated = generate()
+    for name in os.listdir(out_dir):
+        if name.endswith(".svg") and name not in generated:
+            os.remove(os.path.join(out_dir, name))
+            print(f"removed {os.path.join(out_dir, name)}")
+    for name, content in sorted(generated.items()):
         with open(os.path.join(out_dir, name), "w") as f:
             f.write(content)
         print(f"wrote {os.path.join(out_dir, name)}")
@@ -896,6 +915,11 @@ def check(out_dir):
             failures += 1
         elif open(path).read() != content:
             print(f"STALE:   {path} differs from the generator — run gen_icons.py")
+            failures += 1
+    generated_names = set(generated)
+    for name in os.listdir(out_dir):
+        if name.endswith(".svg") and name not in generated_names:
+            print(f"OBSOLETE: {os.path.join(out_dir, name)} is not generated anymore")
             failures += 1
     return failures
 

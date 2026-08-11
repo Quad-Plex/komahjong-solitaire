@@ -61,8 +61,8 @@ def board_geometry():
     outward-bevel model: layer L is shifted up-left by L*BW/L*BH (the bevel
     thickness), so a raised tile's bevels land exactly on the edges of the
     tile directly beneath it. The bounds add the bevel overhang on the
-    east/south and the layer shift on the west/north. Emits the bevel-variant
-    icon name per tile (see MahjongLogic.iconForTile)."""
+    east/south and the layer shift on the west/north. Emits the face kind and
+    independently rendered bevel segments per tile."""
     lua = r'''
 package.path = "%s/?.lua;" .. package.path
 local Logic = require("mahjonglogic")
@@ -85,10 +85,11 @@ local board = Logic.newGame(42)
     for _, p in ipairs(Logic.buildLayout()) do
         local kind = Logic.tileAt(board, p.x, p.y, p.layer)
         if kind then
-            local icon = Logic.iconForTile(board, p.x, p.y, p.layer)
+            local segments = Logic.visibleBevelSegments(board, p.x, p.y, p.layer)
             local px = math.floor(ox + (p.x - g.x_min) * TW - p.layer * BW)
             local py = math.floor(oy + (p.y - g.y_min) * TH - p.layer * BH)
-            io.write(string.format("%%s %%d %%d %%s %%s %%d\n", icon, px, py, tostring(p.x), tostring(p.y), p.layer))
+            io.write(string.format("%%s %%d %%d %%s %%s %%d %%s\n", kind, px, py,
+                tostring(p.x), tostring(p.y), p.layer, table.concat(segments, ",")))
         end
     end
 io.write(string.format("BOUNDS %%d %%d\n",
@@ -103,7 +104,8 @@ io.write(string.format("BOUNDS %%d %%d\n",
             bounds = (int(parts[1]), int(parts[2]))
         else:
             tiles.append({"icon": parts[0], "px": int(parts[1]), "py": int(parts[2]),
-                          "x": float(parts[3]), "y": float(parts[4]), "layer": int(parts[5])})
+                          "x": float(parts[3]), "y": float(parts[4]), "layer": int(parts[5]),
+                          "segments": parts[6].split(",") if len(parts) > 6 and parts[6] else []})
     return tiles, bounds
 
 
@@ -111,10 +113,14 @@ def render_board(tiles, bounds):
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{bounds[0]}" height="{bounds[1]}" '
            f'viewBox="0 0 {bounds[0]} {bounds[1]}">',
            f'<rect width="{bounds[0]}" height="{bounds[1]}" fill="#ffffff"/>']
+    def body(name):
+        content = open(os.path.join(ICONS_DIR, name + ".svg")).read()
+        return content[content.find(">") + 1:content.rfind("</svg>")]
     for t in tiles:
-        body = open(os.path.join(ICONS_DIR, t["icon"] + ".svg")).read()
-        body = body.replace('<svg xmlns="http://www.w3.org/2000/svg" width="110" height="154" viewBox="0 0 110 154">', '').replace('</svg>', '')
-        svg.append(f'<g transform="translate({t["px"]},{t["py"]}) scale({TILE_W / 100},{TILE_H / 140})">{body}</g>')
+        transform = f'translate({t["px"]},{t["py"]}) scale({TILE_W / 100},{TILE_H / 140})'
+        svg.append(f'<g transform="{transform}">{body(t["icon"])}</g>')
+        for segment in t["segments"]:
+            svg.append(f'<g transform="{transform}">{body("bevel_" + segment)}</g>')
     svg.append('</svg>')
     svg_path = os.path.join(REPO_ROOT, ".board_check.svg")
     png_path = os.path.join(REPO_ROOT, ".board_check.png")
@@ -244,7 +250,7 @@ def run_rendered_checks():
 def main():
     # Check 1: XML well-formedness.
     names = sorted(n for n in os.listdir(ICONS_DIR) if n.endswith(".svg"))
-    check(len(names) == 185, f"icons dir holds 185 SVGs (got {len(names)})")
+    check(len(names) == 62, f"icons dir holds 62 SVGs (got {len(names)})")
     malformed = []
     for name in names:
         try:
@@ -252,6 +258,29 @@ def main():
         except ET.ParseError:
             malformed.append(name)
     check(not malformed, "every icon parses as well-formed XML")
+
+    half_assets = [
+        "bevel_right_top.svg", "bevel_right_bottom.svg",
+        "bevel_bottom_left.svg", "bevel_bottom_right.svg",
+    ]
+    clipped_assets = []
+    for name in half_assets:
+        with open(os.path.join(ICONS_DIR, name)) as asset:
+            if "clipPath" in asset.read():
+                clipped_assets.append(name)
+    check(not clipped_assets, "half bevel assets use explicit paths (no clipPath rasterizer bug)")
+    corner_geometry = {
+        "bevel_right_top.svg": "L100 70",
+        "bevel_right_bottom.svg": "L110 84",
+        "bevel_bottom_left.svg": "L60 154",
+        "bevel_bottom_right.svg": "L60 154",
+    }
+    missing_diagonals = []
+    for name, marker in corner_geometry.items():
+        with open(os.path.join(ICONS_DIR, name)) as asset:
+            if marker not in asset.read():
+                missing_diagonals.append(name)
+    check(not missing_diagonals, "half bevel assets retain receding corner diagonals")
 
     # Check 2: icons are up to date with the generator.
     stale = gen_icons.check(ICONS_DIR)

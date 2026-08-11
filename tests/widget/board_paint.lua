@@ -62,7 +62,11 @@ expect(type(xx) == "number", "paintTo x arithmetic no longer errors")
 
 -- Rebuilding (free + rebuild path) must be repeatable.
 b:updateBoard()
-expect(type(b[1]) == "table" and #b[1][1] == 144, "updateBoard rebuilds the full 144-tile board")
+local rendered_faces = 0
+for _ in pairs(b.tile_widgets or {}) do rendered_faces = rendered_faces + 1 end
+expect(type(b[1]) == "table" and rendered_faces == 144
+        and #b[1][1] > rendered_faces,
+    "updateBoard rebuilds the full 144 faces and separate bevel widgets")
 local sz2 = b:getSize()
 expect(sz2.w == 600 and sz2.h == 700, "getSize still returns the board dimen after rebuild")
 

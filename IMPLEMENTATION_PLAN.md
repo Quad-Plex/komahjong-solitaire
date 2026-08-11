@@ -60,13 +60,15 @@ captured from `example_app/casualkochess.koplugin`.
     absolutely positioned via an `OverlapGroup`'s `overlap_offset` — each tile at its real
     `(x, y, layer)` position on the shared grid. It hit-tests taps itself (topmost tile at the
     tapped point wins) and forwards `(x, y, layer)`. The stock `ButtonTable` grid from the
-     original plan was replaced; `buttontable.lua`/`button.lua` shims were removed. Tiles install
-     into `DataStorage:getDataDir()/icons/mahjong/`. Incremental board updates use clipped,
-     screen-space `ui` refresh regions per connected local cluster: the anti-aliasing margin
-     must remain within the board canvas so it cannot merge with adjacent chrome. A pair clear
-     includes its removed tile rects and only same-layer west/north neighbours whose bevel icon
-     actually changed; it must not refresh every possible bevel candidate, because KOReader
-     merges edge-touching rects and turns that speculative set into a visibly larger EPDC drive.
+     original plan was replaced; `buttontable.lua`/`button.lua` shims were removed. Faces install
+      into `DataStorage:getDataDir()/icons/mahjong/`, while shared bevel segments are composited
+      separately in the same per-tile z-order. Incremental board updates use clipped,
+      screen-space `ui` refresh regions per connected local cluster: the anti-aliasing margin
+      must remain within the board canvas so it cannot merge with adjacent chrome. A pair clear
+      includes removed face/bevel ink and only same-layer west/north bevel segments whose visible
+      set changed; it never replaces an unaffected neighboring face or refreshes speculative
+      full-tile candidates. KOReader merges edge-touching rects, so exact segment bounds keep the
+      EPDC drive as local as the connected change permits.
      A structural final-pair update settles its local retry before the full-screen win summary is
      shown; delayed modal callbacks are board-identity guarded and invalidated on replacement or
      close.
