@@ -1020,8 +1020,9 @@ function Mahjong:buildUILayout()
 
     -- Toolbar is 48px tall (rounded bordered buttons) with a small hint label
     -- under each icon, small gaps between the buttons, edge gaps so the outer
-    -- buttons don't scrape the screen sides, and a bottom spacer that lifts
-    -- the row off the screen edge; the board fills what remains.
+    -- buttons don't scrape the screen sides, a small top spacer separating the
+    -- row from the feedback band, and a bottom spacer that lifts the row off
+    -- the screen edge; the board fills what remains.
     local compact_toolbar = MahjongUI.isNarrow(self.full_width)
     local toolbar_btn_h = math.min(Screen:scaleBySize(compact_toolbar and 44 or 48),
         math.max(Screen:scaleBySize(30), math.floor(self.full_height * 0.10)))
@@ -1037,6 +1038,7 @@ function Mahjong:buildUILayout()
     local label_h = compact_toolbar and 0 or label_probe:getSize().h
     label_probe:free()
     local toolbar_h = toolbar_btn_h + label_h
+    local toolbar_top_gap = Screen:scaleBySize(5)
     local bottom_gap = Screen:scaleBySize(12)
     -- Feedback band (US-09): a fixed-height strip between the board and the
     -- toolbar where brief non-blocking messages appear. The slot is always
@@ -1055,23 +1057,16 @@ function Mahjong:buildUILayout()
     local flash_pad_bottom = Screen:scaleBySize(compact_toolbar and 8 or 14)
     local flash_h = flash_text_h + flash_pad_top + flash_pad_bottom
     local board_h = math.max(Screen:scaleBySize(80),
-        self.full_height - status_h - flash_h - toolbar_h - bottom_gap)
+        self.full_height - status_h - flash_h - 2 * toolbar_top_gap - toolbar_h - bottom_gap)
     self.flash_region = Geometry:new{
         x = 0, y = status_h + board_h, w = self.full_width, h = flash_h,
     }
     self.toolbar_region = Geometry:new{
-        x = 0, y = status_h + board_h + flash_h,
+        x = 0, y = status_h + board_h + flash_h + toolbar_top_gap,
         w = self.full_width, h = toolbar_h + bottom_gap,
     }
-    -- The banner (flash band + timer) sits directly above the toolbar and
-    -- shares an edge with it, so KOReader's open-range refresh merge
-    -- (uimanager.lua `_refresh`: rects sharing an edge are combined) would
-    -- collapse any banner+toolbar pair, and often the board's tile rects too,
-    -- into ONE ioctl per batch. When that merged rect is driven while the
-    -- board's own structural update settles, the EPDC can half-apply it and
-    -- leave the action-button row outside the rect — i.e. the "band repainted,
-    -- buttons blank" artifact. Give the whole lower chrome (banner + toolbar)
-    -- ONE explicit rect so a refresh can never stop short of the toolbar row.
+    -- Keep one explicit lower-chrome rect so a refresh can never stop short of
+    -- the action-button row, including the small gap above it.
     self.lower_band_region = Geometry:new{
         x = 0,
         y = self.flash_region.y,
@@ -1255,6 +1250,20 @@ function Mahjong:buildUILayout()
         pause_cell,
         HorizontalSpan:new{ width = toolbar_gap },
     }
+    -- Keep the toolbar as the fourth child of the main vertical group (the
+    -- layout contract used by the interaction harness), but give its centered
+    -- row an extra 2x gap in height. HorizontalGroup centers its children, so
+    -- this moves the complete action row down by exactly toolbar_top_gap.
+    if toolbar.getSize then
+        local toolbar_get_size = toolbar.getSize
+        local toolbar_size = toolbar_get_size(toolbar)
+        toolbar.getSize = function()
+            return Geometry:new{
+                w = toolbar_size.w,
+                h = toolbar_size.h + 2 * toolbar_top_gap,
+            }
+        end
+    end
     -- Keep the raw toolbar so the lower-chrome bake can repaint it
     -- immediately (see bakeLowerChrome below) instead of waiting for the
     -- dirty queue.

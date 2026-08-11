@@ -192,23 +192,32 @@ function StatsWidget:init()
     }
 
     -- Each column uses the same divider logic as the win summary: labels end
-    -- at one shared x-coordinate and values begin after the gap. Keep the
-    -- column itself to the measured content width instead of reserving equal
-    -- empty halves on both sides of the divider.
+    -- at one shared x-coordinate and values begin after the gap. Measure the
+    -- value side independently, though. Global records often include a layout
+    -- suffix and are wider than the local records; equal column widths would
+    -- force the divider to the screen midpoint and leave an empty half beside
+    -- the local column.
     local max_label_w = 0
-    local max_value_w = 0
+    local max_global_value_w = 0
+    local max_map_value_w = 0
     for _, r in ipairs(row_specs) do
         local label_w = measureText(r.label, label_face, false)
         if label_w > max_label_w then max_label_w = label_w end
         local w = measureText(vs[r.key], value_face, true)
-        if w > max_value_w then max_value_w = w end
+        if w > max_global_value_w then max_global_value_w = w end
         local mw = measureText(map_vs[r.key], value_face, true)
-        if mw > max_value_w then max_value_w = mw end
+        if mw > max_map_value_w then max_map_value_w = mw end
     end
-    local column_w = max_label_w + label_gap + max_value_w
+    local header_face = Font:getFace("tfont", Screen:scaleBySize(18))
+    local global_header_text = t("stats.global")
+    local map_header_text = t("layout." .. layout_id)
+    local global_column_w = math.max(max_label_w + label_gap + max_global_value_w,
+        measureText(global_header_text, header_face, true))
+    local map_column_w = math.max(max_label_w + label_gap + max_map_value_w,
+        measureText(map_header_text, header_face, true))
     -- With no layout selected (show_map=false) the card is a single Global
-    -- column, so the two-column math collapses to one column width.
-    local content_w = show_map and (column_w * 2 + col_gap) or column_w
+    -- column, so the two-column math collapses to that column's width.
+    local content_w = show_map and (global_column_w + col_gap + map_column_w) or global_column_w
     -- This card is content-sized; large responsive padding leaves conspicuous
     -- empty margins beside the columns and pushes the close button outward.
     local panel_padding = Screen:scaleBySize(10)
@@ -217,16 +226,17 @@ function StatsWidget:init()
     self._values = {}
 
     -- Builds one column: a centered header ("Global" or the layout name) over
-    -- the column width, then the labelled value rows. Each row is split around
-    -- the column midpoint, matching the win-summary label/value alignment.
+    -- its measured width, then the labelled value rows. Each row is split around
+    -- that column's own divider, so the combined columns can remain centered
+    -- without making the divider itself the screen midpoint.
     -- Value widgets are stored in _values under `prefix .. key` so
     -- updateValues() can re-render them.
-    local function buildColumn(header_text, source_vs, prefix)
+    local function buildColumn(header_text, source_vs, prefix, column_w, column_value_w)
         local header = TextWidget:new{
             text = header_text,
             padding = 0,
             bold = true,
-            face = Font:getFace("tfont", Screen:scaleBySize(18)),
+            face = header_face,
         }
         local header_w = header:getSize().w
         local header_space = math.max(0, math.floor((column_w - header_w) / 2))
@@ -253,16 +263,16 @@ function StatsWidget:init()
                 TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
                 HorizontalSpan:new{ width = label_gap },
                 value_widget,
-                HorizontalSpan:new{ width = max_value_w - value_w },
+                HorizontalSpan:new{ width = column_value_w - value_w },
             }
         end
         return VerticalGroup:new(vchildren)
     end
 
-    local global_col = buildColumn(t("stats.global"), vs, "")
+    local global_col = buildColumn(global_header_text, vs, "", global_column_w, max_global_value_w)
     local map_col
     if show_map then
-        map_col = buildColumn(t("layout." .. layout_id), map_vs, "map_")
+        map_col = buildColumn(map_header_text, map_vs, "map_", map_column_w, max_map_value_w)
     end
 
     -- Reset button (bottom): clears the whole record (global + per-layout
