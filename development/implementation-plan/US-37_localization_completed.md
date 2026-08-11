@@ -28,12 +28,14 @@ dialog even when the user is still on the layout picker.
 
 ### 1. Plugin-owned localization module
 
-Add `mahjong.koplugin/mahjongi18n.lua`, a pure Lua module with:
+Add `mahjong.koplugin/mahjongi18n.lua`, a pure Lua loader plus one complete language definition
+per file in `mahjong.koplugin/translations/`. Each language file contains its code, native display
+name, KOReader locale prefixes, and stable-key strings table. The loader discovers these files at
+runtime, so adding a language does not require changing the loader or settings UI. The module has:
 
-- Supported locale metadata: `en`, `de`, display labels `English` and
-  `Deutsch`, and a deterministic fallback to `en` for missing/invalid values.
-- A stable-key catalog, with English and German entries in the same module (or
-  adjacent data files if the catalog becomes too large).
+- Supported locale metadata loaded from the language files, with a deterministic fallback to `en`
+  for missing/invalid values.
+- A stable-key catalog loaded from the available language files.
 - `getLanguage()`, `setLanguage(language)`, `supportedLanguages()`, and
   `translate(key, ...)`/equivalent placeholder formatting.
 - No UI or `LuaSettings` dependency. The active language is set by `main.lua`

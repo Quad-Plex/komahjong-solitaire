@@ -160,6 +160,23 @@ function M.newContext()
         return o
     end
 
+    local function bundledLanguageFiles(path)
+        if not path:match("/translations/?$") then
+            return function() return nil end
+        end
+        local pipe = io.popen('ls -1 "' .. path .. '" 2>/dev/null')
+        local names = {}
+        if pipe then
+            for name in pipe:lines() do names[#names + 1] = name end
+            pipe:close()
+        end
+        local index = 0
+        return function()
+            index = index + 1
+            return names[index]
+        end
+    end
+
     ctx.mocks = {
         ["device"] = {
             screen = ctx.screen,
@@ -346,8 +363,11 @@ function M.newContext()
             end,
         },
         ["libs/libkoreader-lfs"] = {
-            attributes = function() return "file" end,
-            dir = function() return function() return nil end end,
+            attributes = function(path)
+                if path and path:match("/translations/?$") then return "directory" end
+                return "file"
+            end,
+            dir = bundledLanguageFiles,
         },
         ["util"] = {
             makePath = function() end,

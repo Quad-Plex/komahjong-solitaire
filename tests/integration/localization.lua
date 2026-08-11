@@ -12,6 +12,12 @@ local function expect(cond, msg)
 end
 
 expect(I18n.t("toolbar.hint") == "Hint", "English is the default language")
+local supported = I18n.supportedLanguages()
+local files = I18n.languageFiles()
+expect(#supported == #files, "every language file is available for selection")
+expect(supported[1] == "de" and supported[2] == "en", "language files are discovered in deterministic order")
+expect(I18n.languageName("en") == "English" and I18n.languageName("de") == "Deutsch",
+    "language names come from language definitions")
 I18n.setLanguage("de")
 expect(I18n.t("toolbar.hint") == "Tipp", "German catalog translates toolbar text")
 expect(I18n.t("game.combo", 10) == "KOMBO +10", "German catalog formats placeholders")

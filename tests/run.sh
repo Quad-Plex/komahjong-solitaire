@@ -22,6 +22,9 @@ echo "==> 1/4 syntax check (luac -p)"
 for f in "$PLUGIN"/*.lua; do
     luac -p "$f"
 done
+for f in "$PLUGIN"/**/*.lua; do
+    luac -p "$f"
+done
 for f in **/*.lua; do
     luac -p "$f"
 done

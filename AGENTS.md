@@ -430,6 +430,8 @@ mahjong.koplugin/            # the deliverable
 ├── mahjonglogic.lua         # PURE logic (no ui/ requires): deck, free tiles, match/win/
 │                            #   shuffle, scoring, persistence (v2 with layout field),
 │                            #   re-exports mahjonglayouts.lua's registry API, self-tests
+├── mahjongi18n.lua          # translation loader; discovers language definitions at runtime
+├── translations/*.lua       # one complete language definition per language code
 ├── mahjonglayouts.lua       # PURE layout module (US-22a): the spec tables (Turtle/Spider/
 │                            #   Bridge/Ziggurat/Cloud/Tic-Tac-Toe/Red Dragon/Overpass) +
 │                            #   registerLayout calls, the registry and

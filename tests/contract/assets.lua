@@ -27,7 +27,7 @@ end
 -- util.makePath creates the destination directories the io copy needs.
 ctx.setMock("libs/libkoreader-lfs", {
     attributes = function(path, mode)
-        if path == src_icons then return "directory" end
+        if path == src_icons or path:match("/translations/?$") then return "directory" end
         return nil
     end,
     dir = function(path)

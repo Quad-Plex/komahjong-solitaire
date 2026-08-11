@@ -29,9 +29,9 @@ A native Mahjong Solitaire (Shanghai) plugin for KOReader, optimized for e-ink d
   default; disabling it preserves the selection until it is matched or
   replaced by another viable tile.
 - **Win summary + stats:** A win dialog and a lifetime-stats screen, with a confirm-gated reset.
-- **Localization:** English and German are available in Mahjong's Settings.
-  On first launch, German KOReader locales select German automatically; English
-  is the fallback for English and all other KOReader locales.
+- **Localization:** The available language files are discovered automatically and appear in
+  Mahjong's Settings. English and German are bundled. On first launch, German KOReader locales
+  select German automatically; English is the fallback for English and all other KOReader locales.
 
 ## Installation
 
@@ -64,6 +64,18 @@ device, then fully restart KOReader.
 - **Chain Bonus:** +50 when consecutive matches are of the same tile group.
 - **Penalties:** 5 per hint session and 10 per manual shuffle. Penalties may
   reduce the score below zero and are not refunded by undo.
+
+## Adding a Translation
+
+Language definitions live in `translations/` inside this plugin. To add a language, copy
+`translations/en.lua` to `translations/<code>.lua`, set the language `code`, native display
+`name`, and KOReader `locales`, then translate every entry in the `strings` table. Preserve
+all catalog keys and `%d` / `%s` placeholders.
+
+Adding the file is enough: the loader discovers it automatically, and the language appears in
+the Settings language cycle without changes elsewhere. Run `tests/run.sh`, add the new file to
+the repository, install the complete `mahjong.koplugin/` directory on the Kindle, and restart
+KOReader. Missing keys fall back to English, but contributions should include the complete catalog.
 
 ## License
 

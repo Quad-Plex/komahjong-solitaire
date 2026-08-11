@@ -145,8 +145,9 @@ function SettingsWidget:init()
         return t("settings.seconds", sec)
     end
     local function languageText(language)
-        return t("language." .. (language == "de" and "de" or "en"))
+        return I18n.languageName(language)
     end
+    local supported_languages = I18n.supportedLanguages()
 
     -- Measure a string in the face it will be rendered with. The probes are
     -- throwaway TextWidgets (the same pattern main.lua uses to probe the
@@ -175,8 +176,9 @@ function SettingsWidget:init()
     for _, sec in ipairs(TIMER_INTERVALS) do
         considerValue(intervalText(sec))
     end
-    considerValue(languageText("en"))
-    considerValue(languageText("de"))
+    for _, language in ipairs(supported_languages) do
+        considerValue(languageText(language))
+    end
     -- The button's inner content width is width - 2*padding - 2*bordersize;
     -- add that plus a little breathing room so nothing sits flush.
     local toggle_w = widest_value + 2 * Screen:scaleBySize(6) + 2 * Screen:scaleBySize(1)
@@ -256,7 +258,11 @@ function SettingsWidget:init()
     language_btn = makeButton(languageText(self.changes.language), control_w, Screen:scaleBySize(32),
         function() return languageText(self.changes.language) end)
     language_btn.callback = function()
-        self.changes.language = self.changes.language == "de" and "en" or "de"
+        local index = 1
+        for i, language in ipairs(supported_languages) do
+            if language == self.changes.language then index = i break end
+        end
+        self.changes.language = supported_languages[index % #supported_languages + 1]
         setButtonText(language_btn, language_btn.refresh())
         UIManager:setDirty(self, "ui", self._panel_geom)
     end

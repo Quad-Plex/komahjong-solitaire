@@ -26,7 +26,7 @@ settings, scoring, hints, undo, shuffle and per-layout aswell as global statisti
 - Pause, elapsed timer, save-and-resume, and corrupt-save protection
 - Long-press Hint to auto-solve a board when you want to watch it finish (Invalidates score for the current game)
 - Win summaries, lifetime statistics, per-layout wins, best scores, and best times
-- English and German UI translations, with automatic German selection for German KOReader locales
+- Bundled English and German UI translations, with automatic German selection for German KOReader locales
 - Layout and board sizing that adapt to the reader's screen (untested)
 
 ## Requirements
@@ -137,13 +137,46 @@ and per-layout records. Resetting statistics requires confirmation.
 
 The Settings panel includes:
 
-- English or German interface language.
+- The available interface languages. English and German are bundled; German is selected
+  automatically on first launch for German KOReader locales.
 - Whether an empty-board tap clears the current selection.
 - Timer display mode: periodic interval or on interaction.
 - Timer update interval when interval mode is selected.
 
 The timer always measures elapsed time while a game is running. The display mode only controls
 how often the visible `mm:ss` value is repainted.
+
+### Adding a Translation
+
+Translations are plugin-local and are discovered automatically from
+`mahjong.koplugin/translations/`. To contribute another language:
+
+1. Copy `mahjong.koplugin/translations/en.lua` to
+   `mahjong.koplugin/translations/<code>.lua`, using a lowercase language code such as `fr`.
+2. Keep the file's `code`, set its native display `name`, and add the relevant KOReader locale
+   prefixes to `locales`.
+3. Translate every entry in the `strings` table. Keep the existing keys and `%d` / `%s`
+   placeholders unchanged.
+4. Add the file to the repository. No loader, settings, or language-list code needs to change.
+5. Run `tests/run.sh`, then install the complete `mahjong.koplugin/` directory and restart
+   KOReader. The new language will appear automatically in Mahjong's Settings.
+
+Language files are plain Lua definitions. For example:
+
+```lua
+return {
+    code = "fr",
+    name = "Français",
+    locales = { "fr" },
+    strings = {
+        ["toolbar.hint"] = "Indice",
+        -- ... all other catalog keys ...
+    },
+}
+```
+
+If a translation is missing a key, the English string is used as a fallback. Please include
+complete coverage in contributions so the UI remains consistently translated.
 
 ## E-Ink Design
 
