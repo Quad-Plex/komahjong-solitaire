@@ -25,6 +25,9 @@
 --                    formatted mm:ss; auto-solve wins never count, matching
 --                    layout_wins). For a layout with no win yet it stays nil,
 --                    so a never-won layout shows no time chip.
+--   best_combo / best_combo_points / best_combo_layout the largest fast-clear
+--                    combo and its largest one-time combo bonus
+--   layout_best_combos map layout_id -> { chain, points } for the best combo
 --   layout_played    map layout_id -> games started on that layout (the US-13
 --                    stats screen's <layout> column reads it; bumped by
 --                    startGame() alongside games_played)
@@ -77,6 +80,10 @@ function MahjongStats.defaults()
         layout_wins = {},
         layout_highscores = {},
         layout_best_times = {},
+        best_combo = 0,
+        best_combo_points = 0,
+        best_combo_layout = nil,
+        layout_best_combos = {},
         layout_played = {},
         layout_current_streaks = {},
         layout_longest_streaks = {},
@@ -138,6 +145,24 @@ function MahjongStats.load(saved)
         for id, n in pairs(saved.layout_best_times) do
             if type(id) == "string" and type(n) == "number" and n >= 0 then
                 stats.layout_best_times[id] = n
+            end
+        end
+    end
+    stats.best_combo = num(saved.best_combo) or 0
+    stats.best_combo_points = num(saved.best_combo_points) or 0
+    if type(saved.best_combo_layout) == "string" and saved.best_combo_layout ~= "" then
+        stats.best_combo_layout = saved.best_combo_layout
+    end
+    stats.layout_best_combos = {}
+    if type(saved.layout_best_combos) == "table" then
+        for id, combo in pairs(saved.layout_best_combos) do
+            if type(id) == "string" and type(combo) == "table"
+                    and type(combo.chain) == "number" and combo.chain >= 0
+                    and combo.chain % 1 == 0 and type(combo.points) == "number"
+                    and combo.points >= 0 then
+                stats.layout_best_combos[id] = {
+                    chain = combo.chain, points = combo.points,
+                }
             end
         end
     end
@@ -227,7 +252,8 @@ end
 -- forward-compatibility (a future stats screen may record it); it is not part
 -- of the lifetime record today. `layout_id` records where a new global best
 -- was achieved; it is optional to preserve the legacy call shape.
-function MahjongStats.recordWin(stats, score, elapsed, pairs, layout_id) -- luacheck: ignore 212
+function MahjongStats.recordWin(stats, score, elapsed, _pairs, layout_id,
+                                combo_chain, combo_points)
     stats.games_won = stats.games_won + 1
     stats.current_streak = stats.current_streak + 1
     if stats.current_streak > stats.longest_streak then
@@ -246,7 +272,14 @@ function MahjongStats.recordWin(stats, score, elapsed, pairs, layout_id) -- luac
     -- Cumulative win time feeds the "Average time per win" row on the US-13
     -- stats screen (recordWin is only ever called for real wins).
     stats.total_time = (stats.total_time or 0) + (elapsed or 0)
-    return new_best_score, new_best_time
+    local new_best_combo = false
+    if type(combo_chain) == "number" and combo_chain > (stats.best_combo or 0) then
+        stats.best_combo = combo_chain
+        stats.best_combo_points = combo_points or 0
+        stats.best_combo_layout = type(layout_id) == "string" and layout_id ~= "" and layout_id or nil
+        new_best_combo = true
+    end
+    return new_best_score, new_best_time, new_best_combo
 end
 
 -- Records a human-played win on a specific layout (the layout picker's trophy
@@ -261,7 +294,8 @@ end
 -- existing two-argument callers stay valid. Returns (new_layout_score,
 -- new_layout_time) — whether THIS win set a new per-layout best for each, so
 -- the win summary can mark the just-set records.
-function MahjongStats.recordLayoutWin(stats, layout_id, score, elapsed)
+function MahjongStats.recordLayoutWin(stats, layout_id, score, elapsed,
+                                      combo_chain, combo_points)
     if type(layout_id) ~= "string" or layout_id == "" then return false, false end
     if type(stats.layout_wins) ~= "table" then
         stats.layout_wins = {}
@@ -311,7 +345,20 @@ function MahjongStats.recordLayoutWin(stats, layout_id, score, elapsed)
             new_layout_time = true
         end
     end
-    return new_layout_score, new_layout_time
+    local new_layout_combo = false
+    if type(combo_chain) == "number" and combo_chain > 0 then
+        if type(stats.layout_best_combos) ~= "table" then
+            stats.layout_best_combos = {}
+        end
+        local previous = stats.layout_best_combos[layout_id]
+        if not previous or combo_chain > previous.chain then
+            stats.layout_best_combos[layout_id] = {
+                chain = combo_chain, points = combo_points or 0,
+            }
+            new_layout_combo = true
+        end
+    end
+    return new_layout_score, new_layout_time, new_layout_combo
 end
 
 -- Self-tests ---------------------------------------------------------------

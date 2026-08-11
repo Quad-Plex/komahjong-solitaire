@@ -167,6 +167,8 @@ expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
     "the summary shows zero shuffles on a clean win")
+expect(win_text:find("Best combo achieved: 1 (+10) (New best!)", 1, true) ~= nil,
+    "the summary shows the per-game best combo and marks its first record")
 expect(win_text:find("Overall best score: 80", 1, true) == nil,
     "the session summary no longer lists the global overall best score")
 expect(win_text:find("Overall best time: 00:45", 1, true) == nil,
@@ -193,7 +195,7 @@ local row_group = win_summary._row_group
 expect(row_group ~= nil and row_group[1] ~= nil,
     "the summary card builds the aligned rows as a widget")
 local row_count = #(win_summary.win_rows or {})
-expect(row_count == 6, "the summary has 6 session rows (got " .. row_count .. ")")
+expect(row_count == 7, "the summary has 7 session rows (got " .. row_count .. ")")
 local text_is_headline = win_summary.text:find("Congratulations! New overall best score and best time!", 1, true) ~= nil
 expect(text_is_headline, "the dialog's text is the headline (centered title)")
 -- The headline is the first child of the card's content VerticalGroup, wrapped
@@ -225,6 +227,10 @@ expect(mj1.stats.games_won == 1 and mj1.stats.best_score == 80
         and mj1.stats.best_time == 45 and mj1.stats.current_streak == 1
         and mj1.stats.longest_streak == 1,
     "a human win recorded games_won / bests / streak")
+expect(mj1.stats.best_combo == 1 and mj1.stats.best_combo_points == 10
+        and mj1.stats.layout_best_combos.turtle.chain == 1
+        and mj1.stats.layout_best_combos.turtle.points == 10,
+    "a human win records global and layout combo bests")
 expect(mj1.game_won == true, "showWinDialog sets the game_won flag")
 expect(store.stats ~= nil and store.stats.games_won == 1 and store.stats.best_score == 80,
     "the win was persisted to the stats key")
@@ -320,6 +326,10 @@ expect(win_text:find("Turtle best score: 155", 1, true) == nil,
     "the session summary omits the global layout best score row")
 expect(mj1.stats.best_score == 155 and mj1.stats.best_time == 30,
     "the records updated to the better win")
+expect(mj1.stats.best_combo == 2 and mj1.stats.best_combo_points == 15
+        and mj1.stats.layout_best_combos.turtle.chain == 2
+        and mj1.stats.layout_best_combos.turtle.points == 15,
+    "a longer combo replaces both combo records")
 
 -- ---- A mid-game New Game abandons the game and resets the streak --------------
 

@@ -127,6 +127,9 @@ mj.stats.games_played = 10
 mj.stats.games_won = 4
 mj.stats.best_score = 340
 mj.stats.best_time = 95
+mj.stats.best_combo = 3
+mj.stats.best_combo_points = 20
+mj.stats.best_combo_layout = "spider"
 mj.stats.best_score_layout = "spider"
 mj.stats.best_time_layout = "turtle"
 mj.stats.total_time = 480
@@ -138,6 +141,7 @@ mj.stats.layout_played = { turtle = 6 }
 mj.stats.layout_wins = { turtle = 3 }
 mj.stats.layout_highscores = { turtle = 300 }
 mj.stats.layout_best_times = { turtle = 200 }
+mj.stats.layout_best_combos = { turtle = { chain = 2, points = 15 } }
 mj.stats.layout_total_times = { turtle = 240 }
 mj.stats.layout_current_streaks = { turtle = 2 }
 mj.stats.layout_longest_streaks = { turtle = 3 }
@@ -170,6 +174,8 @@ expect(dlg._values.best_score.text == "340 (Spider)",
     "card shows Best score with the layout where it was achieved")
 expect(dlg._values.best_time.text == "01:35 (Turtle)",
     "card shows Best time with the layout where it was achieved")
+expect(dlg._values.best_combo.text == "3 (+20) (Spider)",
+    "card shows the global max combo with its layout")
 expect(dlg._values.avg_time.text == "02:00", "card shows Average time per win (480/4)")
 expect(dlg._values.current_streak.text == "2", "card shows Current streak")
 expect(dlg._values.longest_streak.text == "3", "card shows Longest streak")
@@ -180,6 +186,8 @@ expect(dlg._values.map_won.text == "3", "map column shows Games won on the layou
 expect(dlg._values.map_win_rate.text == "50%", "map column shows the win rate (3/6)")
 expect(dlg._values.map_best_score.text == "300", "map column shows Best score on the layout")
 expect(dlg._values.map_best_time.text == "03:20", "map column shows Best time (200 s)")
+expect(dlg._values.map_best_combo.text == "2 (+15)",
+    "map column shows the layout max combo")
 expect(dlg._values.map_avg_time.text == "01:20", "map column shows Average time per win (240/3)")
 expect(dlg._values.map_current_streak.text == "2", "map column shows Current streak on the layout")
 expect(dlg._values.map_longest_streak.text == "3", "map column shows Longest streak on the layout")

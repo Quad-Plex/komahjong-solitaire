@@ -315,6 +315,8 @@ local Mahjong = FrameContainer:extend{
     last_match_kind = nil, -- kind of the last matched pair (chain scoring, US-09)
     last_match_elapsed = nil, -- active-game time of the last pair (combo scoring)
     combo_chain = 0, -- consecutive fast-clear count (the first combo is 1)
+    max_combo_chain = 0,
+    max_combo_points = 0,
     history = nil, -- stack of { a, b, ka, kb, score, prev_last }
     settings = nil, -- LuaSettings handle (US-10)
     stats = nil, -- lifetime stats record (US-12), loaded in init()
@@ -473,6 +475,8 @@ function Mahjong:startGame()
         self.last_match_kind = restored.last_match_kind
         self.last_match_elapsed = restored.last_match_elapsed
         self.combo_chain = restored.combo_chain or 0
+        self.max_combo_chain = restored.max_combo_chain or 0
+        self.max_combo_points = restored.max_combo_points or 0
         self.elapsed_base = restored.elapsed
         -- US-18: the per-game help counters ride along in the saved state.
         self.hints_used = restored.hints_used or 0
@@ -627,6 +631,8 @@ function Mahjong:startGameWithLayout(id)
     self.last_match_kind = nil
     self.last_match_elapsed = nil
     self.combo_chain = 0
+    self.max_combo_chain = 0
+    self.max_combo_points = 0
     self.history = {}
     self.pairs_matched = 0
     self.hints_used = 0
@@ -723,7 +729,8 @@ function Mahjong:saveGameState()
             self.board, self.history, self.score,
             self.last_match_kind, self:getElapsed(),
             self.hints_used, self.shuffles_used, self.layout,
-            self.game_was_autosolved, self.last_match_elapsed, self.combo_chain)
+            self.game_was_autosolved, self.last_match_elapsed, self.combo_chain,
+            self.max_combo_chain, self.max_combo_points)
         self.settings:saveSetting("game", data)
     end
     self.settings:flush()
@@ -1445,6 +1452,12 @@ function Mahjong:applyMatch(a, b, extra_rects)
     if combo then
         points = points + MahjongLogic.COMBO_BONUS
             + (combo_chain - 1) * MahjongLogic.COMBO_INCREMENT
+        local combo_points = MahjongLogic.COMBO_BONUS
+            + (combo_chain - 1) * MahjongLogic.COMBO_INCREMENT
+        if combo_chain > (self.max_combo_chain or 0) then
+            self.max_combo_chain = combo_chain
+            self.max_combo_points = combo_points
+        end
     end
     self.last_match_kind = ka
     self.last_match_elapsed = now_elapsed
@@ -1657,19 +1670,21 @@ function Mahjong:showWinDialog()
     self:stopTimer()
     local elapsed = self:getElapsed()
     local pairs = self.pairs_matched or 0
-    local new_best_score, new_best_time = false, false
-    local new_layout_score, new_layout_time = false, false
+    local new_best_score, new_best_time, new_best_combo = false, false, false
+    local new_layout_score, new_layout_time, new_layout_combo = false, false, false
     if not self.game_was_autosolved then
-        new_best_score, new_best_time = MahjongStats.recordWin(
-            self.stats, self.score, elapsed, pairs, self.layout)
+        new_best_score, new_best_time, new_best_combo = MahjongStats.recordWin(
+            self.stats, self.score, elapsed, pairs, self.layout,
+            self.max_combo_chain, self.max_combo_points)
         -- US-30: the layout picker's trophy badge counts human wins per layout
         -- (auto-solve wins never reach recordWin, so they never count either).
         -- US-31: the same call records the layout's best winning score for the
         -- picker's score chip, and the per-layout fastest win for its time chip.
         -- recordLayoutWin returns which per-layout record THIS win just set, so
         -- the summary can distinguish a layout best from an overall best.
-        new_layout_score, new_layout_time = MahjongStats.recordLayoutWin(
-            self.stats, self.layout, self.score, elapsed)
+        new_layout_score, new_layout_time, new_layout_combo = MahjongStats.recordLayoutWin(
+            self.stats, self.layout, self.score, elapsed,
+            self.max_combo_chain, self.max_combo_points)
         self:saveStats()
         self.game_won = true
     end
@@ -1718,6 +1733,7 @@ function Mahjong:showWinDialog()
     local layout = self.layout
     local layout_best_score = self.stats.layout_highscores[layout]
     local layout_best_time = self.stats.layout_best_times[layout]
+    local layout_best_combo = self.stats.layout_best_combos[layout]
     local score_is_new_best = new_best_score or new_layout_score
     local time_is_new_best = new_best_time or new_layout_time
     local value_face = Font:getFace("cfont", Screen:scaleBySize(20))
@@ -1764,13 +1780,23 @@ function Mahjong:showWinDialog()
     end
     local score_marker, score_marker_widget = marker_for(score_is_new_best, score_best_str)
     local time_marker, time_marker_widget = marker_for(time_is_new_best, time_best_str)
+    local combo_is_new_best = new_best_combo or new_layout_combo
+    local combo_best_str
+    if not combo_is_new_best and layout_best_combo then
+        combo_best_str = string.format("%d (+%d)", layout_best_combo.chain,
+            layout_best_combo.points)
+    end
+    local combo_marker, combo_marker_widget = marker_for(combo_is_new_best, combo_best_str)
 
     local win_rows = {
         { label = t("game.layout"),         value = t("layout." .. layout) },
         { label = t("hud.score"),           value = tostring(self.score),
           marker = score_marker, marker_widget = score_marker_widget },
         { label = t("game.time"),           value = MahjongLogic.formatElapsed(elapsed),
-          marker = time_marker, marker_widget = time_marker_widget },
+           marker = time_marker, marker_widget = time_marker_widget },
+        { label = t("game.best_combo"), value = string.format("%d (+%d)",
+              self.max_combo_chain or 0, self.max_combo_points or 0),
+          marker = combo_marker, marker_widget = combo_marker_widget },
         -- US-18: always report the per-game help counters, including clean
         -- wins, so the summary explicitly tells the player whether either was
         -- used.

@@ -795,7 +795,8 @@ end
 -- mutations can't corrupt the save).
 function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
                                            elapsed, hints_used, shuffles_used, layout,
-                                           autosolved, last_match_elapsed, combo_chain)
+                                           autosolved, last_match_elapsed, combo_chain,
+                                           max_combo_chain, max_combo_points)
     local out_board = {}
     for key, kind in pairs(board) do
         out_board[key] = kind
@@ -817,6 +818,8 @@ function MahjongLogic.serializeGameState(board, history, score, last_match_kind,
         last = last_match_kind,
         last_match_elapsed = last_match_elapsed,
         combo_chain = combo_chain or 0,
+        max_combo_chain = max_combo_chain or 0,
+        max_combo_points = max_combo_points or 0,
         elapsed = elapsed or 0,
         hints = hints_used or 0,
         shuffles = shuffles_used or 0,
@@ -926,6 +929,13 @@ function MahjongLogic.deserializeGameState(data)
     elseif type(combo_chain) ~= "number" or combo_chain < 0 or math.floor(combo_chain) ~= combo_chain then
         return nil
     end
+    local max_combo_chain = data.max_combo_chain
+    if max_combo_chain == nil then max_combo_chain = 0
+    elseif type(max_combo_chain) ~= "number" or max_combo_chain < 0
+            or math.floor(max_combo_chain) ~= max_combo_chain then return nil end
+    local max_combo_points = data.max_combo_points
+    if max_combo_points == nil then max_combo_points = 0
+    elseif type(max_combo_points) ~= "number" or max_combo_points < 0 then return nil end
 
     -- US-18: per-game help counters. Absent on a pre-US-18 save -> 0 (a valid
     -- older state restores fine); present but non-count invalidates.
@@ -964,6 +974,8 @@ function MahjongLogic.deserializeGameState(data)
         autosolved = autosolved,
         last_match_elapsed = last_match_elapsed,
         combo_chain = combo_chain,
+        max_combo_chain = max_combo_chain,
+        max_combo_points = max_combo_points,
     }
 end
 

@@ -10,10 +10,10 @@
 -- The card shows TWO side-by-side columns of the lifetime stats from the
 -- owner's `stats` record (mahjongstats.lua):
 --   * a "Global" column with the all-layouts record (games played, wins, win
---     rate, best score/time, average time, streaks), and
+    --     rate, best score/time/combo, average time, streaks), and
 --   * a "<layout>" column (named after the currently played layout) mirroring
 --     the same rows from the per-layout maps — games started on that layout,
---     wins, win rate, best score/time, average time and streaks.
+    --     wins, win rate, best score/time/combo, average time and streaks.
 -- Rows are right-aligned labels with the values in a uniform column (the same
 -- layout trick the settings dialog uses). A bottom Reset button zeroes the
 -- whole record (both columns) — but only after a ConfirmBox. All strings are
@@ -55,7 +55,7 @@ local StatsWidget = InputContainer:extend{
                        --   shows only the Global column (opened from the layout
                        --   picker on first launch / the Play-again path)
     _values = nil,     -- value widgets: global rows under their bare keys
-                       --   (played/won/win_rate/best_score/best_time/avg_time/
+    --   (played/won/win_rate/best_score/best_time/best_combo/avg_time/
                        --   current_streak/longest_streak), the <layout> column
                        --   under the same keys prefixed "map_" (map_played, ...)
     _panel_geom = nil, -- absolute screen rect of the floating panel (tap-outside test)
@@ -86,6 +86,8 @@ local function valueStrings(stats)
     local win_rate = played > 0
             and string.format("%d%%", math.floor(won * 100 / played)) or "—"
     local best_time = stats.best_time and MahjongLogic.formatElapsed(stats.best_time) or "—"
+    local best_combo = stats.best_combo and stats.best_combo > 0
+            and string.format("%d (+%d)", stats.best_combo, stats.best_combo_points or 0) or "—"
     local avg_time = won > 0
             and MahjongLogic.formatElapsed(math.floor((stats.total_time or 0) / won)) or "—"
     local function withLayout(value, layout_id)
@@ -100,6 +102,7 @@ local function valueStrings(stats)
         win_rate = win_rate,
         best_score = withLayout(tostring(stats.best_score or 0), stats.best_score_layout),
         best_time = withLayout(best_time, stats.best_time_layout),
+        best_combo = withLayout(best_combo, stats.best_combo_layout),
         avg_time = avg_time,
         current_streak = tostring(stats.current_streak or 0),
         longest_streak = tostring(stats.longest_streak or 0),
@@ -116,6 +119,8 @@ local function layoutValueStrings(stats, layout_id)
             and string.format("%d%%", math.floor(won * 100 / played)) or "—"
     local best_time = stats.layout_best_times and stats.layout_best_times[layout_id]
             and MahjongLogic.formatElapsed(stats.layout_best_times[layout_id]) or "—"
+    local combo = stats.layout_best_combos and stats.layout_best_combos[layout_id]
+    local best_combo = combo and string.format("%d (+%d)", combo.chain, combo.points) or "—"
     local avg_time = won > 0
             and MahjongLogic.formatElapsed(math.floor(
                 (stats.layout_total_times and stats.layout_total_times[layout_id] or 0) / won)) or "—"
@@ -125,6 +130,7 @@ local function layoutValueStrings(stats, layout_id)
         win_rate = win_rate,
         best_score = tostring(stats.layout_highscores and stats.layout_highscores[layout_id] or 0),
         best_time = best_time,
+        best_combo = best_combo,
         avg_time = avg_time,
         current_streak = tostring(stats.layout_current_streaks and stats.layout_current_streaks[layout_id] or 0),
         longest_streak = tostring(stats.layout_longest_streaks and stats.layout_longest_streaks[layout_id] or 0),
@@ -179,6 +185,7 @@ function StatsWidget:init()
         { key = "win_rate",       label = t("stats.win_rate") },
         { key = "best_score",     label = t("stats.best_score") },
         { key = "best_time",      label = t("stats.best_time") },
+        { key = "best_combo",     label = t("stats.best_combo") },
         { key = "avg_time",       label = t("stats.average_time") },
         { key = "current_streak", label = t("stats.current_streak") },
         { key = "longest_streak", label = t("stats.longest_streak") },
