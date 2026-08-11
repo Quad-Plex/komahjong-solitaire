@@ -8,6 +8,14 @@ The game is single-player: remove matching pairs of free tiles until the 144-til
 empty. It includes 24 different 3D layouts, local e-ink-friendly redraws, persistent games and
 settings, scoring, hints, undo, shuffle and per-layout aswell as global statistics.
 
+## Screenshots
+
+<p align="center">
+  <img src="screenshots/FileManager_2026-08-11_121333.png" alt="Mahjong Solitaire layout picker" width="30%">
+  <img src="screenshots/FileManager_2026-08-11_121354.png" alt="Mahjong Solitaire game board" width="30%">
+  <img src="screenshots/FileManager_2026-08-11_121444.png" alt="Mahjong Solitaire statistics screen" width="30%">
+</p>
+
 ## Feature Overview
 
 - 24 layouts, selected from a paged layout picker
@@ -20,14 +28,6 @@ settings, scoring, hints, undo, shuffle and per-layout aswell as global statisti
 - Win summaries, lifetime statistics, per-layout wins, best scores, and best times
 - English and German UI translations, with automatic German selection for German KOReader locales
 - Layout and board sizing that adapt to the reader's screen (untested)
-
-## Screenshots
-
-<p align="center">
-  <img src="screenshots/FileManager_2026-08-11_121333.png" alt="Mahjong Solitaire layout picker" width="30%">
-  <img src="screenshots/FileManager_2026-08-11_121354.png" alt="Mahjong Solitaire game board" width="30%">
-  <img src="screenshots/FileManager_2026-08-11_121444.png" alt="Mahjong Solitaire statistics screen" width="30%">
-</p>
 
 ## Requirements
 
