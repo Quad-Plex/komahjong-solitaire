@@ -8,18 +8,18 @@ The game is single-player: remove matching pairs of free tiles until the 144-til
 empty. It includes 24 different 3D layouts, local e-ink-friendly redraws, persistent games and
 settings, scoring, hints, undo, shuffle and per-layout aswell as global statistics.
 
-## Features at a glance
+## Feature Overview
 
-- 24 layouts, selected from a paged layout picker.
-- A stepped 3D board with portrait tile faces and outward bevels.
-- Classic free-tile rules, including cross-matching flowers and seasons.
-- Undo, hints, manual shuffle, dead-board detection, and recovery shuffles.
-- Score chains, fast-clear combo bonuses, and hint/shuffle penalties.
-- Pause, elapsed timer, save-and-resume, and corrupt-save protection.
-- Long-press Hint to auto-solve a board when you want to watch it finish.
-- Win summaries, lifetime statistics, per-layout wins, best scores, and best times.
-- English and German UI translations, with automatic German selection for German KOReader locales.
-- Layout and board sizing that adapt to the reader's screen.
+- 24 layouts, selected from a paged layout picker
+- A stepped 3D board with portrait tile faces and outward bevels
+- Classic free-tile rules, including cross-matching flowers and seasons
+- Undo, hints, manual shuffle, dead-board detection, and recovery shuffles
+- Score chains, fast-clear combo bonuses, and hint/shuffle penalties
+- Pause, elapsed timer, save-and-resume, and corrupt-save protection
+- Long-press Hint to auto-solve a board when you want to watch it finish (Invalidates score for the current game)
+- Win summaries, lifetime statistics, per-layout wins, best scores, and best times
+- English and German UI translations, with automatic German selection for German KOReader locales
+- Layout and board sizing that adapt to the reader's screen (untested)
 
 ## Screenshots
 
