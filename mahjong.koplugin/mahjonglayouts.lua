@@ -899,12 +899,13 @@ end
 -- the deck/removal logic.
 
 function Layouts.runSelfTests()
+    local checks = 0
     local function check(cond, msg)
         if not cond then
             io.write("FAIL: ", msg, "\n")
             os.exit(1)
         end
-        io.write("ok:   ", msg, "\n")
+        checks = checks + 1
     end
 
     -- Verifies one layout's shape: exactly 144 unique positions, per-layer
@@ -1114,7 +1115,7 @@ local ids = Layouts.layoutIds()
     checkError(function() Layouts.deregisterLayout(42) end,
         "deregisterLayout rejects a non-string id")
 
-    io.write("All layout self-tests passed.\n")
+    io.write("Mahjong layout self-tests passed (", checks, " checks).\n")
     return true
 end
 

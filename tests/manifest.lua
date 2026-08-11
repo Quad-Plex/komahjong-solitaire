@@ -33,6 +33,7 @@ return {
     { name = "gameplay", path = "integration/gameplay.lua" },
     { name = "gameplay", path = "integration/interaction_features.lua" },
     { name = "game lifecycle", path = "integration/game_lifecycle.lua" },
+    { name = "game lifecycle", path = "integration/awake_policy.lua" },
     { name = "timer and pause", path = "integration/timer.lua" },
     { name = "timer and pause", path = "integration/pause.lua" },
     { name = "auto-solve", path = "integration/autosolve.lua" },

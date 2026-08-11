@@ -56,6 +56,28 @@ local function firstFreePair(board)
     return nil, nil
 end
 
+local function copyState(state)
+    local copy = {}
+    for key, value in pairs(state) do
+        if type(value) == "table" then
+            local nested = {}
+            for k, v in pairs(value) do
+                if type(v) == "table" then
+                    local row = {}
+                    for rk, rv in pairs(v) do row[rk] = rv end
+                    nested[k] = row
+                else
+                    nested[k] = v
+                end
+            end
+            copy[key] = nested
+        else
+            copy[key] = value
+        end
+    end
+    return copy
+end
+
 -- US-14: startGame with no saved game shows the layout picker; pick Turtle.
 local function pickTurtle()
     local picker = ctx.window_stack[#ctx.window_stack].widget
@@ -195,6 +217,46 @@ expect(store.game == nil, "the invalid table state is cleared too")
 pickTurtle()
 expect(Logic.tileCount(mj4b.board) == 144,
     "a table that fails validation also deals a fresh board")
+
+-- US-52: the complete live-board/history multiset must be the canonical deck.
+-- Start with a genuine saved state so each malformed fixture changes only the
+-- invariant it is intended to exercise.
+local valid_state = Logic.serializeGameState(mj1.board, mj1.history, -5,
+    mj1.last_match_kind, 0, 0, 0, "turtle")
+expect(Logic.deserializeGameState(valid_state).score == -5,
+    "a valid negative score survives a persistence round trip")
+local malformed = copyState(valid_state)
+malformed.history[2] = {}
+for i = 1, #malformed.history[1] do malformed.history[2][i] = malformed.history[1][i] end
+expect(Logic.deserializeGameState(malformed) == nil,
+    "duplicate positions in separate history entries are rejected")
+
+malformed = copyState(valid_state)
+local live_key
+for key in pairs(malformed.board) do live_key = key break end
+malformed.board[live_key] = "b1"
+expect(Logic.deserializeGameState(malformed) == nil,
+    "impossible duplicate tile kinds are rejected")
+
+malformed = copyState(valid_state)
+malformed.board[live_key] = nil
+expect(Logic.deserializeGameState(malformed) == nil,
+    "missing tile kinds are rejected")
+
+malformed = copyState(valid_state)
+local record = malformed.history[1]
+malformed.board[pk(record[1], record[2], record[3])] = record[7]
+expect(Logic.deserializeGameState(malformed) == nil,
+    "a live board position reused by history is rejected")
+
+malformed = copyState(valid_state)
+local raw_key
+for key in pairs(malformed.board) do raw_key = key break end
+local x, y, layer = raw_key:match("^(.-),(.-),(.-)$")
+malformed.board[raw_key] = nil
+malformed.board["0" .. x .. "," .. y .. "," .. layer] = valid_state.board[raw_key]
+expect(Logic.deserializeGameState(malformed) == nil,
+    "non-canonical position keys are rejected")
 
 -- ---- A won board is never saved ----------------------------------------------
 

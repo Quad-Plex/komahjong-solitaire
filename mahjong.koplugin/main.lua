@@ -1,4 +1,5 @@
 local Device = require("device")
+local Awake = require("mahjongawake")
 local Screen = Device.screen
 local Blitbuffer = require("ffi/blitbuffer")
 local DataStorage = require("datastorage")
@@ -494,6 +495,7 @@ function Mahjong:startGame()
         self:updateStatus()
         self:updateTimerDisplay()
         self:startTimer()
+        Awake.acquire(self)
         -- Queue the first paint as well as the framebuffer update. Without a
         -- refresh mode, a restored game can remain invisible until unrelated
         -- input happens to trigger another refresh.
@@ -532,6 +534,7 @@ function Mahjong:showLayoutPicker()
     self._no_moves_pending = false
     self:stopAutoSolve()
     self:stopTimer()
+    Awake.release(self)
     self._picker_dlg = LayoutSelect:new{
         full_width = self.full_width,
         full_height = self.full_height,
@@ -565,6 +568,7 @@ function Mahjong:showLayoutPicker()
             if self.board and not MahjongLogic.isWin(self.board) then
                 -- Active board under the picker (New Game / dead-board path):
                 -- closing the picker resumes the running game.
+                Awake.acquire(self)
                 self:startTimer()
                 self:updateTimerDisplay()
             elseif self.board then
@@ -583,6 +587,7 @@ end
 function Mahjong:showHelp()
     if self._help_dlg then return end
     local picker = self._picker_dlg
+    if not picker then Awake.release(self) end
     if picker then
         picker:setPageButtonsVisible(false)
         -- Help is a full-screen modal with a transparent area around its card.
@@ -599,6 +604,9 @@ function Mahjong:showHelp()
             self._help_dlg = nil
             if self._picker_dlg == picker and picker then
                 picker:setPageButtonsVisible(true)
+            elseif self.board and not MahjongLogic.isWin(self.board)
+                    and not self._no_moves_pending and not self._auto_solve_active then
+                Awake.acquire(self)
             end
         end,
     }
@@ -645,6 +653,7 @@ function Mahjong:startGameWithLayout(id)
     self:updateStatus()
     self:updateTimerDisplay()
     self:startTimer()
+    Awake.acquire(self)
     -- If the game widget is already on the stack (New Game / Play again path),
     -- a fresh UIManager:show would duplicate it; only show when absent.
     local already_shown = false
@@ -914,6 +923,7 @@ function Mahjong:openSettings()
     -- Save restarts via onApply, Cancel / tap-outside via onCancel.
     local picker_was_open = self._picker_dlg ~= nil
     self:stopTimer()
+    if not picker_was_open then Awake.release(self) end
     local dlg = SettingsWidget:new{
         full_width = self.full_width,
         full_height = self.full_height,
@@ -941,11 +951,15 @@ function Mahjong:openSettings()
             -- A language change rebuilds an open picker. Keep polling stopped
             -- until the picker is picked or closed; it is opaque and has no
             -- active game surface to update.
-            if not self._picker_dlg then self:startTimer() end
+            if not self._picker_dlg then
+                Awake.acquire(self)
+                self:startTimer()
+            end
             self:updateTimerDisplay()
         end,
         onCancel = function()
             if not picker_was_open then
+                Awake.acquire(self)
                 self:startTimer()
                 self:updateTimerDisplay()
             end
@@ -969,6 +983,7 @@ function Mahjong:openStats()
     -- is picked or closed (the openSettings picker_was_open pattern).
     local picker_was_open = self._picker_dlg ~= nil
     self:stopTimer()
+    if not picker_was_open then Awake.release(self) end
     local dlg = StatsWidget:new{
         full_width = self.full_width,
         full_height = self.full_height,
@@ -978,6 +993,7 @@ function Mahjong:openStats()
         show_map = self.board ~= nil and not MahjongLogic.isWin(self.board),
         onClose = function()
             if not picker_was_open then
+                Awake.acquire(self)
                 self:startTimer()
                 self:updateTimerDisplay()
             end
@@ -1316,9 +1332,10 @@ function Mahjong:createStatusBar()
         right_icon_size_ratio  = 0.9,
         right_icon_tap_callback = function()
             -- US-33: the quit X is dead while the auto-solver runs — closing
-            -- mid-solve used to save a partial score that could be finished
-            -- by hand on the next launch.
-            if self._auto_solve_active then return end
+             -- mid-solve used to save a partial score that could be finished
+             -- by hand on the next launch.
+             if self._auto_solve_active then return end
+            Awake.release(self)
             UIManager:show(ConfirmBox:new{
                 text        = t("game.exit_confirm"),
                 ok_text     = t("toolbar.exit"),
@@ -1327,6 +1344,11 @@ function Mahjong:createStatusBar()
                     -- waveform; avoid a high-fidelity full-screen flash for a
                     -- routine exit.
                     UIManager:close(self, "ui", self.dimensions)
+                end,
+                cancel_callback = function()
+                    if self.board and not MahjongLogic.isWin(self.board) then
+                        Awake.acquire(self)
+                    end
                 end,
             })
         end,
@@ -1530,6 +1552,8 @@ function Mahjong:handleNoMoves()
     -- second dialog over this one.
     self._no_moves_pending = false
     self._render_transition_token = self._render_transition_token + 1
+    -- No tiles can be played while either terminal choice is visible.
+    Awake.release(self)
     if MahjongLogic.isPermanentlyDead(self.board) then
         self:showDeadBoardDialog()
     else
@@ -1538,10 +1562,10 @@ function Mahjong:handleNoMoves()
         -- exited the whole game.
         UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
             text = t("game.no_moves_shuffle"),
-            ok_text = t("toolbar.shuffle"),
-            ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
+                 ok_text = t("toolbar.shuffle"),
+                 ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
             cancel_text = t("toolbar.close"),
-            cancel_callback = function()
+                 cancel_callback = function()
                     UIManager:close(self, "ui", self.dimensions)
             end,
         }))
@@ -1556,6 +1580,7 @@ end
 function Mahjong:showDeadBoardDialog()
     self._render_transition_token = self._render_transition_token + 1
     self:stopTimer()
+    Awake.release(self)
     local has_undo = self.history and #self.history > 0
     local opts = {
         text = t("game.no_moves_dead"),
@@ -1573,8 +1598,9 @@ function Mahjong:showDeadBoardDialog()
             {
                 text = t("toolbar.undo"),
                 callback = function()
-                    self:undo()
-                    self:startTimer()
+                     self:undo()
+                     Awake.acquire(self)
+                     self:startTimer()
                     self:updateTimerDisplay()
                 end,
             },
@@ -1668,6 +1694,7 @@ function Mahjong:showWinDialog()
     -- and stopping the polling loop also stops periodic refreshes flashing
     -- behind the modal dialog -- same reason openSettings pauses the timer).
     self:stopTimer()
+    Awake.release(self)
     local elapsed = self:getElapsed()
     local pairs = self.pairs_matched or 0
     local new_best_score, new_best_time, new_best_combo = false, false, false
@@ -2064,6 +2091,8 @@ function Mahjong:shuffleBestDeadBoard(attempts, charge)
             elseif MahjongLogic.tileCount(self.board) > 0 then
                 self:scheduleDeadBoardDialog(token)
             end
+        else
+            Awake.acquire(self)
         end
     end
 
@@ -2121,12 +2150,15 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
             elseif MahjongLogic.tileCount(self.board) > 0 then
                 self:scheduleDeadBoardDialog()
             end
+        else
+            Awake.acquire(self)
         end
     end
 
     if force then
         do_shuffle()
     else
+        Awake.release(self)
         UIManager:show(ConfirmBox:new{
             text        = t("game.reshuffle"),
             ok_text     = t("toolbar.shuffle"),
@@ -2138,6 +2170,11 @@ function Mahjong:shuffleBoard(force, attempts, charge, optimize_dead_board)
             -- intervening repaint. tickAfterNext is important here: a plain
             -- nextTick can still run before the dialog-clear repaint drains.
             ok_callback = function() UIManager:tickAfterNext(do_shuffle) end,
+            cancel_callback = function()
+                if self.board and not MahjongLogic.isWin(self.board) then
+                    Awake.acquire(self)
+                end
+            end,
         })
     end
 end
@@ -2210,6 +2247,8 @@ function Mahjong:startAutoSolve()
     if self._auto_solve_active then return end
     self._auto_solve_token = self._auto_solve_token + 1
     self._auto_solve_active = true
+    -- The solver owns the board; it is not an interactive play surface.
+    Awake.release(self)
     -- US-12: a board the solver clears is considered "cheated" — its win must
     -- never record a win/best/streak (showWinDialog gates on this flag).
     self.game_was_autosolved = true
@@ -2553,6 +2592,7 @@ function Mahjong:onCloseWidget()
     self:saveGameState()
     self:saveStats()
     self:stopTimer()
+    Awake.release(self)
     self:clearFlash()
     self.selected = nil
     self.board_view = nil

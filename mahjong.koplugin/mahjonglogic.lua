@@ -238,6 +238,7 @@ end
 local function solvableDeal(layout, rng)
     local board = {}
     local working = {}
+    local witness = {}
     for _, p in ipairs(layout) do
         working[MahjongLogic.posKey(p.x, p.y, p.layer)] = true
     end
@@ -258,9 +259,26 @@ local function solvableDeal(layout, rng)
         local ak = MahjongLogic.posKey(a.x, a.y, a.layer)
         local bk = MahjongLogic.posKey(b.x, b.y, b.layer)
         board[ak], board[bk] = pair[1], pair[2]
+        witness[#witness + 1] = { a = a, b = b }
         working[ak], working[bk] = nil, nil
     end
-    return board
+    return board, witness
+end
+
+-- Pure verification hook: returns the random deal and the legal reverse-pass
+-- witness used to construct it. The witness is never persisted or used by UI.
+function MahjongLogic.dealWithWitness(id, rng)
+    if type(id) ~= "string" then rng, id = id, "turtle" end
+    if rng == nil then rng = MahjongLogic.newRng(os.time() * 1000 + math.random(1000))
+    elseif type(rng) == "number" then rng = MahjongLogic.newRng(rng) end
+    local layout = MahjongLogic.buildLayout(id)
+    -- Mirror newGame's random-deal retry policy. Some valid layouts have a
+    -- reverse-clear branch that reaches one remaining free position.
+    for _ = 1, 200 do
+        local board, witness = solvableDeal(layout, rng)
+        if board then return board, witness end
+    end
+    return nil, nil
 end
 
 function MahjongLogic.newGame(id, rng)
@@ -868,6 +886,9 @@ function MahjongLogic.deserializeGameState(data)
         local x, y, layer = key:match("^([%d%.]+),([%d%.]+),(%d+)$")
         if not x then return nil end
         x, y, layer = tonumber(x), tonumber(y), tonumber(layer)
+        -- A board is keyed by posKey. Reject alternate spellings of the same
+        -- coordinate so live-board/history overlap checks cannot be bypassed.
+        if key ~= MahjongLogic.posKey(x, y, layer) then return nil end
         if not MahjongLogic.isLayoutPosition(x, y, layer, layout_id) then return nil end
         board_keys[key] = true
         n = n + 1
@@ -877,6 +898,9 @@ function MahjongLogic.deserializeGameState(data)
     -- History: flat records, positions valid + distinct, kinds valid and
     -- matching (a removed pair must have matched), positions not on the board.
     local out_history = {}
+    local history_keys = {}
+    local kind_counts = {}
+    for _, kind in ipairs(TILE_KINDS) do kind_counts[kind] = 0 end
     for _, m in ipairs(history) do
         if type(m) ~= "table" then return nil end
         local ax, ay, al, bx, by, bl = m[1], m[2], m[3], m[4], m[5], m[6]
@@ -896,13 +920,25 @@ function MahjongLogic.deserializeGameState(data)
             or board_keys[MahjongLogic.posKey(bx, by, bl)] then
             return nil
         end
+        local akey = MahjongLogic.posKey(ax, ay, al)
+        local bkey = MahjongLogic.posKey(bx, by, bl)
+        if history_keys[akey] or history_keys[bkey] then return nil end
+        history_keys[akey], history_keys[bkey] = true, true
         if type(ms) ~= "number" or ms < 0 then return nil end
         if ml ~= nil and not MahjongLogic.isKind(ml) then return nil end
+        kind_counts[ka] = kind_counts[ka] + 1
+        kind_counts[kb] = kind_counts[kb] + 1
         out_history[#out_history + 1] = {
             a = { x = ax, y = ay, layer = al },
             b = { x = bx, y = by, layer = bl },
             ka = ka, kb = kb, score = ms, prev_last = ml,
         }
+    end
+    for _, kind in pairs(board) do
+        kind_counts[kind] = kind_counts[kind] + 1
+    end
+    for kind, count in pairs(kind_counts) do
+        if count ~= MULTIPLICITY[kind] then return nil end
     end
     if n + 2 * #out_history ~= 144 then return nil end
 
@@ -991,12 +1027,13 @@ MahjongLogic.MAX_LAYER = 4
 -- Self-tests --------------------------------------------------------------
 
 function MahjongLogic.runSelfTests()
+    local checks = 0
     local function check(cond, msg)
         if not cond then
             io.write("FAIL: ", msg, "\n")
             os.exit(1)
         end
-        io.write("ok:   ", msg, "\n")
+        checks = checks + 1
     end
 
     -- Deck size and per-category counts.
@@ -1845,7 +1882,7 @@ function MahjongLogic.runSelfTests()
         "deserialize rejects a non-numeric shuffle count")
     bad_shuffles.shuffles = p_serialized.shuffles
 
-    io.write("All self-tests passed.\n")
+    io.write("Mahjong logic self-tests passed (", checks, " checks).\n")
     return true
 end
 

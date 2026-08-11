@@ -55,8 +55,13 @@ end
 LUA
 )
 for t in "${TEST_FILES[@]}"; do
-    echo "-- tests/$t"
-    lua "$t"
+    if output="$(lua "$t" 2>&1)"; then
+        echo "    OK  tests/$t"
+    else
+        echo "-- tests/$t FAILED"
+        printf '%s\n' "$output"
+        exit 1
+    fi
 done
 
 echo

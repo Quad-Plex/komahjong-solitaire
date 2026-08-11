@@ -224,7 +224,8 @@ filename marks a shipped story; files without it are planned. Completed: **US-01
 | US-49 — Zodiac layouts I (Hare through Rooster) | [US-49_zodiac-layouts-one_completed.md](implementation-plan/US-49_zodiac-layouts-one_completed.md) | ✅ completed |
 | US-50 — Zodiac layouts II (Dog, Snake, Boar, Ox, Wedges and Hourglass) | [US-50_zodiac-layouts-two_completed.md](implementation-plan/US-50_zodiac-layouts-two_completed.md) | ✅ completed |
 | US-51 — Feature-driven test-suite transformation | [US-51_test-suite-transformation.md](implementation-plan/US-51_test-suite-transformation.md) | planned |
-| US-52 — Reliability, maintainability, and device-awake policy | [US-52_reliability-maintainability-and-awake-policy.md](implementation-plan/US-52_reliability-maintainability-and-awake-policy.md) | planned |
+| US-52 — Reliability, maintainability, and device-awake policy | [US-52_reliability-maintainability-and-awake-policy.md](implementation-plan/US-52_reliability-maintainability-and-awake-policy.md) | completed |
+| US-53 — Incremental game-controller module extraction | [US-53_controller-module-extraction.md](implementation-plan/US-53_controller-module-extraction.md) | planned |
 
 The US-21..US-29 stories added the full GNOME Mahjongg layout set once the registry + picker
 (US-14) and two extra layouts (Spider, Bridge) had shipped. A full git checkout of the GNOME

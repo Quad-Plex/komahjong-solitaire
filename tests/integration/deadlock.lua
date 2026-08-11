@@ -335,31 +335,35 @@ expect(Logic.tileCount(reload_board) == 4, "saved board holds 4 tiles")
 expect(not Logic.isPermanentlyDead(reload_board),
     "stacked pair + other free tiles is NOT provably dead (a shuffle can fix it)")
 
--- Pad history to a valid save (n + 2 * #history == 144).
+-- Pad history to a valid save (n + 2 * #history == 144). US-52 validates the
+-- whole deck multiset, so use every tile not already on the four-tile board.
 local reload_history = {}
 local used_keys = {}
 for key in pairs(reload_board) do used_keys[key] = true end
-local needed_hist = (144 - 4) / 2
-local filled_hist = 0
+local positions = {}
 for _, p in ipairs(Logic.buildLayout("turtle")) do
-    if filled_hist >= needed_hist then break end
-    local k = pk(p.x, p.y, p.layer)
-    if not used_keys[k] then
-        for _, q in ipairs(Logic.buildLayout("turtle")) do
-            local qk = pk(q.x, q.y, q.layer)
-            if (q.x ~= p.x or q.y ~= p.y or q.layer ~= p.layer) and not used_keys[qk] then
-                reload_history[#reload_history + 1] = {
-                    a = { x = p.x, y = p.y, layer = p.layer },
-                    b = { x = q.x, y = q.y, layer = q.layer },
-                    ka = "d1", kb = "d1", score = 10, prev_last = nil,
-                }
-                used_keys[k] = true
-                used_keys[qk] = true
-                filled_hist = filled_hist + 1
-                break
-            end
-        end
+    if not used_keys[pk(p.x, p.y, p.layer)] then positions[#positions + 1] = p end
+end
+local remaining, skipped = {}, { b1 = 0, c1 = 0 }
+for _, kind in ipairs(Logic.createDeck()) do
+    if skipped[kind] and skipped[kind] < 2 then
+        skipped[kind] = skipped[kind] + 1
+    else
+        remaining[#remaining + 1] = kind
     end
+end
+for i = 1, #remaining, 2 do
+    local match_at
+    for j = i + 1, #remaining do
+        if Logic.matches(remaining[i], remaining[j]) then match_at = j break end
+    end
+    remaining[i + 1], remaining[match_at] = remaining[match_at], remaining[i + 1]
+    local a, b = positions[i], positions[i + 1]
+    reload_history[#reload_history + 1] = {
+        a = { x = a.x, y = a.y, layer = a.layer },
+        b = { x = b.x, y = b.y, layer = b.layer },
+        ka = remaining[i], kb = remaining[i + 1], score = 10, prev_last = nil,
+    }
 end
 expect(4 + 2 * #reload_history == 144, "the reload save is a valid 144-tile state")
 

@@ -7,8 +7,9 @@ plugin remains reliable on e-ink devices as features continue to grow.
 
 ## Status
 
-Planned. This story is intentionally implementation-only: complete it in a
-fresh session after reading `AGENTS.md`, this story, and the current code.
+Completed. The implementation keeps automatic standby disabled only while a
+playable board is visible, hardens persistence against malformed complete-deck
+states, and proves random deals with a construction witness.
 
 ## Decisions locked before implementation
 

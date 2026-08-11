@@ -364,12 +364,13 @@ end
 -- Self-tests ---------------------------------------------------------------
 
 function MahjongStats.runSelfTests()
+    local checks = 0
     local function check(cond, msg)
         if not cond then
             io.write("FAIL: ", msg, "\n")
             os.exit(1)
         end
-        io.write("ok:   ", msg, "\n")
+        checks = checks + 1
     end
 
     local s = MahjongStats.defaults()
@@ -686,7 +687,7 @@ function MahjongStats.runSelfTests()
     check(old_pl.layout_played.turtle == 1 and old_pl.layout_total_times.turtle == 55,
         "a pre-feature record gains per-layout counters after its first game/win")
 
-    io.write("All self-tests passed.\n")
+    io.write("Mahjong stats self-tests passed (", checks, " checks).\n")
     return true
 end
 
