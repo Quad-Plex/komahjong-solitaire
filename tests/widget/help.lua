@@ -62,6 +62,13 @@ expect(saw_icon["mahjong/c1"] and saw_icon["mahjong/east"]
 expect(not saw_auto_solve, "help does not mention the hidden auto-solve feature")
 expect(saw_text["X"], "help marks blocked tiles with X")
 
+help:onSwipe(nil, { direction = "west" })
+expect(help.page == 2, "swiping left advances help")
+help:onSwipe(nil, { direction = "west" })
+expect(help.page == 2, "swiping left stays on the last help page")
+help:onSwipe(nil, { direction = "east" })
+expect(help.page == 1, "swiping right returns to the previous help page")
+
 if help and help[1] then
     local function inspect_for_text(node, found)
         if type(node) ~= "table" then return end

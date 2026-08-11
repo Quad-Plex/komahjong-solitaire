@@ -34,6 +34,12 @@ for _, id in ipairs(extra) do ids[#ids + 1] = id end
 expect(picker.page_count == 3, "30 layouts create exactly three pages")
 expect(#picker._card_rects == 12, "page one has twelve cards")
 expect(picker.page == 1, "picker starts on page one")
+picker:onSwipe(nil, { direction = "east" })
+expect(picker.page == 1, "swiping right stays on the first page")
+picker:onSwipe(nil, { direction = "west" })
+expect(picker.page == 2, "swiping left advances the picker")
+picker:onSwipe(nil, { direction = "east" })
+expect(picker.page == 1, "swiping right returns to the previous picker page")
 expect(picker._page_left.enabled == false, "left arrow is disabled on page one")
 expect(picker._page_right.enabled ~= false, "right arrow is enabled on page one")
 for i, rect in ipairs(picker._card_rects) do

@@ -642,6 +642,9 @@ function LayoutSelect:init()
         TapSelect = {
             GestureRange:new{ ges = "tap", range = self.dimen },
         },
+        Swipe = {
+            GestureRange:new{ ges = "swipe", range = self.dimen },
+        },
     }
 end
 
@@ -669,6 +672,19 @@ function LayoutSelect:setPageButtonsVisible(visible)
             or HorizontalSpan:new{ width = self._page_right:getSize().w }
     end
     UIManager:setDirty(self, "ui")
+end
+
+-- Horizontal swipes follow the pager direction: a swipe left advances and a
+-- swipe right goes back. KOReader reports these as west/east directions.
+function LayoutSelect:onSwipe(_, ges)
+    if not ges then return true end
+    local direction = ges.direction or ges.dir
+    if direction == "west" or direction == "left" then
+        self:setPage(self.page + 1)
+    elseif direction == "east" or direction == "right" then
+        self:setPage(self.page - 1)
+    end
+    return true
 end
 
 -- The picker is an opaque full-screen widget, so it must enqueue its own

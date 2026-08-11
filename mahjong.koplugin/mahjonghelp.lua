@@ -184,7 +184,10 @@ function HelpWidget:init()
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
     self:buildPage()
-    self.ges_events = { TapClose = { GestureRange:new{ ges = "tap", range = self.dimen } } }
+    self.ges_events = {
+        TapClose = { GestureRange:new{ ges = "tap", range = self.dimen } },
+        Swipe = { GestureRange:new{ ges = "swipe", range = self.dimen } },
+    }
 end
 
 function HelpWidget:buildPage()
@@ -222,12 +225,12 @@ function HelpWidget:buildPage()
     local left = ButtonWidget:new{
         text = "←", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
         bordersize = Screen:scaleBySize(1), padding = 0,
-        callback = function() self.page = 1; self:buildPage() end,
+        callback = function() self:setPage(1) end,
     }
     local right = ButtonWidget:new{
         text = "→", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
         bordersize = Screen:scaleBySize(1), padding = 0,
-        callback = function() self.page = 2; self:buildPage() end,
+        callback = function() self:setPage(2) end,
     }
     if self.page == 1 then
         if left.disable then left:disable() else left.enabled = false end
@@ -374,6 +377,25 @@ function HelpWidget:buildPage()
     if UIManager:isWidgetShown(self) then
         UIManager:setDirty(self, "full")
     end
+end
+
+function HelpWidget:setPage(page)
+    page = math.max(1, math.min(page, 2))
+    if page == self.page then return end
+    self.page = page
+    self:buildPage()
+end
+
+-- Match the layout picker: swipe left advances and swipe right goes back.
+function HelpWidget:onSwipe(_, ges)
+    if not ges then return true end
+    local direction = ges.direction or ges.dir
+    if direction == "west" or direction == "left" then
+        self:setPage(self.page + 1)
+    elseif direction == "east" or direction == "right" then
+        self:setPage(self.page - 1)
+    end
+    return true
 end
 
 function HelpWidget:show() UIManager:show(self) end
