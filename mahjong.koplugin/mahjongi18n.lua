@@ -29,7 +29,7 @@ local CATALOG = {
         ["pause.resume"] = "Resume",
         ["stats.games_played"] = "Games played", ["stats.games_won"] = "Games won",
         ["stats.win_rate"] = "Win rate", ["stats.best_score"] = "Best score",
-         ["stats.best_time"] = "Best time", ["stats.best_combo"] = "Max combo achieved", ["stats.average_time"] = "Avg. duration",
+         ["stats.best_time"] = "Best time", ["stats.best_combo"] = "Max combo", ["stats.average_time"] = "Avg. duration",
         ["stats.current_streak"] = "Current streak", ["stats.longest_streak"] = "Longest streak",
         ["stats.global"] = "Global", ["stats.reset_confirm"] = "Reset all statistics? This cannot be undone.",
          ["game.exit_confirm"] = "Exit Mahjong Solitaire?", ["game.blocked"] = "Tile is blocked",
