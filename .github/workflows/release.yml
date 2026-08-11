@@ -1,0 +1,75 @@
+name: Release plugin
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out triggering commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Calculate release version
+        id: version
+        shell: bash
+        run: |
+          major=1
+          minor=-1
+
+          # A major-only tag, such as v2, starts a new release series at v2.0.
+          while IFS= read -r tag; do
+            if [[ "$tag" =~ ^v([0-9]+)$ ]]; then
+              tag_major=${BASH_REMATCH[1]}
+              tag_minor=-1
+            elif [[ "$tag" =~ ^v([0-9]+)\.([0-9]+)$ ]]; then
+              tag_major=${BASH_REMATCH[1]}
+              tag_minor=${BASH_REMATCH[2]}
+            else
+              continue
+            fi
+
+            if (( tag_major > major )); then
+              major=$tag_major
+              minor=$tag_minor
+            elif (( tag_major == major && tag_minor > minor )); then
+              minor=$tag_minor
+            fi
+          done < <(git tag --list 'v*')
+
+          next_minor=$((minor + 1))
+          if (( minor < 0 )); then
+            next_minor=0
+          fi
+
+          version="${major}.${next_minor}"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Package plugin
+        shell: bash
+        run: |
+          test -f mahjong.koplugin/_meta.lua
+          zip -r "mahjong.koplugin-v${{ steps.version.outputs.version }}.zip" mahjong.koplugin
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          COMMIT_SHA: ${{ github.sha }}
+          ZIP_FILE: mahjong.koplugin-v${{ steps.version.outputs.version }}.zip
+        run: |
+          gh release create "$RELEASE_TAG" "$ZIP_FILE" \
+            --target "$COMMIT_SHA" \
+            --title "Mahjong Solitaire v${RELEASE_VERSION}" \
+            --notes "Automated release for commit ${COMMIT_SHA}. Unzip ${ZIP_FILE} into KOReader's plugins folder."
