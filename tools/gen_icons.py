@@ -598,11 +598,11 @@ def orchid():
     rosette, with one simple 5-petal bloom on a slim stem."""
     p = []
     # Five long curving leaves from the base.
-    leaves = ["M50 108 Q24 78 16 40",
-              "M50 108 Q34 78 30 32",
-              "M50 108 L50 28",
-              "M50 108 Q66 78 70 32",
-              "M50 108 Q76 78 84 40"]
+    leaves = ["M50 100 Q24 78 16 40",
+              "M50 100 Q34 78 30 32",
+              "M50 100 L50 28",
+              "M50 100 Q66 78 70 32",
+              "M50 100 Q76 78 84 40"]
     p.extend(path(d, INK_BLACK, 4.5) for d in leaves)
     # Slim flower stem with a small bloom near the top.
     p.append(path("M50 60 Q60 40 62 18", INK_BLACK, 2.5))
