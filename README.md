@@ -68,7 +68,7 @@ same face. There are no computer opponents.
 
 The picker currently includes these 24 layouts:
 
-|Layouts|
+|Layouts||
 | --- | --- |
 | Bridge | Hare |
 | Cloud | Horse |
