@@ -67,6 +67,16 @@ expect(type(mj.board) == "table" and Logic.tileCount(mj.board) == 144,
 expect(mj.status_bar ~= nil and mj.status_bar.title == "Mahjong Solitaire",
     "status bar created with the right title")
 expect(mj[1] ~= nil, "full-screen layout built into self[1]")
+
+local home_key = {
+    match = function(_, sequence) return sequence[1] == "Home" end,
+}
+ctx.last_confirm = nil
+mj:onKeyPress(home_key)
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "Kindle Home opens the exit confirmation during gameplay")
+ctx.last_confirm.onClose(ctx.last_confirm)
+
 expect(mj.status_bar.right_icon == "mahjong/close"
         and (mj.status_bar.right_icon_size_ratio or 0.6) > 0.6,
     "quit X uses the bolder mahjong/close icon at a larger size")

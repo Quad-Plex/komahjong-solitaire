@@ -450,6 +450,50 @@ function Mahjong:onMahjongStart()
     return true
 end
 
+-- Kindle's physical Home button is delivered as a Home key event. Keep it in
+-- the same confirmation path as the in-game HUD X; the layout picker forwards
+-- its Home event here because it is the top-level widget on first launch.
+function Mahjong:showExitConfirmation()
+    if self._exit_dialog then return true end
+    if self._auto_solve_active then return true end
+
+    local picker = self._picker_dlg
+    if not picker then Awake.release(self) end
+    self._exit_dialog = ConfirmBox:new{
+        text = t("game.exit_confirm"),
+        ok_text = t("toolbar.exit"),
+        ok_callback = function()
+            self._exit_dialog = nil
+            if self.board then
+                UIManager:close(self, "ui", self.dimensions)
+            end
+            if picker then
+                self._picker_dlg = nil
+                UIManager:close(picker, "full")
+            end
+        end,
+        cancel_callback = function()
+            self._exit_dialog = nil
+            if not picker and self.board and not MahjongLogic.isWin(self.board) then
+                Awake.acquire(self)
+            end
+        end,
+    }
+    UIManager:show(self._exit_dialog)
+    return true
+end
+
+function Mahjong:onHome()
+    return self:showExitConfirmation()
+end
+
+function Mahjong:onKeyPress(key)
+    if key and key.match and key:match({ "Home" }) then
+        return self:onHome()
+    end
+    return false
+end
+
 function Mahjong:handleEvent(event)
     -- Dispatcher can launch the game while this widget is not on the stack.
     if event.handler == "onMahjongStart" then
@@ -562,9 +606,10 @@ function Mahjong:showLayoutPicker()
                  self:startGameWithLayout(id)
              end
          end,
-        onHelp = function() self:showHelp() end,
-        onSettings = function() self:openSettings() end,
-        onStats = function() self:openStats() end,
+         onHelp = function() self:showHelp() end,
+         onSettings = function() self:openSettings() end,
+         onStats = function() self:openStats() end,
+         onHomeCallback = function() self:showExitConfirmation() end,
         -- An active (un-won) board under the picker means the title-row close
         -- button renders as a return arrow (see mahjonglayoutselect.lua) and
         -- the stats card keeps its Map column for the running game.
@@ -1245,26 +1290,7 @@ function Mahjong:createStatusBar()
         right_icon             = "mahjong/close",
         right_icon_size_ratio  = 0.9,
         right_icon_tap_callback = function()
-            -- US-33: the quit X is dead while the auto-solver runs — closing
-             -- mid-solve used to save a partial score that could be finished
-             -- by hand on the next launch.
-             if self._auto_solve_active then return end
-            Awake.release(self)
-            UIManager:show(ConfirmBox:new{
-                text        = t("game.exit_confirm"),
-                ok_text     = t("toolbar.exit"),
-                ok_callback = function()
-                    -- Returning to the file manager only needs the normal UI
-                    -- waveform; avoid a high-fidelity full-screen flash for a
-                    -- routine exit.
-                    UIManager:close(self, "ui", self.dimensions)
-                end,
-                cancel_callback = function()
-                    if self.board and not MahjongLogic.isWin(self.board) then
-                        Awake.acquire(self)
-                    end
-                end,
-            })
+            self:showExitConfirmation()
         end,
     }
 end

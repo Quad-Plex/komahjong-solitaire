@@ -96,6 +96,7 @@ local LayoutSelect = InputContainer:extend{
     parent = nil,      -- the Mahjong instance
     onPick = nil,      -- function(layout_id) — deals a fresh game on the layout
     onClose = nil,     -- function() — close X / tap outside (owner resumes timer)
+    onHomeCallback = nil, -- function() — Kindle Home button
     onHelp = nil,      -- function() — show gameplay help above this picker
     onSettings = nil,  -- function() — show settings above this picker
     onStats = nil,     -- function() — show the stats card above this picker
@@ -646,6 +647,11 @@ function LayoutSelect:init()
             GestureRange:new{ ges = "swipe", range = self.dimen },
         },
     }
+    self.key_events = {
+        Home = {
+            { "Home" },
+        },
+    }
 end
 
 function LayoutSelect:setPage(page)
@@ -684,6 +690,11 @@ function LayoutSelect:onSwipe(_, ges)
     elseif direction == "east" or direction == "right" then
         self:setPage(self.page - 1)
     end
+    return true
+end
+
+function LayoutSelect:onHome()
+    if self.onHomeCallback then self.onHomeCallback() end
     return true
 end
 

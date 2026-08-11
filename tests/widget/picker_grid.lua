@@ -53,6 +53,16 @@ local picker = ctx.window_stack[#ctx.window_stack].widget
 expect(picker ~= nil and picker.name == "mahjonglayoutselect",
     "first launch shows the layout picker")
 
+picker:onHome()
+expect(ctx.last_confirm ~= nil and ctx.last_confirm.text == "Exit Mahjong Solitaire?",
+    "Kindle Home opens the exit confirmation from the picker")
+ctx.last_confirm.onClose(ctx.last_confirm)
+local picker_after_home_cancel = false
+for _, e in ipairs(ctx.window_stack) do
+    if e.widget == picker then picker_after_home_cancel = true end
+end
+expect(picker_after_home_cancel, "cancelling Home confirmation keeps the picker open")
+
 local ids = Logic.layoutIds()
 local expected_rows = math.max(3, math.ceil(#ids / COLS))
 expect(#picker._card_rects == math.min(12, #ids),
