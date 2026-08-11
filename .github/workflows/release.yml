@@ -69,7 +69,18 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           ZIP_FILE: mahjong.koplugin-v${{ steps.version.outputs.version }}.zip
         run: |
+          {
+            printf 'Automated release for commit %s.\n\n' "$COMMIT_SHA"
+            git log -1 --format='%B' "$COMMIT_SHA"
+            printf '\n\n## Installation\n\n'
+            printf '1. Download the `%s` asset from this release.\n' "$ZIP_FILE"
+            printf '%s\n' '2. Extract the ZIP file directly into KOReader'\''s `plugins/` directory. The archive already contains the complete `mahjong.koplugin/` folder, so it should create `plugins/mahjong.koplugin/`.'
+            printf '3. Do not copy only the Lua files; keep the entire plugin folder and its `icons/` directory intact.\n'
+            printf '4. Fully restart KOReader, because plugins are loaded during startup.\n'
+            printf '5. Open **Tools -> Mahjong Solitaire** from the KOReader menu.\n'
+          } > release-notes.md
+
           gh release create "$RELEASE_TAG" "$ZIP_FILE" \
             --target "$COMMIT_SHA" \
             --title "Mahjong Solitaire v${RELEASE_VERSION}" \
-            --notes "Automated release for commit ${COMMIT_SHA}. Unzip ${ZIP_FILE} into KOReader's plugins folder."
+            --notes-file release-notes.md
