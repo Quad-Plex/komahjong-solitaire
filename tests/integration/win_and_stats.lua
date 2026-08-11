@@ -167,7 +167,7 @@ expect(win_text:find("Hints used: 0", 1, true) ~= nil,
     "the summary shows zero hints used on a clean win")
 expect(win_text:find("Shuffles: 0", 1, true) ~= nil,
     "the summary shows zero shuffles on a clean win")
-expect(win_text:find("Best combo achieved: 1 (+10) (New best!)", 1, true) ~= nil,
+expect(win_text:find("Best combo: 1 (+10) (New best!)", 1, true) ~= nil,
     "the summary shows the per-game best combo and marks its first record")
 expect(win_text:find("Overall best score: 80", 1, true) == nil,
     "the session summary no longer lists the global overall best score")
