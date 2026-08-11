@@ -82,5 +82,5 @@ jobs:
 
           gh release create "$RELEASE_TAG" "$ZIP_FILE" \
             --target "$COMMIT_SHA" \
-            --title "Mahjong Solitaire v${RELEASE_VERSION}" \
+            --title "KoMahjong Solitaire v${RELEASE_VERSION}" \
             --notes-file release-notes.md
