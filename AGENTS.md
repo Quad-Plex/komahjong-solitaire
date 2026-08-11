@@ -1,8 +1,7 @@
 # AGENTS.md — Writing Native KOReader Plugins
 
-This document captures what I learned from studying `example_app/casualkochess.koplugin`
-(a working chess/checkers/reversi/fox-and-hounds suite for jailbroken e-ink readers running
-KOReader) plus the official KOReader documentation, so that future agents can write native
+This document captures how to write working koreader game plugins, plus the official KOReader
+documentation, so that future agents can write native
 KOReader plugins (and specifically the Mahjong Solitaire plugin in this repo) correctly.
 
 ## What KOReader is
