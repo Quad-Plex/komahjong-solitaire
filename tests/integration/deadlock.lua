@@ -182,18 +182,21 @@ expect(#ctx.window_stack == stack_before,
 -- ---- Tap-outside the shuffle prompt does NOT exit the game --------------------------
 
 -- Not-provably-dead board -> shuffle prompt; a stray tap next to it keeps the
--- prompt up (the game keeps running, and previously it closed the whole app).
+-- prompt up (the game remains open and the clock stays paused).
 local mj_tap2 = Mahjong:new()
 mj_tap2.board = boardWith{ {2,2,0,"b1"}, {2,2,1,"b1"} }
 mj_tap2.layout = "turtle"
 mj_tap2:buildUILayout()
 mj_tap2.history = {}
+mj_tap2:startTimer()
 um:show(mj_tap2)
 local orig_dead = Logic.isPermanentlyDead
 Logic.isPermanentlyDead = function() return false end
 mj_tap2:handleNoMoves()
 Logic.isPermanentlyDead = orig_dead
 local shuffle_dlg = ctx.last_confirm
+expect(not mj_tap2._timer_running,
+    "shuffle prompt pauses the timer")
 expect(tostring(shuffle_dlg.text):find("No moves left", 1, true) ~= nil,
     "shuffle prompt shown (not dead board)")
 expect(tostring(shuffle_dlg.text):find("-10 Score", 1, true) ~= nil,
@@ -211,6 +214,9 @@ for _, e in ipairs(ctx.window_stack) do
 end
 expect(shuffle_still_up,
     "tap-outside the shuffle prompt keeps the prompt open")
+shuffle_dlg.cancel_callback()
+expect(not mj_tap2._timer_running,
+    "closing the shuffle prompt leaves the timer stopped")
 
 -- ---- Not-provably-dead board → shuffle prompt (existing behaviour) ---------------
 

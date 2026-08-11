@@ -56,7 +56,8 @@ Features:
 - **Failure recognition (US-32):** a provably-dead board (e.g. the last two
   copies of a kind stacked in one column) triggers a loss dialog with
   New Game / Close / Undo instead of an endless shuffle loop; a retries-exhausted
-  fallback catches exotic deadlocks.
+  fallback catches exotic deadlocks. The no-moves shuffle prompt pauses the
+  clock until a playable shuffle is found.
 - **Pause (US-17):** a bottom-toolbar button freezes the clock behind a
   tap-consuming overlay; the clock restarts exactly once on resume.
 - **Timer:** elapsed seconds always accrue; the mode controls only when the

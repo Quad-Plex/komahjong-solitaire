@@ -64,7 +64,9 @@ At no-moves time (`checkGameState`, `showHint`'s dead branch, and the
    background search of 15 shuffled candidates, and commits the candidate with
    the greatest number of matching free pairs. If every candidate is still
    stuck, the bounded retry path repeats the search without charging another
-   shuffle penalty.
+   shuffle penalty. The timer is paused while this prompt and its background
+   shuffle search are active, and resumes only after a playable arrangement is
+   found.
 
 > **Tap-outside fix (after shipping):** KOReader fires a ConfirmBox's
 > `cancel_callback` for a tap OUTSIDE the dialog too, so a stray tap next to
@@ -80,7 +82,9 @@ when `autoSolveStep`'s mid-solve shuffle loop exhausts. In the auto-solve case
 history is cleared, so Undo is naturally absent.
 
 The timer is paused while the loss dialog is up (matching the win-dialog
-pattern).
+pattern) and while the no-moves shuffle prompt/search is active. Closing the
+shuffle prompt exits the game; accepting it resumes the timer only after the
+shuffle produces a playable board.
 
 ## No-moves shuffle optimization (post-US-32)
 

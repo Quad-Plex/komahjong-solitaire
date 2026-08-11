@@ -1449,16 +1449,23 @@ function Mahjong:_handleNoMoves()
     if MahjongLogic.isPermanentlyDead(self.board) then
         self:showDeadBoardDialog()
     else
+        -- The shuffle offer is modal just like the dead-board and win dialogs:
+        -- freeze elapsed time while the player decides. Remember whether this
+        -- game was running so direct/headless callers do not start a clock that
+        -- was already stopped.
+        self._no_moves_timer_was_running = self._timer_running == true
+        self:stopTimer()
         -- US-32's tap-outside fix (dismissDialogOnTapOutside): a stray tap next
         -- to this dialog must only keep it open — the old cancel_callback here
         -- exited the whole game.
         UIManager:show(dismissDialogOnTapOutside(ConfirmBox:new{
             text = t("game.no_moves_shuffle"),
-                 ok_text = t("toolbar.shuffle"),
-                 ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
+            ok_text = t("toolbar.shuffle"),
+            ok_callback = function() self:shuffleBoard(true, 10, nil, true) end,
             cancel_text = t("toolbar.close"),
-                 cancel_callback = function()
-                    UIManager:close(self, "ui", self.dimensions)
+            cancel_callback = function()
+                self._no_moves_timer_was_running = false
+                UIManager:close(self, "ui", self.dimensions)
             end,
         }))
     end
@@ -1985,6 +1992,11 @@ function Mahjong:_shuffleBestDeadBoard(attempts, charge)
             end
         else
             Awake.acquire(self)
+            if self._no_moves_timer_was_running then
+                self._no_moves_timer_was_running = false
+                self:startTimer()
+                self:updateTimerDisplay()
+            end
         end
     end
 
