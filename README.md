@@ -26,7 +26,7 @@ settings, scoring, hints, undo, shuffle and per-layout aswell as global statisti
 - Pause, elapsed timer, save-and-resume, and corrupt-save protection
 - Long-press Hint to auto-solve a board when you want to watch it finish (Invalidates score for the current game)
 - Win summaries, lifetime statistics, per-layout wins, best scores, and best times
-- Bundled English and German UI translations, with automatic German selection for German KOReader locales
+- Bundled English, German, and Spanish UI translations, with automatic locale-based selection for German and Spanish KOReader locales
 - Layout and board sizing that adapt to the reader's screen (untested)
 
 ## Requirements
@@ -137,8 +137,8 @@ and per-layout records. Resetting statistics requires confirmation.
 
 The Settings panel includes:
 
-- The available interface languages. English and German are bundled; German is selected
-  automatically on first launch for German KOReader locales.
+- The available interface languages. English, German, and Spanish are bundled; German or Spanish
+  is selected automatically on first launch for matching KOReader locales.
 - Whether an empty-board tap clears the current selection.
 - Timer display mode: periodic interval or on interaction.
 - Timer update interval when interval mode is selected.
