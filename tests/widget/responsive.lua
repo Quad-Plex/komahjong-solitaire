@@ -177,6 +177,15 @@ ctx.screen.getWidth = function() return 1600 end
 ctx.screen.getHeight = function() return 2000 end
 ctx.screen.scaleBySize = function(_, px) return px * 3 end
 ctx.mocks["device"].isAndroid = function() return true end
+local fold_hud = HudBar:new{
+    title = "Mahjong Solitaire",
+    full_width = 1600,
+    right_icon = "mahjong/close",
+    right_icon_tap_callback = function() end,
+}
+expect(fold_hud._chip_layouts[1][3].face.size <= 36
+        and fold_hud._chip_layouts[1][5].face.size <= 24,
+    "Fold HUD keeps stat text compact and centered beside its icons")
 local fold_picker = Picker:new{
     wins_by_layout = { bridge = 0 },
     highscores_by_layout = { bridge = 120 },
@@ -194,7 +203,9 @@ if fold_card then
     local fold_name = fold_content[4]
     expect(fold_picker._help_btn.text_font_size <= 40,
         "Fold-sized picker keeps the help question mark compact")
-    expect(fold_name.face.size <= 32 and fold_name.forced_height <= math.floor(fold_card.h * 0.14),
+    expect(fold_name.face.size <= 32
+            and fold_name.forced_height > math.floor(fold_card.h * 0.14)
+            and fold_name.forced_height <= math.floor(fold_card.h * 0.20),
         "Fold-sized picker keeps layout captions compact despite high DPI")
     expect(fold_badge_row[1].width <= 24,
         "Fold-sized picker keeps the played badge icon compact")

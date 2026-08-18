@@ -12,7 +12,8 @@
 -- Each chip: icon | value | label (horizontal pill). main.lua calls
 -- setStats(pairs, free, score) after every state change.
 
-local Screen = require("device").screen
+local Device = require("device")
+local Screen = Device.screen
 local Blitbuffer = require("ffi/blitbuffer")
 local Geometry = require("ui/geometry")
 local FrameContainer = require("ui/widget/container/framecontainer")
@@ -31,6 +32,10 @@ local BAR_BG = Blitbuffer.COLOR_WHITE
 local QUIT_BG = Blitbuffer.COLOR_LIGHT_GRAY
 local CHIP_BG = Blitbuffer.COLOR_WHITE
 local CHIP_BORDER = Blitbuffer.COLOR_DARK_GRAY
+
+local function isAndroidDevice()
+    return type(Device.isAndroid) == "function" and Device:isAndroid()
+end
 
 local HudBar = FrameContainer:extend{
     name = "hudbar",
@@ -66,9 +71,23 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
     local label_max_w = compact and 0 or math.max(1, math.floor(inner_w * 0.34))
     local value_max_w = math.max(1, inner_w - icon_size - gap
         - (compact and 0 or gap) - label_max_w)
+    local android = isAndroidDevice()
+    local value_preferred = Screen:scaleBySize(compact and 14 or 16)
+    local value_minimum = Screen:scaleBySize(9)
+    local label_preferred = Screen:scaleBySize(10)
+    local label_minimum = Screen:scaleBySize(8)
+    if android then
+        -- Android can report a large DPI multiplier without giving the HUD
+        -- proportionally more room. Keep the text readable inside the chip;
+        -- the HorizontalGroup will then center it beside the icon.
+        value_preferred = math.min(value_preferred, math.floor(inner_h * 0.48))
+        value_minimum = math.min(value_minimum, math.floor(inner_h * 0.35))
+        label_preferred = math.min(label_preferred, math.floor(inner_h * 0.32))
+        label_minimum = math.min(label_minimum, math.floor(inner_h * 0.24))
+    end
     local value_face = MahjongUI.fitTextFace(
-        "000", "smallinfofontbold", Screen:scaleBySize(compact and 14 or 16),
-        Screen:scaleBySize(9), value_max_w, inner_h)
+        "000", "smallinfofontbold", value_preferred,
+        value_minimum, value_max_w, inner_h)
     local value = TextWidget:new{
         text = "0",
         bold = true,
@@ -84,7 +103,7 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
     }
     if not compact then
         local label_face = MahjongUI.fitTextFace(
-            label, "smallinfofont", Screen:scaleBySize(10), Screen:scaleBySize(8),
+            label, "smallinfofont", label_preferred, label_minimum,
             label_max_w, inner_h)
         content_children[#content_children + 1] = HorizontalSpan:new{ width = gap }
         content_children[#content_children + 1] = TextWidget:new{

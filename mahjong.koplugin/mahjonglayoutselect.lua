@@ -532,7 +532,10 @@ function LayoutSelect:init()
     -- oversized caption.
     local name_h
     if isAndroidDevice() then
-        name_h = math.max(1, math.min(Screen:scaleBySize(28), math.floor(card_h * 0.14)))
+        -- TextWidget draws from the top of its forced-height slot. Reserve a
+        -- little extra caption room so that the baseline sits above the card
+        -- border instead of being pressed against it on tall Android cards.
+        name_h = math.max(1, math.min(Screen:scaleBySize(28), math.floor(card_h * 0.20)))
     else
         name_h = math.min(Screen:scaleBySize(28),
             math.max(Screen:scaleBySize(16), math.floor(card_h * 0.25)))
