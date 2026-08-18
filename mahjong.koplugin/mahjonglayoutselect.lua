@@ -30,7 +30,6 @@ local Device = require("device")
 local Screen = Device.screen
 local UIManager = require("ui/uimanager")
 local Blitbuffer = require("ffi/blitbuffer")
-local Font = require("ui/font")
 local Geometry = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
@@ -215,19 +214,41 @@ LayoutSelect.layoutThumbnail = layoutThumbnail
 -- The badge is a real FrameContainer with a fixed dimen + getSize override, so
 -- it can sit as a child of an OverlapGroup (see the OverlapGroup child rules in
 -- AGENTS.md). The caller sets `overlap_offset` to position it on the thumb.
-local function layoutBadge(wins)
-    local pad = Screen:scaleBySize(3)
-    local icon_size = Screen:scaleBySize(16)
-    local gap = Screen:scaleBySize(4)
+local function chipSize(scaled_size, extent, fraction)
+    return math.max(1, math.min(Screen:scaleBySize(scaled_size),
+        math.floor(extent * fraction)))
+end
+
+local function chipRadius(extent)
+    return math.max(1, math.min(Screen:scaleBySize(4), math.floor(extent * 0.02)))
+end
+
+local function layoutBadge(wins, thumb_w, thumb_h)
+    local extent = math.max(1, math.min(thumb_w, thumb_h))
+    -- Card-internal controls must follow the thumbnail, not just device DPI.
+    -- Android devices can report a large scaleBySize value while the picker
+    -- cards grow by a much smaller factor than the Kindle canvas.
+    local pad = chipSize(3, extent, 0.02)
+    local icon_fraction = Screen:scaleBySize(1) > 1 and 0.07 or 0.09
+    local icon_size = chipSize(16, extent, icon_fraction)
+    local gap = chipSize(4, extent, 0.02)
+    local text = tostring(wins or 0)
+    local preferred = chipSize(14, extent, 0.08)
+    local minimum = math.max(1, math.min(preferred, math.floor(extent * 0.04)))
+    local text_max_w = math.max(1, math.floor(thumb_w * 0.18))
+    local count_face = MahjongUI.fitTextFace(text, "smallinfofont", preferred,
+        minimum, text_max_w, icon_size)
     local sync = IconWidget:new{
         icon = "mahjong/sync",
         width = icon_size,
         height = icon_size,
     }
     local count = TextWidget:new{
-        text = tostring(wins or 0),
+        text = text,
         padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(14)),
+        face = count_face,
+        max_width = text_max_w,
+        truncate_with_ellipsis = true,
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local count_size = count:getSize()
@@ -241,7 +262,7 @@ local function layoutBadge(wins)
         },
         padding = pad,
         bordersize = 1,
-        radius = Screen:scaleBySize(4),
+        radius = chipRadius(extent),
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
         width = badge_w,
@@ -262,19 +283,29 @@ end
 -- as a child of an OverlapGroup (see the OverlapGroup child rules in
 -- AGENTS.md). The caller sets `overlap_offset` to position it on the thumb and
 -- only adds the chip to a card when the layout has a highscore (US-31).
-local function layoutScoreChip(score)
-    local pad = Screen:scaleBySize(3)
-    local icon_size = Screen:scaleBySize(16)
-    local gap = Screen:scaleBySize(4)
+local function layoutScoreChip(score, thumb_w, thumb_h)
+    local extent = math.max(1, math.min(thumb_w, thumb_h))
+    local pad = chipSize(3, extent, 0.02)
+    local icon_fraction = Screen:scaleBySize(1) > 1 and 0.07 or 0.09
+    local icon_size = chipSize(16, extent, icon_fraction)
+    local gap = chipSize(4, extent, 0.02)
+    local text_value = tostring(score)
+    local preferred = chipSize(14, extent, 0.08)
+    local minimum = math.max(1, math.min(preferred, math.floor(extent * 0.04)))
+    local text_max_w = math.max(1, math.floor(thumb_w * 0.24))
+    local text_face = MahjongUI.fitTextFace(text_value, "smallinfofont", preferred,
+        minimum, text_max_w, icon_size)
     local trophy = IconWidget:new{
         icon = "mahjong/trophy",
         width = icon_size,
         height = icon_size,
     }
     local text = TextWidget:new{
-        text = tostring(score),
+        text = text_value,
         padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(14)),
+        face = text_face,
+        max_width = text_max_w,
+        truncate_with_ellipsis = true,
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local text_size = text:getSize()
@@ -288,7 +319,7 @@ local function layoutScoreChip(score)
         },
         padding = pad,
         bordersize = 1,
-        radius = Screen:scaleBySize(4),
+        radius = chipRadius(extent),
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
         width = chip_w,
@@ -310,12 +341,20 @@ end
 -- child of an OverlapGroup (see the OverlapGroup child rules in AGENTS.md).
 -- The caller sets `overlap_offset` to position it on the thumb and only adds
 -- the chip to a card when the layout has a best time.
-local function layoutTimeChip(time_str)
-    local pad = Screen:scaleBySize(3)
+local function layoutTimeChip(time_str, thumb_w, thumb_h)
+    local extent = math.max(1, math.min(thumb_w, thumb_h))
+    local pad = chipSize(3, extent, 0.02)
+    local preferred = chipSize(14, extent, 0.08)
+    local minimum = math.max(1, math.min(preferred, math.floor(extent * 0.04)))
+    local text_max_w = math.max(1, math.floor(thumb_w * 0.28))
+    local text_face = MahjongUI.fitTextFace(time_str, "smallinfofont", preferred,
+        minimum, text_max_w, math.max(1, math.floor(extent * 0.12)))
     local text = TextWidget:new{
         text = time_str,
         padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(14)),
+        face = text_face,
+        max_width = text_max_w,
+        truncate_with_ellipsis = true,
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local text_size = text:getSize()
@@ -325,7 +364,7 @@ local function layoutTimeChip(time_str)
         text,
         padding = pad,
         bordersize = 1,
-        radius = Screen:scaleBySize(4),
+        radius = chipRadius(extent),
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
         width = chip_w,
@@ -404,7 +443,10 @@ function LayoutSelect:init()
     self._help_btn = ButtonWidget:new{
         text = "?",
         text_font_face = "tfont",
-        text_font_size = math.max(8, math.floor(close_size * 0.45)),
+        -- Keep the Kindle glyph proportion, but stop a high-DPI font from
+        -- filling the entire help button on Android devices.
+        text_font_size = math.max(8, math.floor(close_size
+            * (Screen:scaleBySize(1) > 1 and 0.30 or 0.45))),
         width = close_size,
         height = close_size,
         bordersize = Screen:scaleBySize(1),
@@ -476,7 +518,20 @@ function LayoutSelect:init()
     local card_h = math.max(1, math.floor(grid_h / rows))
 
     -- Card layout: thumbnail on top, name underneath.
-    local name_h = math.min(Screen:scaleBySize(28), math.max(Screen:scaleBySize(16), math.floor(card_h * 0.25)))
+    -- Keep the Kindle baseline, but do not let a high-DPI Android face turn
+    -- the label area into a quarter of every card. The label is a compact
+    -- caption below the schematic, so its slot scales with the card itself.
+    -- Kindle-sized screens use the established geometry unchanged; the
+    -- relative cap is for canvases where DPI scaling is the source of the
+    -- oversized caption.
+    local dpi_scale = Screen:scaleBySize(1)
+    local name_h
+    if dpi_scale > 1 then
+        name_h = math.max(1, math.min(Screen:scaleBySize(28), math.floor(card_h * 0.14)))
+    else
+        name_h = math.min(Screen:scaleBySize(28),
+            math.max(Screen:scaleBySize(16), math.floor(card_h * 0.25)))
+    end
     local thumb_pad = math.min(Screen:scaleBySize(6), math.max(1, math.floor(card_w * 0.05)))
     local badge_margin = math.min(Screen:scaleBySize(4), math.max(1, math.floor(card_w * 0.03)))
     local thumb_w = math.max(1, card_w - 2 * thumb_pad)
@@ -494,7 +549,7 @@ function LayoutSelect:init()
                 -- US-30: played-count badge in the top-right corner of the
                 -- thumbnail, counting human wins on this layout.
                 local wins = (self.wins_by_layout and self.wins_by_layout[id]) or 0
-                local badge = layoutBadge(wins)
+                local badge = layoutBadge(wins, thumb_w, thumb_h)
                 badge.overlap_offset = {
                     thumb_w - badge:getSize().w - badge_margin,
                     badge_margin,
@@ -505,7 +560,7 @@ function LayoutSelect:init()
                 local thumb_children = { thumb, badge }
                 local highscore = (self.highscores_by_layout and self.highscores_by_layout[id]) or 0
                 if highscore > 0 then
-                    local chip = layoutScoreChip(highscore)
+                    local chip = layoutScoreChip(highscore, thumb_w, thumb_h)
                     chip.overlap_offset = {
                         thumb_w - chip:getSize().w - badge_margin,
                         thumb_h - chip:getSize().h - badge_margin,
@@ -518,7 +573,7 @@ function LayoutSelect:init()
                 -- best time, rendered as mm:ss; a never-won layout shows no chip.
                 local best_time = (self.best_times_by_layout and self.best_times_by_layout[id]) or nil
                 if best_time then
-                    local tchip = layoutTimeChip(MahjongLogic.formatElapsed(best_time))
+                    local tchip = layoutTimeChip(MahjongLogic.formatElapsed(best_time), thumb_w, thumb_h)
                     tchip.overlap_offset = {
                         badge_margin,
                         thumb_h - tchip:getSize().h - badge_margin,
@@ -527,9 +582,13 @@ function LayoutSelect:init()
                 end
                 local name_text = t("layout." .. id)
                 local name_max_w = math.max(1, card_w - 2 * thumb_pad)
+                local name_preferred = math.max(1, math.min(Screen:scaleBySize(16),
+                    math.floor(card_w * 0.06)))
+                local name_minimum = math.max(1, math.min(name_preferred,
+                    Screen:scaleBySize(10), math.floor(card_w * 0.035)))
                 local name_face = MahjongUI.fitTextFace(
-                    name_text, "smallinfofont", Screen:scaleBySize(16),
-                    Screen:scaleBySize(10), name_max_w, name_h)
+                    name_text, "smallinfofont", name_preferred,
+                    name_minimum, name_max_w, name_h)
                 local name = TextWidget:new{
                     text = name_text,
                     padding = 0,

@@ -144,8 +144,48 @@ expect(pw_stats._panel_geom.x >= 0 and pw_stats._panel_geom.y >= 0
         and pw_stats._panel_geom.y + pw_stats._panel_geom.h <= 1448,
     "stats panel remains inside the PW12 canvas")
 
+-- Fold-like high-DPI canvas: scaleBySize is intentionally much larger than
+-- the canvas growth, so card-internal text and chips must use the card as an
+-- additional bound instead of inheriting the raw DPI-scaled size.
+ctx.screen.getWidth = function() return 1600 end
+ctx.screen.getHeight = function() return 2000 end
+ctx.screen.scaleBySize = function(_, px) return px * 3 end
+local fold_picker = Picker:new{
+    wins_by_layout = { bridge = 0 },
+    highscores_by_layout = { bridge = 120 },
+    best_times_by_layout = { bridge = 125 },
+}
+local fold_card
+for _, rect in ipairs(fold_picker._card_rects) do
+    if rect.id == "bridge" then fold_card = rect break end
+end
+if fold_card then
+    local fold_content = fold_card.card[1][1]
+    local fold_thumb = fold_content[2]
+    local fold_badge = fold_thumb[2]
+    local fold_badge_row = fold_badge[1]
+    local fold_name = fold_content[4]
+    expect(fold_picker._help_btn.text_font_size <= 40,
+        "Fold-sized picker keeps the help question mark compact")
+    expect(fold_name.face.size <= 32 and fold_name.forced_height <= math.floor(fold_card.h * 0.14),
+        "Fold-sized picker keeps layout captions compact despite high DPI")
+    expect(fold_badge_row[1].width <= 24,
+        "Fold-sized picker keeps the played badge icon compact")
+    expect(fold_badge_row[3].face.size <= 24,
+        "Fold-sized picker keeps the played badge count compact")
+    local fold_thumb_dimen = fold_thumb[1].dimen
+    expect(fold_badge:getSize().w < fold_thumb_dimen.w * 0.25
+            and fold_badge:getSize().h < fold_thumb_dimen.h * 0.25,
+        "Fold-sized picker keeps the played badge inside a small thumbnail corner")
+    expect(fold_thumb[3]:getSize().w < fold_thumb_dimen.w * 0.25
+            and fold_thumb[4]:getSize().w < fold_thumb_dimen.w * 0.25,
+        "Fold-sized picker keeps score and time chips compact")
+end
+
+-- Restore the phone canvas and neutral mock DPI for the game assertions below.
 ctx.screen.getWidth = function() return 360 end
 ctx.screen.getHeight = function() return 640 end
+ctx.screen.scaleBySize = function(_, px) return px end
 
 local turtle
 for _, rect in ipairs(picker._card_rects) do
