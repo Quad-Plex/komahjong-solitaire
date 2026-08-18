@@ -144,12 +144,39 @@ expect(pw_stats._panel_geom.x >= 0 and pw_stats._panel_geom.y >= 0
         and pw_stats._panel_geom.y + pw_stats._panel_geom.h <= 1448,
     "stats panel remains inside the PW12 canvas")
 
+-- Kindle regression: a Kindle also has a scaleBySize factor above one, but it
+-- must retain the established picker typography and chip metrics.
+ctx.mocks["device"].isAndroid = nil
+ctx.screen.scaleBySize = function(_, px) return px * 2 end
+local kindle_picker = Picker:new{
+    wins_by_layout = { bridge = 0 },
+}
+local kindle_card
+for _, rect in ipairs(kindle_picker._card_rects) do
+    if rect.id == "bridge" then kindle_card = rect break end
+end
+if kindle_card then
+    local kindle_content = kindle_card.card[1][1]
+    local kindle_thumb = kindle_content[2]
+    local kindle_badge = kindle_thumb[2]
+    local kindle_badge_row = kindle_badge[1]
+    local kindle_name = kindle_content[4]
+    expect(kindle_name.face.size == 32 and kindle_name.forced_height >= 32,
+        "Kindle picker retains the established layout caption size")
+    expect(kindle_badge_row[1].width == 32 and kindle_badge_row[3].face.size == 28,
+        "Kindle picker retains the established played badge metrics")
+    expect(kindle_picker._help_btn.text_font_size
+            == math.floor(kindle_picker._close_btn.width * 0.45),
+        "Kindle picker retains the established help glyph proportion")
+end
+
 -- Fold-like high-DPI canvas: scaleBySize is intentionally much larger than
 -- the canvas growth, so card-internal text and chips must use the card as an
 -- additional bound instead of inheriting the raw DPI-scaled size.
 ctx.screen.getWidth = function() return 1600 end
 ctx.screen.getHeight = function() return 2000 end
 ctx.screen.scaleBySize = function(_, px) return px * 3 end
+ctx.mocks["device"].isAndroid = function() return true end
 local fold_picker = Picker:new{
     wins_by_layout = { bridge = 0 },
     highscores_by_layout = { bridge = 120 },
@@ -183,6 +210,7 @@ if fold_card then
 end
 
 -- Restore the phone canvas and neutral mock DPI for the game assertions below.
+ctx.mocks["device"].isAndroid = nil
 ctx.screen.getWidth = function() return 360 end
 ctx.screen.getHeight = function() return 640 end
 ctx.screen.scaleBySize = function(_, px) return px end

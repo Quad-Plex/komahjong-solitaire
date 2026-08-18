@@ -54,6 +54,10 @@ local MahjongUI = require("mahjongui")
 local TILE_ASPECT = 1.4
 local BEVEL_FRAC = 0.10
 
+local function isAndroidDevice()
+    return type(Device.isAndroid) == "function" and Device:isAndroid()
+end
+
 -- US-30: tapping a card shows a pressed state for this long before the deal
 -- runs. The deal (board build + show) is synchronous, so without the deferral
 -- the pressed state would never paint on e-ink; a short delay lets one screen
@@ -215,11 +219,13 @@ LayoutSelect.layoutThumbnail = layoutThumbnail
 -- it can sit as a child of an OverlapGroup (see the OverlapGroup child rules in
 -- AGENTS.md). The caller sets `overlap_offset` to position it on the thumb.
 local function chipSize(scaled_size, extent, fraction)
+    if not isAndroidDevice() then return Screen:scaleBySize(scaled_size) end
     return math.max(1, math.min(Screen:scaleBySize(scaled_size),
         math.floor(extent * fraction)))
 end
 
 local function chipRadius(extent)
+    if not isAndroidDevice() then return Screen:scaleBySize(4) end
     return math.max(1, math.min(Screen:scaleBySize(4), math.floor(extent * 0.02)))
 end
 
@@ -229,13 +235,13 @@ local function layoutBadge(wins, thumb_w, thumb_h)
     -- Android devices can report a large scaleBySize value while the picker
     -- cards grow by a much smaller factor than the Kindle canvas.
     local pad = chipSize(3, extent, 0.02)
-    local icon_fraction = Screen:scaleBySize(1) > 1 and 0.07 or 0.09
+    local icon_fraction = 0.07
     local icon_size = chipSize(16, extent, icon_fraction)
     local gap = chipSize(4, extent, 0.02)
     local text = tostring(wins or 0)
     local preferred = chipSize(14, extent, 0.08)
     local minimum = math.max(1, math.min(preferred, math.floor(extent * 0.04)))
-    local text_max_w = math.max(1, math.floor(thumb_w * 0.18))
+    local text_max_w = isAndroidDevice() and math.max(1, math.floor(thumb_w * 0.18)) or nil
     local count_face = MahjongUI.fitTextFace(text, "smallinfofont", preferred,
         minimum, text_max_w, icon_size)
     local sync = IconWidget:new{
@@ -286,13 +292,13 @@ end
 local function layoutScoreChip(score, thumb_w, thumb_h)
     local extent = math.max(1, math.min(thumb_w, thumb_h))
     local pad = chipSize(3, extent, 0.02)
-    local icon_fraction = Screen:scaleBySize(1) > 1 and 0.07 or 0.09
+    local icon_fraction = 0.07
     local icon_size = chipSize(16, extent, icon_fraction)
     local gap = chipSize(4, extent, 0.02)
     local text_value = tostring(score)
     local preferred = chipSize(14, extent, 0.08)
     local minimum = math.max(1, math.min(preferred, math.floor(extent * 0.04)))
-    local text_max_w = math.max(1, math.floor(thumb_w * 0.24))
+    local text_max_w = isAndroidDevice() and math.max(1, math.floor(thumb_w * 0.24)) or nil
     local text_face = MahjongUI.fitTextFace(text_value, "smallinfofont", preferred,
         minimum, text_max_w, icon_size)
     local trophy = IconWidget:new{
@@ -346,7 +352,7 @@ local function layoutTimeChip(time_str, thumb_w, thumb_h)
     local pad = chipSize(3, extent, 0.02)
     local preferred = chipSize(14, extent, 0.08)
     local minimum = math.max(1, math.min(preferred, math.floor(extent * 0.04)))
-    local text_max_w = math.max(1, math.floor(thumb_w * 0.28))
+    local text_max_w = isAndroidDevice() and math.max(1, math.floor(thumb_w * 0.28)) or nil
     local text_face = MahjongUI.fitTextFace(time_str, "smallinfofont", preferred,
         minimum, text_max_w, math.max(1, math.floor(extent * 0.12)))
     local text = TextWidget:new{
@@ -446,7 +452,7 @@ function LayoutSelect:init()
         -- Keep the Kindle glyph proportion, but stop a high-DPI font from
         -- filling the entire help button on Android devices.
         text_font_size = math.max(8, math.floor(close_size
-            * (Screen:scaleBySize(1) > 1 and 0.30 or 0.45))),
+            * (isAndroidDevice() and 0.30 or 0.45))),
         width = close_size,
         height = close_size,
         bordersize = Screen:scaleBySize(1),
@@ -524,9 +530,8 @@ function LayoutSelect:init()
     -- Kindle-sized screens use the established geometry unchanged; the
     -- relative cap is for canvases where DPI scaling is the source of the
     -- oversized caption.
-    local dpi_scale = Screen:scaleBySize(1)
     local name_h
-    if dpi_scale > 1 then
+    if isAndroidDevice() then
         name_h = math.max(1, math.min(Screen:scaleBySize(28), math.floor(card_h * 0.14)))
     else
         name_h = math.min(Screen:scaleBySize(28),
@@ -582,10 +587,16 @@ function LayoutSelect:init()
                 end
                 local name_text = t("layout." .. id)
                 local name_max_w = math.max(1, card_w - 2 * thumb_pad)
-                local name_preferred = math.max(1, math.min(Screen:scaleBySize(16),
-                    math.floor(card_w * 0.06)))
-                local name_minimum = math.max(1, math.min(name_preferred,
-                    Screen:scaleBySize(10), math.floor(card_w * 0.035)))
+                local name_preferred, name_minimum
+                if isAndroidDevice() then
+                    name_preferred = math.max(1, math.min(Screen:scaleBySize(16),
+                        math.floor(card_w * 0.06)))
+                    name_minimum = math.max(1, math.min(name_preferred,
+                        Screen:scaleBySize(10), math.floor(card_w * 0.035)))
+                else
+                    name_preferred = Screen:scaleBySize(16)
+                    name_minimum = Screen:scaleBySize(10)
+                end
                 local name_face = MahjongUI.fitTextFace(
                     name_text, "smallinfofont", name_preferred,
                     name_minimum, name_max_w, name_h)
