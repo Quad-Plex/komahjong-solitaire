@@ -359,13 +359,36 @@ function LayoutSelect:init()
     -- active game sits below the picker the X renders as a return arrow (the
     -- owner's onClose resumes that game).
     local compact = MahjongUI.isNarrow(self.full_width)
+    -- Header controls are sized from the canvas, not from the title's font
+    -- metrics. A device font can be substantially larger than its nominal
+    -- point size and must not make the whole header wider than the screen.
+    local control_size = math.max(1, math.min(
+        Screen:scaleBySize(compact and 38 or 42),
+        math.floor(self.full_width / 7),
+        math.floor(self.full_height / 10)))
+    local btn_gap = math.max(1, math.min(Screen:scaleBySize(4), math.floor(control_size * 0.12)))
+    local left_btns = 3 * control_size + 2 * btn_gap
+    local right_btn = control_size
+    local title_gap = btn_gap
+    -- The stronger centered-title bound accounts for the asymmetric three-left
+    -- button header. Without it, the title can fit between the controls while
+    -- still being unable to sit at the actual screen center.
+    local title_max_w = math.max(1, math.min(
+        self.full_width - 2 * edge_pad - left_btns - right_btn - 2 * title_gap,
+        self.full_width - 2 * edge_pad - 2 * left_btns))
+    local title_max_h = math.max(1, control_size - 2 * title_gap)
+    local title_face = MahjongUI.fitTextFace(
+        t("picker.title"), "tfont", Screen:scaleBySize(compact and 18 or 22),
+        Screen:scaleBySize(10), title_max_w, title_max_h)
     local title_widget = TextWidget:new{
         text = t("picker.title"),
         padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(compact and 18 or 22)),
+        face = title_face,
+        max_width = title_max_w,
+        truncate_with_ellipsis = true,
     }
     local title_h = title_widget:getSize().h
-    local close_size = title_h + Screen:scaleBySize(8)
+    local close_size = control_size
     self._close_btn = ButtonWidget:new{
         icon = self.game_in_background and "chevron.left" or "mahjong/close",
         width = close_size,
@@ -381,7 +404,7 @@ function LayoutSelect:init()
     self._help_btn = ButtonWidget:new{
         text = "?",
         text_font_face = "tfont",
-        text_font_size = 22,
+        text_font_size = math.max(8, math.floor(close_size * 0.45)),
         width = close_size,
         height = close_size,
         bordersize = Screen:scaleBySize(1),
@@ -411,7 +434,7 @@ function LayoutSelect:init()
         padding = 0,
         callback = function() if self.onStats then self.onStats() end end,
     }
-    local title_w = title_widget:getSize().w
+    local title_w = math.min(title_widget:getSize().w, title_max_w)
     local title_row_w = self.full_width
     -- Keep the title centered in the full row, rather than centered in the
     -- space between the buttons. The left side carries three buttons (settings
@@ -419,9 +442,6 @@ function LayoutSelect:init()
     -- so the two flexible spans must be asymmetric: left_space bumps the flex
     -- by a button (close_size + the 4px gap) so the title sits exactly at the
     -- row center regardless of how many buttons the left side holds.
-    local btn_gap = Screen:scaleBySize(4)
-    local left_btns = 3 * close_size + 2 * btn_gap
-    local right_btn = close_size
     local flex = math.max(0, title_row_w - 2 * edge_pad
         - left_btns - right_btn - title_w)
     local left_space = math.max(0, math.floor((flex - (left_btns - right_btn)) / 2))
@@ -438,7 +458,6 @@ function LayoutSelect:init()
         HorizontalSpan:new{ width = right_space },
         self._close_btn,
         HorizontalSpan:new{ width = edge_pad },
-        width = title_row_w,
     }
 
     -- US-48: every page has exactly three columns and four rows. Empty slots
@@ -450,7 +469,7 @@ function LayoutSelect:init()
     local grid_top = top_pad + title_row_h + Screen:scaleBySize(16)
     local grid_w = self.full_width - 2 * edge_pad - (cols - 1) * gap
     local card_w = math.max(1, math.floor(grid_w / cols))
-    local footer_h = Screen:scaleBySize(34)
+    local footer_h = math.max(1, math.min(Screen:scaleBySize(34), math.floor(self.full_height * 0.08)))
     local footer_gap = Screen:scaleBySize(8)
     local grid_h = math.max(1, self.full_height - grid_top - edge_pad - footer_gap - footer_h
         - (rows - 1) * gap)
@@ -506,10 +525,18 @@ function LayoutSelect:init()
                     }
                     thumb_children[#thumb_children + 1] = tchip
                 end
+                local name_text = t("layout." .. id)
+                local name_max_w = math.max(1, card_w - 2 * thumb_pad)
+                local name_face = MahjongUI.fitTextFace(
+                    name_text, "smallinfofont", Screen:scaleBySize(16),
+                    Screen:scaleBySize(10), name_max_w, name_h)
                 local name = TextWidget:new{
-                        text = t("layout." .. id),
+                    text = name_text,
                     padding = 0,
-                    face = Font:getFace("smallinfofont", Screen:scaleBySize(16)),
+                    face = name_face,
+                    max_width = name_max_w,
+                    forced_height = name_h,
+                    truncate_with_ellipsis = true,
                     fgcolor = Blitbuffer.COLOR_BLACK,
                 }
                 local card_content = VerticalGroup:new{
@@ -572,12 +599,12 @@ function LayoutSelect:init()
     end
 
     local left = ButtonWidget:new{
-        text = "←", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
+        text = "←", width = footer_h, height = footer_h,
         bordersize = Screen:scaleBySize(1), padding = 0,
         callback = function() self:setPage(self.page - 1) end,
     }
     local right = ButtonWidget:new{
-        text = "→", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
+        text = "→", width = footer_h, height = footer_h,
         bordersize = Screen:scaleBySize(1), padding = 0,
         callback = function() self:setPage(self.page + 1) end,
     }
@@ -591,7 +618,9 @@ function LayoutSelect:init()
     self._page_right = right
     local indicator = TextWidget:new{
         text = string.format("%d/%d", self.page, self.page_count), padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(15)),
+        face = MahjongUI.fitTextFace(string.format("%d/%d", self.page, self.page_count),
+            "smallinfofont", Screen:scaleBySize(15), Screen:scaleBySize(9),
+            math.max(1, footer_h * 2), footer_h),
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local page_button_gap = Screen:scaleBySize(14)

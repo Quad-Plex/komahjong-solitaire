@@ -7,6 +7,8 @@ is not needed to install or use the plugin.
   notes, and user-story index.
 - [`implementation-plan/`](implementation-plan/) contains the detailed user-story documents and
   implementation history.
+- Cross-device UI rules and the responsive regression matrix are documented in the main
+  [`README.md`](../README.md) and the KOReader-specific [`AGENTS.md`](../AGENTS.md).
 - [`../AGENTS.md`](../AGENTS.md) remains at the repository root because it is consumed as the
   repository's agent and contributor guidance.
 

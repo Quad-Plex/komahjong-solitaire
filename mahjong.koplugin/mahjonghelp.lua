@@ -4,7 +4,6 @@ local Device = require("device")
 local Screen = Device.screen
 local UIManager = require("ui/uimanager")
 local Blitbuffer = require("ffi/blitbuffer")
-local Font = require("ui/font")
 local Geometry = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
@@ -34,16 +33,22 @@ local HelpWidget = InputContainer:extend{
     page = 1,
 }
 
-local function label(value, size, color)
+local function label(value, size, color, max_width)
+    local text = t(value)
+    local preferred = Screen:scaleBySize(size or 15)
+    local face = MahjongUI.fitTextFace(text, "smallinfofont", preferred,
+        Screen:scaleBySize(8), max_width or Screen:getWidth(),
+        math.max(1, Screen:scaleBySize((size or 15) + 5)))
     return TextWidget:new{
-        text = t(value), padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(size or 15)),
+        text = text, padding = 0, face = face,
+        max_width = max_width or Screen:getWidth(),
+        truncate_with_ellipsis = true,
         fgcolor = color or Blitbuffer.COLOR_BLACK,
     }
 end
 
-local function bullet(value)
-    return label("• " .. t(value), 15)
+local function bullet(value, max_width)
+    return label("• " .. t(value), 15, nil, max_width)
 end
 
 local function icon(name, size)
@@ -85,8 +90,7 @@ local function icon_group(names, description, group_size, max_width)
     local boundary_gap = Screen:scaleBySize(12)
     if max_width then
         icon_size = math.min(icon_size,
-            math.max(Screen:scaleBySize(12),
-                math.floor((max_width - (group_size - 1) * row_gap) / group_size)))
+            math.max(2, math.floor((max_width - (group_size - 1) * row_gap) / group_size)))
     end
     local icons = {}
     for i, name in ipairs(names) do
@@ -120,15 +124,19 @@ local function icon_group(names, description, group_size, max_width)
         group[#group + 1] = HorizontalGroup:new(icons)
     end
     for line in t(description):gmatch("[^\n]+") do
-        group[#group + 1] = label(line, 13)
+        group[#group + 1] = label(line, 13, nil, max_width)
     end
     return VerticalGroup:new(group)
 end
 
 local function board_tile(board, x, y, layer, marker, px, py, tw, th, tile_w, tile_h)
+    local marker_face = MahjongUI.fitTextFace(marker, "tfont", Screen:scaleBySize(26),
+        Screen:scaleBySize(8), math.max(1, tw - Screen:scaleBySize(4)),
+        math.max(1, th - Screen:scaleBySize(4)))
     local marker_widget = TextWidget:new{
         text = marker, padding = 0, bold = true,
-        face = Font:getFace("tfont", Screen:scaleBySize(26)),
+        face = marker_face,
+        max_width = math.max(1, tw - Screen:scaleBySize(4)),
         fgcolor = Blitbuffer.COLOR_BLACK,
     }
     local marker_layer = CenterContainer:new{
@@ -219,24 +227,35 @@ end
 
 function HelpWidget:buildPage()
     local gap = Screen:scaleBySize(8)
-    local title = TextWidget:new{
-        text = t("help.title"), padding = 0, bold = true, underline = true,
-        face = Font:getFace("tfont", Screen:scaleBySize(21)),
-    }
-    local close = ButtonWidget:new{
-        icon = "mahjong/close", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
-        icon_width = Screen:scaleBySize(20), icon_height = Screen:scaleBySize(20),
-        bordersize = 0, padding = 0, callback = function() self:closeDialog() end,
-    }
+    local compact = MahjongUI.isNarrow(self.full_width) or self.full_height < 700
     local panel_w = math.max(1, math.floor(self.full_width * 0.86))
     panel_w = math.min(panel_w, math.max(1, self.full_width - 2 * Screen:scaleBySize(8)))
-    local panel_padding = math.min(Screen:scaleBySize(22), math.max(2, math.floor(panel_w * 0.08)))
+    local panel_padding = math.min(Screen:scaleBySize(22),
+        math.max(2, math.min(math.floor(panel_w * 0.08), math.floor(self.full_height * 0.03))))
     local inner_w = math.max(1, panel_w - 2 * panel_padding)
+    local title = TextWidget:new{
+        text = t("help.title"), padding = 0, bold = true, underline = true,
+        face = MahjongUI.fitTextFace(t("help.title"), "tfont",
+            Screen:scaleBySize(compact and 17 or 21), Screen:scaleBySize(10),
+            math.max(1, inner_w - 2 * Screen:scaleBySize(34)), Screen:scaleBySize(32)),
+        max_width = math.max(1, inner_w - 2 * Screen:scaleBySize(34)),
+        truncate_with_ellipsis = true,
+    }
+    local close_size = math.max(1, math.min(Screen:scaleBySize(34),
+        math.floor(self.full_height * 0.07)))
+    local close = ButtonWidget:new{
+        icon = "mahjong/close", width = close_size, height = close_size,
+        icon_width = math.floor(close_size * 0.6), icon_height = math.floor(close_size * 0.6),
+        bordersize = 0, padding = 0, callback = function() self:closeDialog() end,
+    }
     local function section_heading(value)
+        local text = t(value)
+        local heading_face = MahjongUI.fitTextFace(text, "tfont", Screen:scaleBySize(18),
+            Screen:scaleBySize(10), inner_w, Screen:scaleBySize(26))
         return CenterContainer:new{
             TextWidget:new{
-                text = t(value), padding = 0, bold = true,
-                face = Font:getFace("tfont", Screen:scaleBySize(18)),
+                text = text, padding = 0, bold = true, face = heading_face,
+                max_width = inner_w, truncate_with_ellipsis = true,
             },
             dimen = Geometry:new{ w = inner_w, h = Screen:scaleBySize(26) },
         }
@@ -244,18 +263,18 @@ function HelpWidget:buildPage()
     local title_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = close.width },
         CenterContainer:new{
-            title,
-            dimen = Geometry:new{ w = math.max(1, inner_w - 2 * close.width), h = Screen:scaleBySize(36) },
+                title,
+            dimen = Geometry:new{ w = math.max(1, inner_w - 2 * close.width), h = close_size },
         },
         close,
     }
     local left = ButtonWidget:new{
-        text = "←", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
+        text = "←", width = close_size, height = close_size,
         bordersize = Screen:scaleBySize(1), padding = 0,
         callback = function() self:setPage(1) end,
     }
     local right = ButtonWidget:new{
-        text = "→", width = Screen:scaleBySize(34), height = Screen:scaleBySize(34),
+        text = "→", width = close_size, height = close_size,
         bordersize = Screen:scaleBySize(1), padding = 0,
         callback = function() self:setPage(2) end,
     }
@@ -264,27 +283,27 @@ function HelpWidget:buildPage()
     else
         if right.disable then right:disable() else right.enabled = false end
     end
-    local page_indicator = label(string.format("%d/2", self.page), 15)
+    local page_indicator = label(string.format("%d/2", self.page), 15, nil, inner_w)
     local footer = CenterContainer:new{
         HorizontalGroup:new{
-            left, HorizontalSpan:new{ width = Screen:scaleBySize(14) },
+            left, HorizontalSpan:new{ width = math.max(1, math.floor(close_size * 0.4)) },
             page_indicator, HorizontalSpan:new{ width = Screen:scaleBySize(14) }, right,
         },
-        dimen = Geometry:new{ w = inner_w, h = Screen:scaleBySize(34) },
+        dimen = Geometry:new{ w = inner_w, h = close_size },
     }
     local content
     if self.page == 1 then
         content = VerticalGroup:new{
             align = "left",
-            label("help.page_one_1", 15), label("help.page_one_2", 15),
-            label("help.page_one_3", 15), label("help.page_one_4", 15),
-            label("help.page_one_5", 15),
+            label("help.page_one_1", 15, nil, inner_w), label("help.page_one_2", 15, nil, inner_w),
+            label("help.page_one_3", 15, nil, inner_w), label("help.page_one_4", 15, nil, inner_w),
+            label("help.page_one_5", 15, nil, inner_w),
             VerticalSpan:new{ width = gap },
             CenterContainer:new{
                 lifted_example_board(inner_w),
                 dimen = Geometry:new{ w = inner_w, h = Screen:scaleBySize(96) },
             },
-            label("help.page_one_6", 12), label("help.page_one_7", 12),
+            label("help.page_one_6", 12, nil, inner_w), label("help.page_one_7", 12, nil, inner_w),
             VerticalSpan:new{ width = gap },
             section_heading("help.tile_groups"),
             icon_group({"c1", "c2", "c3", "d1", "d2", "d3", "b1", "b2", "b3"}, "help.characters", 3, inner_w),
@@ -297,30 +316,33 @@ function HelpWidget:buildPage()
         content = VerticalGroup:new{
             align = "left",
             section_heading("help.scoring"),
-            bullet("help.each_pair"), bullet("help.chain_bonus"), label("help.chain_method", 15),
-            label("help.chain_method_2", 15),
-            bullet("help.combo_1"), label("help.combo_2", 15), bullet("help.combo_3"),
-            label("help.combo_4", 15), bullet("help.hint_penalty"), label("help.hint_session", 15),
-            bullet("help.shuffle_penalty"),
+            bullet("help.each_pair", inner_w), bullet("help.chain_bonus", inner_w),
+            label("help.chain_method", 15, nil, inner_w),
+            label("help.chain_method_2", 15, nil, inner_w),
+            bullet("help.combo_1", inner_w), label("help.combo_2", 15, nil, inner_w),
+            bullet("help.combo_3", inner_w),
+            label("help.combo_4", 15, nil, inner_w), bullet("help.hint_penalty", inner_w),
+            label("help.hint_session", 15, nil, inner_w),
+            bullet("help.shuffle_penalty", inner_w),
             VerticalSpan:new{ width = gap },
             section_heading("help.features"),
-            bullet("help.undo_1"), label("help.undo_2", 15),
-            bullet("help.pause_1"), label("help.pause_2", 15),
+            bullet("help.undo_1", inner_w), label("help.undo_2", 15, nil, inner_w),
+            bullet("help.pause_1", inner_w), label("help.pause_2", 15, nil, inner_w),
         }
     end
     local panel_h = math.floor(self.full_height * 0.82) + Screen:scaleBySize(35)
     panel_h = math.min(panel_h, math.max(1, self.full_height - 2 * Screen:scaleBySize(8)))
     local inner_h = math.max(1, panel_h - 2 * panel_padding)
-    local title_h = Screen:scaleBySize(36)
-    local footer_h = Screen:scaleBySize(34)
+    local title_h = close_size
+    local footer_h = close_size
     local credits
     local credits_h = Screen:scaleBySize(30)
     if self.page == 2 then
         credits = CenterContainer:new{
             VerticalGroup:new{
                 align = "center",
-                label("help.created_by", 12),
-                label("https://github.com/Quad-Plex/komahjong-solitaire", 12),
+                label("help.created_by", 12, nil, inner_w),
+                label("https://github.com/Quad-Plex/komahjong-solitaire", 12, nil, inner_w),
             },
             dimen = Geometry:new{ w = inner_w, h = credits_h },
         }

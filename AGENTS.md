@@ -400,6 +400,47 @@ local area, with a delayed retry only for structural changes that can overlap ra
   cropping behavior; page changes and card selection are tested through the
   picker widget's active-page hit regions.
 
+## Responsive KOReader widget construction
+
+KOReader widget sizing is intrinsic, not CSS-like. A responsive widget must constrain every child
+that can contribute text or geometry; setting `width` or `height` on a group is not sufficient.
+Use this checklist when adding or changing a screen-sized plugin widget:
+
+- Refresh `Screen:getWidth()` and `Screen:getHeight()` during `init()` or every layout rebuild. Do
+  not rely on class-level dimensions because KOReader can rotate or change the active viewport.
+- Use `Screen:scaleBySize()` for baseline tokens, then clamp them against the actual available
+  width and height. A scaled minimum must never force a panel, footer, toolbar, or card beyond the
+  canvas.
+- Remember that `HorizontalGroup:getSize()` sums child widths and `VerticalGroup:getSize()` uses
+  the widest child. Their named `width`/`height` fields do not constrain layout. Use explicit
+  `Geometry`/`dimen`, a fixed-size `CenterContainer`, or an `OverlapGroup` with child
+  `overlap_offset` when exact screen coordinates matter.
+- Treat every `TextWidget` as a single-line intrinsic-size widget. Probe candidate faces with the
+  real text, choose the largest face that fits the slot, set `max_width`, and retain ellipsis or a
+  deliberate wrapping fallback for longer translations and live values. Do not measure a short
+  placeholder such as `"0"` when the rendered value can become `"340 (Confounding Cross)"`.
+- Give labels, values, titles, badges, timers, and button captions their own bounded slots. A
+  `CenterContainer` centers oversized content but does not clip it, so it cannot protect a card
+  from an unrestricted child.
+- For floating dialogs, calculate a panel maximum from the canvas, expose an absolute
+  `_panel_geom`, and keep the panel inside `x >= 0`, `y >= 0`, `x + w <= screen_w`, and
+  `y + h <= screen_h`. Use a compact or stacked layout when the normal horizontal arrangement
+  cannot fit; never allow intrinsic content to silently widen the panel off-screen.
+- Keep rendering geometry and hit-test geometry derived from the same calculated rectangles. Do
+  not let a parent group recenter or expand rendered cards after `_card_rects` has been calculated.
+- Bound lower chrome as well as the main content. HUD chips need inner width for icon, value, and
+  label; feedback bands and timers need a capped height and a fitted face; toolbar captions need
+  a max width independent of the button icon.
+- Test at representative portrait and short-landscape canvases, including at least a narrow phone,
+  a common Kindle canvas, and a PW12-sized canvas. Assert panel/card bounds and text max widths,
+  not only that the widget constructor returns successfully.
+- Keep the test mock faithful to KOReader's intrinsic `getSize()` behavior. Pass-through group stubs
+  can hide the exact overflow that will make a real device recenter or clip the widget.
+
+The shared `mahjongui.lua` `fitTextFace` helper is the reference implementation for selecting a
+face from text, width, and height constraints. `tests/widget/responsive.lua` is the reference
+regression suite for screen-size and floating-panel checks.
+
 ## Mahjong plugin — current state and key contracts (US-01..US-50 and US-52..US-53 shipped)
 
 This repo builds `mahjong.koplugin` (Mahjong Solitaire). `development/IMPLEMENTATION_PLAN.md` is
@@ -614,11 +655,13 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
      `_panel_geom`; `onShow` re-dirties a refresh function over `_panel_geom` (else the panel may
      stay invisible); row buttons `setDirty(self, "ui")`; toggle labels are rebuilt via
      `setButtonText` (Button:setText can truncate changed values); value buttons
-     are sized to the widest value; timer-interval button greys out in "On interaction" mode. The
-     stats screen is the read-only counterpart: right-aligned labels + a uniform value column, a
-     Reset button gated behind a `ConfirmBox`, and an `onClose` hook (main.lua's `openStats`
-     pauses the timer while the card is up, exactly like `openSettings`). The record it lists is
-     `MahjongStats` (`total_time` feeds the average-time-per-win row).
+      are sized to the widest value; timer-interval button greys out in "On interaction" mode. The
+      stats screen is the read-only counterpart: right-aligned labels + a uniform value column, a
+      Reset button gated behind a `ConfirmBox`, and an `onClose` hook (main.lua's `openStats`
+      pauses the timer while the card is up, exactly like `openSettings`). The record it lists is
+      `MahjongStats` (`total_time` feeds the average-time-per-win row). Both floating cards use
+      bounded, automatically fitted typography and clamp their panel geometry to the runtime
+      canvas; the stats columns stack only when the dual-column layout cannot fit.
  12. **Long-press auto-solve (US-19):** KOReader `Button` fires `hold_callback` ~0.5 s after
      contact (the device-global `ges_hold_interval_ms`), NOT per-widget, so a ~10 s hold is
      implemented as arm/cancel: the Hint button is a `LongPressButton` (a `ButtonWidget` subclass

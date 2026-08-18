@@ -27,7 +27,7 @@ settings, scoring, hints, undo, shuffle and per-layout aswell as global statisti
 - Long-press Hint to auto-solve a board when you want to watch it finish (Invalidates score for the current game)
 - Win summaries, lifetime statistics, per-layout wins, best scores, and best times
 - Bundled English, German, and Spanish UI translations, with automatic locale-based selection for German and Spanish KOReader locales
-- Layout and board sizing that adapt to the reader's screen (untested)
+- Layout, typography, dialogs, and board sizing that adapt to the reader's screen
 
 ## Requirements
 
@@ -187,6 +187,18 @@ beneath them. Tile faces and bevel segments are rendered independently.
 After a pair is removed, only the changed face, bevel, and affected local edges are refreshed.
 Terminal dialogs wait for structural board repaint work to settle. These details reduce large
 screen flashes and help avoid stale pixels on e-ink displays.
+
+## Responsive UI
+
+The plugin reads the runtime KOReader canvas dimensions when each screen-sized widget is built.
+The picker, HUD, feedback band, toolbar, Settings, Help, and Statistics windows use bounded text
+slots and automatically reduce typography when the available width or height is smaller. The
+Statistics window keeps its two-column layout on normal Kindle-sized screens and stacks columns
+only when the available panel width cannot hold both columns.
+
+Responsive behavior is tested with the headless suite at phone, Kindle-sized, PW12-sized portrait,
+and short landscape dimensions. The PW12 regression canvas used by the tests is 1072x1448; this is
+a geometry target rather than a requirement that every device report exactly those dimensions.
 
 ## Development
 

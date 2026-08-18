@@ -77,16 +77,17 @@ local SettingsWidget = InputContainer:extend{
 -- label when the value changes. The text font is set explicitly (matching the
 -- measurement in init) so the value always renders in the same face/size.
 local function makeButton(text, w, h, refresh)
+    local padding = math.max(1, math.min(Screen:scaleBySize(6), math.floor(h * 0.16)))
     local btn = ButtonWidget:new{
         text = text,
         text_font_face = "cfont",
-        text_font_size = 20,
+        text_font_size = math.max(8, math.min(20, math.floor(h * 0.6))),
         text_font_bold = true,
         width = w,
         height = h,
         bordersize = Screen:scaleBySize(1),
         radius = Screen:scaleBySize(4),
-        padding = Screen:scaleBySize(6),
+        padding = padding,
         callback = nil,
     }
     btn.refresh = refresh
@@ -132,9 +133,13 @@ function SettingsWidget:init()
     }
     self._rows = {}
 
+    local compact = MahjongUI.isNarrow(self.full_width) or self.full_height < 700
     local label_gap = math.min(Screen:scaleBySize(12),
-        math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.03)))
-    local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(16))
+        math.max(Screen:scaleBySize(4), math.floor(self.full_height * 0.018)))
+    local label_face = MahjongUI.fitTextFace(
+        t("settings.deselect_on_empty"), "smallinfofont",
+        Screen:scaleBySize(compact and 13 or 16), Screen:scaleBySize(8),
+        math.max(1, math.floor(self.full_width * 0.42)), Screen:scaleBySize(22))
     local label_color = Blitbuffer.COLOR_DARK_GRAY
 
     -- Value texts ----------------------------------------------------------
@@ -163,7 +168,9 @@ function SettingsWidget:init()
     -- value on a SINGLE line, so nothing wraps, truncates, or gets cut off
     -- when a value is changed later. Values are measured in the exact font the
     -- Button renders them with (cfont 20 bold, see makeButton).
-    local btn_face = Font:getFace("cfont", 20)
+    local control_h = math.max(1, math.min(Screen:scaleBySize(32),
+        math.floor(self.full_height * 0.06)))
+    local btn_face = Font:getFace("cfont", math.max(8, math.min(20, math.floor(control_h * 0.6))))
     local widest_value = 0
     local function considerValue(v)
         local w = measureText(v, btn_face, true)
@@ -208,8 +215,14 @@ function SettingsWidget:init()
         and math.max(1, max_panel_w - 2 * panel_padding)
         or toggle_w
     local function row(label, control)
+        local label_max_w = stacked and control_w or max_label_w
+        local row_label_face = MahjongUI.fitTextFace(
+            label, "smallinfofont", label_face.size or Screen:scaleBySize(16),
+            Screen:scaleBySize(8), label_max_w, Screen:scaleBySize(22))
         local label_widget = TextWidget:new{
-            text = label, padding = 0, face = label_face, fgcolor = label_color,
+            text = label, padding = 0, face = row_label_face,
+            max_width = label_max_w, truncate_with_ellipsis = true,
+            fgcolor = label_color,
         }
         if stacked then
             return VerticalGroup:new{
@@ -230,7 +243,7 @@ function SettingsWidget:init()
     -- Hint button --------------------------------------------------------
     local hints_btn
     hints_btn = makeButton(
-        self.changes.hints and t("settings.on") or t("settings.off"), control_w, Screen:scaleBySize(32),
+        self.changes.hints and t("settings.on") or t("settings.off"), control_w, control_h,
         function() return self.changes.hints and t("settings.on") or t("settings.off") end)
     hints_btn.callback = function()
         self.changes.hints = not (self.changes.hints or false)
@@ -243,7 +256,7 @@ function SettingsWidget:init()
     local deselect_on_empty_btn
     deselect_on_empty_btn = makeButton(
         self.changes.deselect_on_empty and t("settings.on") or t("settings.off"),
-        control_w, Screen:scaleBySize(32),
+         control_w, control_h,
         function()
             return self.changes.deselect_on_empty and t("settings.on") or t("settings.off")
         end)
@@ -255,7 +268,7 @@ function SettingsWidget:init()
     self._rows.deselect_on_empty = deselect_on_empty_btn
 
     local language_btn
-    language_btn = makeButton(languageText(self.changes.language), control_w, Screen:scaleBySize(32),
+    language_btn = makeButton(languageText(self.changes.language), control_w, control_h,
         function() return languageText(self.changes.language) end)
     language_btn.callback = function()
         local index = 1
@@ -275,7 +288,7 @@ function SettingsWidget:init()
     local setIntervalEnabled
     local timer_mode_btn
     timer_mode_btn = makeButton(
-        timerModeText(self.changes.timer_update), control_w, Screen:scaleBySize(32),
+        timerModeText(self.changes.timer_update), control_w, control_h,
         function() return timerModeText(self.changes.timer_update) end)
     timer_mode_btn.callback = function()
         local idx = 1
@@ -295,7 +308,7 @@ function SettingsWidget:init()
     -- meaningless (the mm:ss only repaints on board interaction), so the
     -- button is greyed out and its taps are ignored.
     timer_interval_btn = makeButton(
-        intervalText(self.changes.timer_interval), control_w, Screen:scaleBySize(32),
+        intervalText(self.changes.timer_interval), control_w, control_h,
         function() return intervalText(self.changes.timer_interval) end)
     setIntervalEnabled = function()
         local on = self.changes.timer_update ~= "move"
@@ -327,9 +340,9 @@ function SettingsWidget:init()
         math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.025)))
     local bottom_w = math.min(Screen:scaleBySize(150),
         math.max(1, math.floor((max_panel_w - 2 * panel_padding - gap) / 2)))
-    local reset_btn = makeButton(t("settings.reset"), bottom_w, Screen:scaleBySize(32))
+    local reset_btn = makeButton(t("settings.reset"), bottom_w, control_h)
     reset_btn.callback = function() self:resetToDefaults() end
-    local save_btn = makeButton(t("settings.save"), bottom_w, Screen:scaleBySize(32))
+    local save_btn = makeButton(t("settings.save"), bottom_w, control_h)
     save_btn.callback = function() self:save() end
 
     -- Title row: "Settings" centered, with a close X pinned at the panel's
@@ -343,13 +356,20 @@ function SettingsWidget:init()
     -- the X flush against the panel's inner right edge.
     local content_w = stacked and control_w or natural_content_w
     local title_row_w = math.max(content_w, 2 * bottom_w + gap)
+    local close_size = math.max(1, math.min(Screen:scaleBySize(36),
+        math.floor(self.full_height * 0.08)))
+    local title_max_w = math.max(1, title_row_w - close_size - label_gap)
+    local title_face = MahjongUI.fitTextFace(
+        t("settings.title"), "tfont", Screen:scaleBySize(compact and 16 or 20),
+        Screen:scaleBySize(10), title_max_w, close_size)
     local title_widget = TextWidget:new{
         text = t("settings.title"),
         padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(20)),
+        face = title_face,
+        max_width = title_max_w,
+        truncate_with_ellipsis = true,
     }
-    local title_w = title_widget:getSize().w
-    local close_size = title_widget:getSize().h + Screen:scaleBySize(8)
+    local title_w = math.min(title_widget:getSize().w, title_max_w)
     self._close_btn = ButtonWidget:new{
         icon = "mahjong/close",
         width = close_size,
@@ -372,8 +392,8 @@ function SettingsWidget:init()
 
     -- Floating panel: a white rounded card centered over the game. The outer
     -- widget stays transparent, so the board shows through around the card.
-    local top_pad = math.min(stacked and Screen:scaleBySize(16) or Screen:scaleBySize(40),
-        math.max(Screen:scaleBySize(8), math.floor(self.full_height * 0.04)))
+    local top_pad = math.min(stacked and Screen:scaleBySize(10) or Screen:scaleBySize(18),
+        math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.025)))
     local panel = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,

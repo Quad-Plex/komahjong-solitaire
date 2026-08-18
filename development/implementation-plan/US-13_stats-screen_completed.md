@@ -20,6 +20,14 @@ As a player, I want a dedicated stats screen so I can review my lifetime progres
   `openSettings`.
 - `main.lua`: `createStatusBar()` wires the Stats button; `openStats()` shows the dialog.
 
+## Responsive follow-up
+
+The floating card now fits labels, values, headers, and the Reset control to bounded slots. Its
+two-column layout remains unchanged when it fits the panel; on narrow canvases the columns stack
+instead of expanding beyond the screen. Title and value faces are selected from the available
+width and height, and the panel geometry is checked against the runtime canvas in the responsive
+widget suite.
+
 **Acceptance:**
 - `tests/us13_stats.lua` (registered in `tests/run.sh`): the HUD exposes a stats button whose
   callback opens the dialog; the card lists the persisted lifetime stats; Reset zeroes them only

@@ -1,6 +1,8 @@
 -- Small UI helpers shared by the plugin's screen-sized widgets.
 
 local Screen = require("device").screen
+local Font = require("ui/font")
+local TextWidget = require("ui/widget/textwidget")
 
 local UI = {}
 
@@ -24,6 +26,26 @@ end
 -- pixel width.
 function UI.isNarrow(width)
     return width < 480
+end
+
+-- Pick the largest face that fits both dimensions of a bounded text slot.
+-- TextWidget is single-line, so callers should still provide max_width as a
+-- final ellipsis guard for translations or live values that grow later.
+function UI.fitTextFace(text, face_name, preferred_size, minimum_size, max_width, max_height)
+    local size = math.max(1, math.floor(preferred_size))
+    local minimum = math.max(1, math.floor(minimum_size))
+    while size >= minimum do
+        local face = Font:getFace(face_name, size)
+        local probe = TextWidget:new{ text = text, padding = 0, face = face }
+        local dimen = probe:getSize()
+        if probe.free then probe:free() end
+        if (not max_width or dimen.w <= max_width)
+                and (not max_height or dimen.h <= max_height) then
+            return face, size
+        end
+        size = size - 1
+    end
+    return Font:getFace(face_name, minimum), minimum
 end
 
 return UI

@@ -14,7 +14,6 @@
 
 local Screen = require("device").screen
 local Blitbuffer = require("ffi/blitbuffer")
-local Font = require("ui/font")
 local Geometry = require("ui/geometry")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local HorizontalGroup = require("ui/widget/horizontalgroup")
@@ -57,25 +56,43 @@ local HudBar = FrameContainer:extend{
 -- label text (right). Returns the chip widget, its layout (for size
 -- invalidation) and the value TextWidget (for setStats).
 local function buildChip(icon, label, chip_w, chip_h, compact)
-    local pad = Screen:scaleBySize(compact and 4 or 6)
-    local icon_size = Screen:scaleBySize(compact and 16 or 20)
+    local border = math.max(1, Screen:scaleBySize(1))
+    local pad = math.max(1, math.min(Screen:scaleBySize(compact and 4 or 6),
+        math.floor(chip_h * 0.16)))
+    local inner_h = math.max(1, chip_h - 2 * pad - 2 * border)
+    local icon_size = math.max(1, math.min(Screen:scaleBySize(compact and 16 or 20), inner_h))
+    local gap = math.max(1, math.min(Screen:scaleBySize(4), math.floor(chip_w * 0.04)))
+    local inner_w = math.max(1, chip_w - 2 * pad - 2 * border)
+    local label_max_w = compact and 0 or math.max(1, math.floor(inner_w * 0.34))
+    local value_max_w = math.max(1, inner_w - icon_size - gap
+        - (compact and 0 or gap) - label_max_w)
+    local value_face = MahjongUI.fitTextFace(
+        "000", "smallinfofontbold", Screen:scaleBySize(compact and 14 or 16),
+        Screen:scaleBySize(9), value_max_w, inner_h)
     local value = TextWidget:new{
         text = "0",
         bold = true,
         padding = 0,
-        face = Font:getFace("smallinfofontbold", Screen:scaleBySize(compact and 14 or 16)),
+        face = value_face,
+        max_width = value_max_w,
+        truncate_with_ellipsis = false,
     }
     local content_children = {
         IconWidget:new{ icon = icon, width = icon_size, height = icon_size },
-        HorizontalSpan:new{ width = Screen:scaleBySize(4) },
+        HorizontalSpan:new{ width = gap },
         value,
     }
     if not compact then
-        content_children[#content_children + 1] = HorizontalSpan:new{ width = Screen:scaleBySize(4) }
+        local label_face = MahjongUI.fitTextFace(
+            label, "smallinfofont", Screen:scaleBySize(10), Screen:scaleBySize(8),
+            label_max_w, inner_h)
+        content_children[#content_children + 1] = HorizontalSpan:new{ width = gap }
         content_children[#content_children + 1] = TextWidget:new{
             text = label,
             padding = 0,
-            face = Font:getFace("smallinfofont", Screen:scaleBySize(10)),
+            face = label_face,
+            max_width = label_max_w,
+            truncate_with_ellipsis = true,
             fgcolor = Blitbuffer.COLOR_BLACK, -- high contrast
         }
     end
@@ -83,7 +100,7 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
 
     local chip = FrameContainer:new{
         content,
-        bordersize = Screen:scaleBySize(1),
+        bordersize = border,
         color = CHIP_BORDER,
         background = CHIP_BG,
         radius = Screen:scaleBySize(8),
@@ -107,27 +124,7 @@ function HudBar:init()
     self._padding_bottom = 0
     self.bordersize = 0
 
-    local chip_gap = Screen:scaleBySize(8)
-    local edge_pad = Screen:scaleBySize(8)
-    local right_pad = Screen:scaleBySize(8)
-
-    -- Title text (row 1, center)
     local compact = MahjongUI.isNarrow(self.full_width)
-    local title_widget = TextWidget:new{
-        text = self.title or "",
-        padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(compact and 16 or 18)),
-    }
-    local h1 = title_widget:getSize().h
-
-    -- Dummy chip to measure natural chip height (initial estimate)
-    local dummy_chip = select(1, buildChip("mahjong/hud_pairs", t("hud.pairs"), 100, 40, compact))
-    local h2 = dummy_chip:getSize().h
-    self.HUD_H = h1 + h2 + Screen:scaleBySize(compact and 8 or 12)
-
-    -- Square quit button width = height = HUD_H
-    local quit_w = self.right_icon and self.right_icon_tap_callback and self.HUD_H or 0
-
     -- Left buttons: the new `left_icons` list (one button per entry) or the
     -- legacy single `left_icon` fields (US-13). Each is a slim rounded-border
     -- button pinned to the far left, so a row of them reads as controls
@@ -142,17 +139,55 @@ function HudBar:init()
             { icon = self.left_icon, size_ratio = 0.45, callback = self.left_icon_tap_callback },
         }
     end
-    local left_btn_w = math.floor(self.HUD_H * 0.6)
+    -- Reserve a compact two-row status bar. The previous implementation let
+    -- device font metrics determine both rows, which made the HUD consume a
+    -- large fraction of tall Kindle screens.
+    local title_row_h = math.max(1, math.min(
+        Screen:scaleBySize(compact and 28 or 34),
+        math.floor(self.full_height * 0.05)))
+    local chip_h = math.max(1, math.min(
+        Screen:scaleBySize(compact and 30 or 38),
+        math.floor(self.full_height * 0.055)))
+    local row_gap = math.max(1, math.min(
+        Screen:scaleBySize(compact and 4 or 6),
+        math.floor(self.full_height * 0.012)))
+    local bar_edge_pad = math.max(1, math.min(
+        Screen:scaleBySize(compact and 3 or 5),
+        math.floor(self.full_height * 0.01)))
+    self.HUD_H = title_row_h + chip_h + row_gap + 2 * bar_edge_pad
+
+    -- Square quit button width = height = HUD_H
+    local quit_w = self.right_icon and self.right_icon_tap_callback and self.HUD_H or 0
+    local left_btn_w = math.max(1, math.floor(self.HUD_H * 0.6))
     local left_w = #left_specs * left_btn_w
     local content_w = self.full_width - quit_w - left_w
 
+    -- Title text (row 1, center). Keep it centered in the full screen while
+    -- preventing it from expanding the intrinsic width of the bar.
+    local title_max_w = math.max(1, math.min(
+        self.full_width - 2 * left_w,
+        content_w - Screen:scaleBySize(8)))
+    local title_face = MahjongUI.fitTextFace(
+        self.title or "", "tfont", Screen:scaleBySize(compact and 16 or 18),
+        Screen:scaleBySize(10), title_max_w, title_row_h)
+    local title_widget = TextWidget:new{
+        text = self.title or "",
+        padding = 0,
+        face = title_face,
+        max_width = title_max_w,
+        truncate_with_ellipsis = true,
+    }
+
+    local chip_gap = math.max(1, math.min(Screen:scaleBySize(8), math.floor(self.full_width * 0.02)))
+    local edge_pad = math.max(1, math.min(Screen:scaleBySize(8), math.floor(self.full_width * 0.02)))
+    local right_pad = edge_pad
     local available_for_chips = content_w - edge_pad - right_pad - (2 * chip_gap)
     local chip_w = math.max(1, math.floor(available_for_chips / 3))
 
-    -- Build chips with precise chip_w and h2
-    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", t("hud.pairs"), chip_w, h2, compact)
-    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", t("hud.free"), chip_w, h2, compact)
-    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", t("hud.score"), chip_w, h2, compact)
+    -- Build chips with precise dimensions and text that fits those dimensions.
+    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", t("hud.pairs"), chip_w, chip_h, compact)
+    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", t("hud.free"), chip_w, chip_h, compact)
+    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", t("hud.score"), chip_w, chip_h, compact)
     self._value_widgets = { pairs = val_pairs, free = val_free, score = val_score }
     self._chip_layouts = { lay_pairs, lay_free, lay_score }
 
@@ -199,7 +234,7 @@ function HudBar:init()
     -- Row 1: Center the title in the full bar, not merely in the space
     -- between the left controls and the quit button. With settings + stats on
     -- the left, centering within content_w visibly shifts the title right.
-    local title_w = title_widget:getSize().w
+    local title_w = math.min(title_widget:getSize().w, title_max_w)
     local title_left = math.floor((self.full_width - title_w) / 2)
     local title_space = math.max(0, title_left - left_w)
     local title_right_space = math.max(0, content_w - title_w - title_space)
@@ -208,7 +243,6 @@ function HudBar:init()
         title_widget,
         HorizontalSpan:new{ width = title_right_space },
     }
-    row1.width = content_w
 
     -- Row 2: Chips with edge gaps and ~8px spacers between them
     local row2 = HorizontalGroup:new{
@@ -220,15 +254,14 @@ function HudBar:init()
         chip_score,
         HorizontalSpan:new{ width = right_pad },
     }
-    row2.width = content_w
 
     -- Left vertical group holding row1 and row2
     local left_vertical_group = VerticalGroup:new{
-        VerticalSpan:new{ height = Screen:scaleBySize(4) },
+        VerticalSpan:new{ height = bar_edge_pad },
         row1,
-        VerticalSpan:new{ height = Screen:scaleBySize(4) },
+        VerticalSpan:new{ height = row_gap },
         row2,
-        VerticalSpan:new{ height = Screen:scaleBySize(4) },
+        VerticalSpan:new{ height = bar_edge_pad },
     }
 
     -- Full bar: HorizontalGroup holding left buttons + left_vertical_group +

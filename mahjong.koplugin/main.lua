@@ -201,10 +201,10 @@ end
 -- Returns the cell (the VerticalGroup), the ButtonWidget itself (so tests can
 -- reach the hold callbacks), and the badge (or nil).
 local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_cb, counter, hide_label)
-    local pad = Screen:scaleBySize(6)
-    local border = Screen:scaleBySize(1)
-    local radius = Screen:scaleBySize(4)
-    local icon_h = h - 2 * pad - 2 * border
+    local pad = math.max(1, math.min(Screen:scaleBySize(6), math.floor(h * 0.12)))
+    local border = math.max(1, math.min(Screen:scaleBySize(1), math.floor(h * 0.04)))
+    local radius = math.min(Screen:scaleBySize(4), math.floor(h * 0.12))
+    local icon_h = math.max(1, h - 2 * pad - 2 * border)
     local button_opts = {
         icon = icon,
         width = w,
@@ -258,10 +258,16 @@ local function createToolbarButton(icon, label, w, h, cb, hold_cb, hold_release_
     if hide_label then
         cell = VerticalGroup:new{ align = "center", button_layer }
     else
+        local label_max_w = math.max(1, w - 2 * pad)
+        local label_face = MahjongUI.fitTextFace(
+            label, "smallinfofont", Screen:scaleBySize(11), Screen:scaleBySize(8),
+            label_max_w, math.max(1, math.floor(h * 0.5)))
         local label_widget = TextWidget:new{
             text = label,
             padding = 0,
-            face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
+            face = label_face,
+            max_width = label_max_w,
+            truncate_with_ellipsis = true,
             fgcolor = Blitbuffer.COLOR_BLACK,
         }
         cell = VerticalGroup:new{
@@ -1024,16 +1030,23 @@ function Mahjong:buildUILayout()
     -- row from the feedback band, and a bottom spacer that lifts the row off
     -- the screen edge; the board fills what remains.
     local compact_toolbar = MahjongUI.isNarrow(self.full_width)
-    local toolbar_btn_h = math.min(Screen:scaleBySize(compact_toolbar and 44 or 48),
-        math.max(Screen:scaleBySize(30), math.floor(self.full_height * 0.10)))
-    local toolbar_gap = Screen:scaleBySize(6)
+    local toolbar_btn_h = math.max(1, math.min(
+        Screen:scaleBySize(compact_toolbar and 40 or 44),
+        math.floor(self.full_height * 0.08)))
+    local toolbar_gap = math.max(1, math.min(Screen:scaleBySize(6),
+        math.floor(self.full_width * 0.015)))
     -- 6 gaps: one at each edge + 4 between the 5 buttons.
     local toolbar_btn_w = math.max(1, math.floor((self.full_width - 6 * toolbar_gap) / 5))
     -- Probe the hint-label height so the toolbar row reserves room for it.
+    local label_max_w = math.max(1, toolbar_btn_w - 2 * Screen:scaleBySize(6))
+    local label_face = MahjongUI.fitTextFace(
+        "New Game", "smallinfofont", Screen:scaleBySize(11), Screen:scaleBySize(8),
+        label_max_w, math.max(1, math.floor(toolbar_btn_h * 0.5)))
     local label_probe = TextWidget:new{
-        text = "Ag",
+        text = "New Game",
         padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(11)),
+        face = label_face,
+        max_width = label_max_w,
     }
     local label_h = compact_toolbar and 0 or label_probe:getSize().h
     label_probe:free()
@@ -1045,18 +1058,29 @@ function Mahjong:buildUILayout()
     -- reserved so the board geometry stays stable when a message shows/clears.
     -- Font is kept small (~0.8× HUD labels) so it reads as a subtle notice;
     -- height is probed from the font so it fits any DPI.
-    local flash_font_size = Screen:scaleBySize(compact_toolbar and 22 or 30)
+    local band_edge_pad = math.max(1, math.min(Screen:scaleBySize(8),
+        math.floor(self.full_width * 0.02)))
+    local flash_pad_top = math.max(1, math.min(Screen:scaleBySize(4),
+        math.floor(self.full_height * 0.005)))
+    local flash_pad_bottom = math.max(1, math.min(
+        Screen:scaleBySize(compact_toolbar and 6 or 10),
+        math.floor(self.full_height * 0.01)))
+    local flash_max_h = math.max(1, math.min(
+        Screen:scaleBySize(compact_toolbar and 40 or 48),
+        math.floor(self.full_height * 0.065)))
+    local flash_face = MahjongUI.fitTextFace(
+        "Ag", "smallinfofont", Screen:scaleBySize(compact_toolbar and 16 or 20),
+        Screen:scaleBySize(9), self.full_width - 2 * band_edge_pad,
+        math.max(1, flash_max_h - flash_pad_top - flash_pad_bottom))
     local flash_probe = TextWidget:new{
         text = "Ag",
         padding = 0,
-        face = Font:getFace("smallinfofont", flash_font_size),
+        face = flash_face,
     }
     local flash_text_h = flash_probe:getSize().h
     flash_probe:free()
-    local flash_pad_top = Screen:scaleBySize(4)
-    local flash_pad_bottom = Screen:scaleBySize(compact_toolbar and 8 or 14)
-    local flash_h = flash_text_h + flash_pad_top + flash_pad_bottom
-    local board_h = math.max(Screen:scaleBySize(80),
+    local flash_h = math.min(flash_max_h, flash_text_h + flash_pad_top + flash_pad_bottom)
+    local board_h = math.max(1,
         self.full_height - status_h - flash_h - 2 * toolbar_top_gap - toolbar_h - bottom_gap)
     self.flash_region = Geometry:new{
         x = 0, y = status_h + board_h, w = self.full_width, h = flash_h,
@@ -1119,7 +1143,6 @@ function Mahjong:buildUILayout()
     -- on the board keep working while a message is showing.  The warning
     -- triangle icon sits on the far left; the text is centered across the
     -- full band width.  Both appear/disappear together.
-    local band_edge_pad = Screen:scaleBySize(8)
     local band_border = Screen:scaleBySize(1)
     -- Icon sized to the band's text (a bit smaller than the cap height) and
     -- vertically aligned with the text's vertical center, so the icon reads
@@ -1140,7 +1163,9 @@ function Mahjong:buildUILayout()
     self.flash_text = TextWidget:new{
         text = "",
         padding = 0,
-        face = Font:getFace("smallinfofont", flash_font_size),
+        face = flash_face,
+        max_width = math.max(1, self.full_width - 2 * band_edge_pad),
+        truncate_with_ellipsis = true,
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         -- OverlapGroup supports per-child overlap_align; "center" centers the
         -- text across the FULL band width, independent of the icon position.
@@ -1153,10 +1178,12 @@ function Mahjong:buildUILayout()
     local timer_probe = TextWidget:new{
         text = "00:00",
         padding = 0,
-        face = Font:getFace("smallinfofont", flash_font_size),
+        face = flash_face,
     }
-    local timer_slot_w = timer_probe:getSize().w
+    local timer_slot_w = math.max(1, timer_probe:getSize().w)
     timer_probe:free()
+    self.flash_text.max_width = math.max(1,
+        self.full_width - timer_slot_w - 2 * band_edge_pad - icon_size - Screen:scaleBySize(8))
     local timer_x = self.full_width - timer_slot_w - band_edge_pad - Screen:scaleBySize(4)
     self.timer_region = Geometry:new{
         x = timer_x, y = self.flash_region.y,
@@ -1165,7 +1192,9 @@ function Mahjong:buildUILayout()
     self.timer_text = TextWidget:new{
         text = MahjongLogic.formatElapsed(0),
         padding = 0,
-        face = Font:getFace("smallinfofont", flash_font_size),
+        face = flash_face,
+        max_width = timer_slot_w,
+        truncate_with_ellipsis = false,
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
         -- Array-form offset on the widget itself (OverlapGroup contract, see
         -- the board's tile widgets). Right-aligned to the band edge with the

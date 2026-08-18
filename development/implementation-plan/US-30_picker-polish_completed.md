@@ -56,6 +56,11 @@ game loads; win games on a couple of layouts and confirm the badges count them.
   `OverlapGroup` stub gained `getSize()` (real overlapgroups are queryable), which the new
   nested thumbnail OverlapGroup needs.
 
+**Responsive follow-up:** picker title and layout-name faces now shrink to their available width
+and height, with `TextWidget.max_width` as an ellipsis guard. Header controls, footer controls,
+and card labels are bounded independently of intrinsic text metrics. The PW12-sized picker and
+narrow-phone geometry are covered by `tests/widget/responsive.lua`.
+
 **Post-US-30 bugfix (picker close leaves the e-ink stale; win-case X stranded the player):**
 
 - `LayoutSelect:closeDialog` (and `startGameWithLayout`'s drop of the picker) now call

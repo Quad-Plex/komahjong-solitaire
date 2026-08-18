@@ -26,7 +26,6 @@ local Device = require("device")
 local Screen = Device.screen
 local UIManager = require("ui/uimanager")
 local Blitbuffer = require("ffi/blitbuffer")
-local Font = require("ui/font")
 local Geometry = require("ui/geometry")
 local GestureRange = require("ui/gesturerange")
 local InputContainer = require("ui/widget/container/inputcontainer")
@@ -162,15 +161,22 @@ function StatsWidget:init()
     local show_map = self.show_map ~= false
     local vs = valueStrings(stats)
     local map_vs = layoutValueStrings(stats, layout_id)
+    local compact = MahjongUI.isNarrow(self.full_width) or self.full_height < 700
 
     local label_gap = math.min(Screen:scaleBySize(12),
-        math.max(Screen:scaleBySize(6), math.floor(self.full_width * 0.03)))
+        math.max(Screen:scaleBySize(4), math.floor(self.full_width * 0.02)))
     -- Keep the dual-column gutter tight. The columns already have their own
     -- midpoint spacing, so a larger responsive gap only wastes card width.
-    local col_gap = Screen:scaleBySize(10)
-    local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(16))
+    local col_gap = math.max(1, math.min(Screen:scaleBySize(10), math.floor(self.full_width * 0.02)))
+    local label_face = MahjongUI.fitTextFace(
+        t("stats.longest_streak"), "smallinfofont", Screen:scaleBySize(compact and 12 or 16),
+        Screen:scaleBySize(8), math.max(1, math.floor(self.full_width * 0.28)),
+        Screen:scaleBySize(22))
     local label_color = Blitbuffer.COLOR_DARK_GRAY
-    local value_face = Font:getFace("cfont", Screen:scaleBySize(18))
+    local value_face = MahjongUI.fitTextFace(
+        "0000 (Confounding Cross)", "cfont", Screen:scaleBySize(compact and 14 or 18),
+        Screen:scaleBySize(9), math.max(1, math.floor(self.full_width * 0.42)),
+        Screen:scaleBySize(24))
 
     local function measureText(text, face, bold)
         local probe = TextWidget:new{ text = text, padding = 0, face = face, bold = bold }
@@ -208,7 +214,10 @@ function StatsWidget:init()
         local mw = measureText(map_vs[r.key], value_face, true)
         if mw > max_map_value_w then max_map_value_w = mw end
     end
-    local header_face = Font:getFace("tfont", Screen:scaleBySize(18))
+    local header_face = MahjongUI.fitTextFace(
+        t("stats.global"), "tfont", Screen:scaleBySize(compact and 15 or 18),
+        Screen:scaleBySize(10), math.max(1, math.floor(self.full_width * 0.35)),
+        Screen:scaleBySize(28))
     local global_header_text = t("stats.global")
     local map_header_text = t("layout." .. layout_id)
     local global_column_w = math.max(max_label_w + label_gap + max_global_value_w,
@@ -220,8 +229,18 @@ function StatsWidget:init()
     local content_w = show_map and (global_column_w + col_gap + map_column_w) or global_column_w
     -- This card is content-sized; large responsive padding leaves conspicuous
     -- empty margins beside the columns and pushes the close button outward.
-    local panel_padding = Screen:scaleBySize(10)
+    local panel_padding = math.max(2, math.min(Screen:scaleBySize(10),
+        math.floor(math.min(self.full_width, self.full_height) * 0.02)))
     local max_panel_w = math.max(1, self.full_width - 2 * Screen:scaleBySize(8))
+    local max_inner_w = math.max(1, max_panel_w - 2 * panel_padding)
+    global_column_w = math.min(global_column_w, max_inner_w)
+    map_column_w = math.min(map_column_w, max_inner_w)
+    local stacked_columns = show_map
+        and global_column_w + col_gap + map_column_w > max_inner_w
+    local global_value_w = math.max(1, math.min(max_global_value_w,
+        global_column_w - label_gap - 1))
+    local map_value_w = math.max(1, math.min(max_map_value_w,
+        map_column_w - label_gap - 1))
 
     self._values = {}
 
@@ -232,11 +251,18 @@ function StatsWidget:init()
     -- Value widgets are stored in _values under `prefix .. key` so
     -- updateValues() can re-render them.
     local function buildColumn(header_text, source_vs, prefix, column_w, column_value_w)
+        local label_slot_w = math.max(1, math.min(max_label_w,
+            column_w - label_gap - column_value_w))
+        local column_header_face = MahjongUI.fitTextFace(
+            header_text, "tfont", header_face.size or Screen:scaleBySize(18),
+            Screen:scaleBySize(9), column_w, Screen:scaleBySize(28))
         local header = TextWidget:new{
             text = header_text,
             padding = 0,
             bold = true,
-            face = header_face,
+            face = column_header_face,
+            max_width = column_w,
+            truncate_with_ellipsis = true,
         }
         local header_w = header:getSize().w
         local header_space = math.max(0, math.floor((column_w - header_w) / 2))
@@ -249,30 +275,37 @@ function StatsWidget:init()
         }
         for _, r in ipairs(row_specs) do
             vchildren[#vchildren + 1] = VerticalSpan:new{ width = Screen:scaleBySize(14) }
+            local row_value_face = MahjongUI.fitTextFace(
+                source_vs[r.key], "cfont", value_face.size or Screen:scaleBySize(18),
+                Screen:scaleBySize(8), column_value_w, Screen:scaleBySize(24))
             local value_widget = TextWidget:new{
                 text = source_vs[r.key],
                 padding = 0,
                 bold = true,
-                face = value_face,
+                face = row_value_face,
+                max_width = column_value_w,
+                truncate_with_ellipsis = true,
             }
             self._values[prefix .. r.key] = value_widget
             local label_w = measureText(r.label, label_face, false)
             local value_w = measureText(source_vs[r.key], value_face, true)
             vchildren[#vchildren + 1] = HorizontalGroup:new{
-                HorizontalSpan:new{ width = max_label_w - label_w },
-                TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
+                HorizontalSpan:new{ width = math.max(0, label_slot_w - label_w) },
+                TextWidget:new{ text = r.label, padding = 0, face = label_face,
+                    max_width = label_slot_w, truncate_with_ellipsis = true,
+                    fgcolor = label_color },
                 HorizontalSpan:new{ width = label_gap },
                 value_widget,
-                HorizontalSpan:new{ width = column_value_w - value_w },
+                HorizontalSpan:new{ width = math.max(0, column_value_w - value_w) },
             }
         end
         return VerticalGroup:new(vchildren)
     end
 
-    local global_col = buildColumn(global_header_text, vs, "", global_column_w, max_global_value_w)
+    local global_col = buildColumn(global_header_text, vs, "", global_column_w, global_value_w)
     local map_col
     if show_map then
-        map_col = buildColumn(map_header_text, map_vs, "map_", map_column_w, max_map_value_w)
+        map_col = buildColumn(map_header_text, map_vs, "map_", map_column_w, map_value_w)
     end
 
     -- Reset button (bottom): clears the whole record (global + per-layout
@@ -280,23 +313,26 @@ function StatsWidget:init()
     -- wipe the lifetime stats.
     local reset_w = math.min(Screen:scaleBySize(160),
         math.max(1, max_panel_w - 2 * panel_padding))
+    local reset_h = math.max(1, math.min(Screen:scaleBySize(32),
+        math.floor(self.full_height * 0.06)))
     local reset_btn = ButtonWidget:new{
         text = t("settings.reset"),
         text_font_face = "cfont",
-        text_font_size = 20,
+        text_font_size = math.max(8, math.min(20, math.floor(reset_h * 0.6))),
         text_font_bold = true,
         width = reset_w,
-        height = Screen:scaleBySize(32),
+        height = reset_h,
         bordersize = Screen:scaleBySize(1),
         radius = Screen:scaleBySize(4),
-        padding = Screen:scaleBySize(6),
+        padding = math.max(1, math.min(Screen:scaleBySize(6), math.floor(reset_h * 0.16))),
         callback = function() self:resetStats() end,
     }
     self._reset_btn = reset_btn
 
     local gap = math.min(Screen:scaleBySize(14),
-        math.max(Screen:scaleBySize(6), math.floor(self.full_height * 0.025)))
-    local panel_content_w = math.max(content_w, reset_w)
+        math.max(Screen:scaleBySize(4), math.floor(self.full_height * 0.018)))
+    local layout_content_w = stacked_columns and math.max(global_column_w, map_column_w) or content_w
+    local panel_content_w = math.max(layout_content_w, reset_w)
     local pad_side = math.max(0, math.floor((panel_content_w - reset_w) / 2))
     local reset_row = HorizontalGroup:new{
         HorizontalSpan:new{ width = pad_side },
@@ -307,13 +343,17 @@ function StatsWidget:init()
     -- Title row: "Stats" centered, with a close X pinned at the panel's
     -- top-right corner (same grey-square style as the HUD's quit X). Tapping
     -- it closes the card (and runs onClose).
+    local close_size = math.max(1, math.min(Screen:scaleBySize(36),
+        math.floor(self.full_height * 0.08)))
+    local title_max_w = math.max(1, panel_content_w - close_size - gap)
+    local title_face = MahjongUI.fitTextFace(
+        t("toolbar.stats"), "tfont", Screen:scaleBySize(compact and 16 or 20),
+        Screen:scaleBySize(10), title_max_w, close_size)
     local title_widget = TextWidget:new{
-        text = t("toolbar.stats"),
-        padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(20)),
+        text = t("toolbar.stats"), padding = 0, face = title_face,
+        max_width = title_max_w, truncate_with_ellipsis = true,
     }
-    local title_w = title_widget:getSize().w
-    local close_size = title_widget:getSize().h + Screen:scaleBySize(8)
+    local title_w = math.min(title_widget:getSize().w, title_max_w)
     self._close_btn = ButtonWidget:new{
         icon = "mahjong/close",
         width = close_size,
@@ -336,7 +376,8 @@ function StatsWidget:init()
 
     -- Floating panel: a white rounded card centered over the game. The outer
     -- widget stays transparent, so the board shows through around the card.
-    local top_pad = math.max(Screen:scaleBySize(8), math.floor(self.full_height * 0.04))
+    local top_pad = math.max(Screen:scaleBySize(6), math.min(
+        Screen:scaleBySize(18), math.floor(self.full_height * 0.025)))
     -- The two columns ALWAYS render side by side: a vertical stacked layout
     -- (Global above <layout>) made the card a very tall panel that overflowed
     -- the screen. The columns share the same width, so a side-by-side row is
@@ -345,11 +386,19 @@ function StatsWidget:init()
     -- the columns from crowding on narrow screens).
     local columns_layout
     if show_map then
-        columns_layout = HorizontalGroup:new{
-            global_col,
-            HorizontalSpan:new{ width = col_gap },
-            map_col,
-        }
+        if stacked_columns then
+            columns_layout = VerticalGroup:new{
+                global_col,
+                VerticalSpan:new{ height = col_gap },
+                map_col,
+            }
+        else
+            columns_layout = HorizontalGroup:new{
+                global_col,
+                HorizontalSpan:new{ width = col_gap },
+                map_col,
+            }
+        end
     else
         columns_layout = global_col
     end
