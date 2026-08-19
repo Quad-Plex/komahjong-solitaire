@@ -144,6 +144,24 @@ expect(pw_stats._panel_geom.x >= 0 and pw_stats._panel_geom.y >= 0
         and pw_stats._panel_geom.x + pw_stats._panel_geom.w <= 1072
         and pw_stats._panel_geom.y + pw_stats._panel_geom.h <= 1448,
     "stats panel remains inside the PW12 canvas")
+ctx.mocks["device"].isAndroid = nil
+ctx.screen.scaleBySize = function(_, px) return px * 2 end
+local pw_hud = HudBar:new{
+    title = "Mahjong Solitaire",
+    right_icon = "mahjong/close",
+    right_icon_tap_callback = function() end,
+}
+pw_hud:setStats(0, 0, 1870)
+expect(pw_hud._value_widgets.score.text == "1870"
+        and pw_hud._value_widgets.score.truncate_with_ellipsis == false,
+    "PW12 HUD keeps the complete four-digit score without ellipsis")
+expect(pw_hud._value_widgets.score.face.size <= 24
+        and pw_hud._label_widgets.score.face.size <= 18,
+    "PW12 HUD fits score and label typography below the high-DPI default")
+for _, key in ipairs({ "pairs", "free", "score" }) do
+    expect(pw_hud._value_widgets[key].max_width == pw_hud._value_specs[key].max_width,
+        "PW12 HUD " .. key .. " value keeps an explicit chip slot")
+end
 
 -- Kindle regression: a Kindle also has a scaleBySize factor above one, but it
 -- must retain the established picker typography and chip metrics.

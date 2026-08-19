@@ -59,7 +59,9 @@ local HudBar = FrameContainer:extend{
 
 -- One stat chip: rounded pill, icon (left), bold value (center),
 -- label text (right). Returns the chip widget, its layout (for size
--- invalidation) and the value TextWidget (for setStats).
+-- invalidation), the value TextWidget, the value sizing spec, and the label
+-- TextWidget. Values are re-fitted when live stats change; a three-digit probe
+-- is not enough for a score that grows to four digits.
 local function buildChip(icon, label, chip_w, chip_h, compact)
     local border = math.max(1, Screen:scaleBySize(1))
     local pad = math.max(1, math.min(Screen:scaleBySize(compact and 4 or 6),
@@ -68,14 +70,20 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
     local icon_size = math.max(1, math.min(Screen:scaleBySize(compact and 16 or 20), inner_h))
     local gap = math.max(1, math.min(Screen:scaleBySize(4), math.floor(chip_w * 0.04)))
     local inner_w = math.max(1, chip_w - 2 * pad - 2 * border)
-    local label_max_w = compact and 0 or math.max(1, math.floor(inner_w * 0.34))
+    local label_max_w = compact and 0 or math.max(1, math.floor(inner_w * 0.40))
     local value_max_w = math.max(1, inner_w - icon_size - gap
         - (compact and 0 or gap) - label_max_w)
     local android = isAndroidDevice()
-    local value_preferred = Screen:scaleBySize(compact and 14 or 16)
-    local value_minimum = Screen:scaleBySize(9)
-    local label_preferred = Screen:scaleBySize(10)
-    local label_minimum = Screen:scaleBySize(8)
+    -- Keep high-DPI devices from turning short chip values into oversized
+    -- glyphs. The live-value fitting below then reduces this further when a
+    -- score or counter needs more horizontal room.
+    local value_preferred = math.min(Screen:scaleBySize(compact and 14 or 16), 24)
+    -- The fallback is deliberately small: values have ellipsis disabled, so
+    -- an unusually large score must shrink rather than leave digits outside
+    -- the chip.
+    local value_minimum = 1
+    local label_preferred = math.min(Screen:scaleBySize(10), 18)
+    local label_minimum = 1
     if android then
         -- Android can report a large DPI multiplier without giving the HUD
         -- proportionally more room. Keep the text readable inside the chip;
@@ -86,7 +94,7 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
         label_minimum = math.min(label_minimum, math.floor(inner_h * 0.24))
     end
     local value_face = MahjongUI.fitTextFace(
-        "000", "smallinfofontbold", value_preferred,
+        "0000", "smallinfofontbold", value_preferred,
         value_minimum, value_max_w, inner_h)
     local value = TextWidget:new{
         text = "0",
@@ -96,6 +104,7 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
         max_width = value_max_w,
         truncate_with_ellipsis = false,
     }
+    local label_widget = nil
     local content_children = {
         IconWidget:new{ icon = icon, width = icon_size, height = icon_size },
         HorizontalSpan:new{ width = gap },
@@ -106,14 +115,15 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
             label, "smallinfofont", label_preferred, label_minimum,
             label_max_w, inner_h)
         content_children[#content_children + 1] = HorizontalSpan:new{ width = gap }
-        content_children[#content_children + 1] = TextWidget:new{
+        label_widget = TextWidget:new{
             text = label,
             padding = 0,
             face = label_face,
             max_width = label_max_w,
-            truncate_with_ellipsis = true,
+            truncate_with_ellipsis = false,
             fgcolor = Blitbuffer.COLOR_BLACK, -- high contrast
         }
+        content_children[#content_children + 1] = label_widget
     end
     local content = HorizontalGroup:new(content_children)
 
@@ -132,7 +142,13 @@ local function buildChip(icon, label, chip_w, chip_h, compact)
     chip.getSize = function()
         return Geometry:new{ w = chip_w, h = chip_h }
     end
-    return chip, content, value
+    return chip, content, value, {
+        face_name = "smallinfofontbold",
+        preferred_size = value_preferred,
+        minimum_size = value_minimum,
+        max_width = value_max_w,
+        max_height = inner_h,
+    }, label_widget
 end
 
 function HudBar:init()
@@ -204,10 +220,15 @@ function HudBar:init()
     local chip_w = math.max(1, math.floor(available_for_chips / 3))
 
     -- Build chips with precise dimensions and text that fits those dimensions.
-    local chip_pairs, lay_pairs, val_pairs = buildChip("mahjong/hud_pairs", t("hud.pairs"), chip_w, chip_h, compact)
-    local chip_free, lay_free, val_free = buildChip("mahjong/lightbulb", t("hud.free"), chip_w, chip_h, compact)
-    local chip_score, lay_score, val_score = buildChip("mahjong/hud_score", t("hud.score"), chip_w, chip_h, compact)
+    local chip_pairs, lay_pairs, val_pairs, spec_pairs, label_pairs = buildChip(
+        "mahjong/hud_pairs", t("hud.pairs"), chip_w, chip_h, compact)
+    local chip_free, lay_free, val_free, spec_free, label_free = buildChip(
+        "mahjong/lightbulb", t("hud.free"), chip_w, chip_h, compact)
+    local chip_score, lay_score, val_score, spec_score, label_score = buildChip(
+        "mahjong/hud_score", t("hud.score"), chip_w, chip_h, compact)
     self._value_widgets = { pairs = val_pairs, free = val_free, score = val_score }
+    self._value_specs = { pairs = spec_pairs, free = spec_free, score = spec_score }
+    self._label_widgets = { pairs = label_pairs, free = label_free, score = label_score }
     self._chip_layouts = { lay_pairs, lay_free, lay_score }
 
     -- Quit button: square (HUD_H x HUD_H), grey background, well-proportioned X icon
@@ -303,9 +324,20 @@ end
 function HudBar:setStats(pairs, free, score)
     self.stats = { pairs = pairs, free = free, score = score }
     if not self._value_widgets then return end
-    self._value_widgets.pairs:setText(tostring(pairs))
-    self._value_widgets.free:setText(tostring(free))
-    self._value_widgets.score:setText(tostring(score))
+    local function updateValue(key, value)
+        local widget = self._value_widgets[key]
+        local spec = self._value_specs[key]
+        local text = tostring(value)
+        widget.face = MahjongUI.fitTextFace(text, spec.face_name,
+            spec.preferred_size, spec.minimum_size, spec.max_width, spec.max_height)
+        widget:setText(text)
+        -- Changing the face is not covered by setText when the value is
+        -- unchanged; explicitly invalidate the cached TextWidget metrics.
+        if widget.free then widget:free() end
+    end
+    updateValue("pairs", pairs)
+    updateValue("free", free)
+    updateValue("score", score)
     for _, layout in ipairs(self._chip_layouts or {}) do
         if layout.resetLayout then layout:resetLayout() end
     end
