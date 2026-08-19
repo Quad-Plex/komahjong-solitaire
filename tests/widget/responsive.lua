@@ -12,6 +12,7 @@ local Help = ctx.loadPlugin("mahjonghelp")
 local Settings = ctx.loadPlugin("mahjongsettings")
 local StatsWidget = ctx.loadPlugin("mahjongstatswidget")
 local Picker = ctx.loadPlugin("mahjonglayoutselect")
+local WinSummary = ctx.loadPlugin("mahjongwinsummary")
 local Main = ctx.loadPlugin("main")
 
 local failures = 0
@@ -148,6 +149,35 @@ expect(pw_stats._panel_geom.x >= 0 and pw_stats._panel_geom.y >= 0
 -- must retain the established picker typography and chip metrics.
 ctx.mocks["device"].isAndroid = nil
 ctx.screen.scaleBySize = function(_, px) return px * 2 end
+local pw_summary = WinSummary:new{
+    text = "Congratulations! New overall best score and best time!",
+    win_rows = {
+        { label = "Layout", value = "Bridge" },
+        { label = "Score", value = "1870", marker = "(Global Record!)",
+          marker_widget = { getSize = function() return { w = 900, h = 40 } end } },
+        { label = "Time", value = "10:06", marker = "(Global Record!)",
+          marker_widget = { getSize = function() return { w = 900, h = 40 } end } },
+        { label = "Best combo", value = "15 (+80)", marker = "(Global Record!)",
+          marker_widget = { getSize = function() return { w = 900, h = 40 } end } },
+        { label = "Hints used", value = "0" },
+        { label = "Shuffles", value = "1" },
+        { label = "Current streak", value = "1" },
+    },
+    ok_text = "Play again",
+    cancel_text = "Select Layout",
+}
+expect(pw_summary._content_w + 2 * pw_summary._panel_padding + 2 * pw_summary._border
+        <= pw_summary._max_panel_w,
+    "PW12 win summary card reserves a hard in-canvas width")
+expect(pw_summary._headline_widget.max_width <= pw_summary._content_w
+        and pw_summary._headline_widget.face.size <= 28,
+    "PW12 win summary headline is bounded and not DPI-enlarged")
+expect(pw_summary._row_slots.value < pw_summary._max_panel_w / 2,
+    "PW12 win summary value column has an explicit slot")
+local pw_summary_row = pw_summary._row_group[3]
+expect(pw_summary_row[6].max_width <= pw_summary._row_slots.value,
+    "PW12 win summary record markers cannot widen a result row")
+
 local kindle_picker = Picker:new{
     wins_by_layout = { bridge = 0 },
 }

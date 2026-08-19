@@ -439,7 +439,8 @@ Use this checklist when adding or changing a screen-sized plugin widget:
 
 The shared `mahjongui.lua` `fitTextFace` helper is the reference implementation for selecting a
 face from text, width, and height constraints. `tests/widget/responsive.lua` is the reference
-regression suite for screen-size and floating-panel checks.
+regression suite for screen-size and floating-panel checks, including long-text win-summary cards
+with oversized record markers on the PW12-sized canvas.
 
 ## Mahjong plugin — current state and key contracts (US-01..US-50 and US-52..US-53 shipped)
 
@@ -815,9 +816,11 @@ example_app/casualkochess.koplugin/   # the chess/checkers reference plugin
     x, LEFT-aligned in its column. A full-screen tap is consumed (only the
     buttons dismiss), matching the tap-outside contract. The widget exposes
     `text` (headline), `win_rows` (`{label, value}` pairs), `ok_text`/
-    `cancel_text`, and `ok_callback`/`cancel_callback` so the headless harness
-    re-reads the summary with `ctx.summaryText` exactly as before; `_row_group`
-    holds the aligned-rows VerticalGroup for the structural check.
+     `cancel_text`, and `ok_callback`/`cancel_callback` so the headless harness
+     re-reads the summary with `ctx.summaryText` exactly as before; `_row_group`
+     holds the aligned-rows VerticalGroup for the structural check. The card derives a hard maximum
+     width from the runtime canvas, fits headline/label/value faces to bounded slots, and falls back
+     to truncated marker text when a record marker would otherwise widen a row.
  20. **Tap-outside a dialog never closes the game.** The shuffle / dead-board / win
     ConfirmBoxes use `cancel_callback` to exit the game (the "Close" button's documented
     action), but KOReader fires `cancel_callback` for a tap OUTSIDE the dialog too — so a

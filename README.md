@@ -191,14 +191,17 @@ screen flashes and help avoid stale pixels on e-ink displays.
 ## Responsive UI
 
 The plugin reads the runtime KOReader canvas dimensions when each screen-sized widget is built.
-The picker, HUD, feedback band, toolbar, Settings, Help, and Statistics windows use bounded text
-slots and automatically reduce typography when the available width or height is smaller. The
-Statistics window keeps its two-column layout on normal Kindle-sized screens and stacks columns
+The picker, HUD, feedback band, toolbar, Settings, Help, Statistics, and win-summary windows use
+bounded text slots and automatically reduce typography when the available width or height is
+smaller. The win summary keeps its headline, result values, record markers, and buttons inside a
+panel-width limit, so long translations and high-DPI Kindle scaling cannot push the card off-screen.
+The Statistics window keeps its two-column layout on normal Kindle-sized screens and stacks columns
 only when the available panel width cannot hold both columns.
 
 Responsive behavior is tested with the headless suite at phone, Kindle-sized, PW12-sized portrait,
-and short landscape dimensions. The PW12 regression canvas used by the tests is 1072x1448; this is
-a geometry target rather than a requirement that every device report exactly those dimensions.
+and short landscape dimensions. The PW12 regression canvas used by the tests is 1072x1448 and
+includes long win-summary text and oversized record markers; this is a geometry target rather than
+a requirement that every device report exactly those dimensions.
 
 ## Development
 

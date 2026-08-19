@@ -1,29 +1,4 @@
--- Win summary (US-12) — floating centered card.
---
--- The cleared-board dialog as a floating card in the exact
--- mahjongsettings.lua / mahjongstatswidget.lua / mahjongpause.lua pattern: a
--- transparent full-screen InputContainer whose single child is a
--- CenterContainer holding a white rounded FrameContainer, so the game stays
--- visible around the card. The card sizes itself to its content and is centered,
--- so the whole summary is horizontally centered in the window (the stock
--- ConfirmBox centers a wide headline text area, which left the narrow label/
--- value rows hugging the left edge).
---
--- Layout inside the card:
---   * the headline ("You cleared the board!" / "Congratulations! …best score…")
---     centered across the card's content width;
---   * the summary rows split into two equal columns: labels are right-aligned
---     against the center line, and VALUES are left-aligned from that line;
---   * a two-button row (Play again / Select Layout) centered at the bottom.
---
--- A tap anywhere OUTSIDE the buttons is silently consumed (never closes the
--- card), matching the dialog contract that only the buttons dismiss it
--- (US-20/32: a stray tap must not exit the whole app).
---
--- It exposes `text` (the headline), `win_rows` ({ label, value } pairs),
--- `ok_text`/`cancel_text`, and `ok_callback`/`cancel_callback` — the same
--- surface as a ConfirmButton — so the headless harness drives it and re-reads
--- its summary exactly as before.
+-- Win summary (US-12): a bounded, centered floating results card.
 
 local Device = require("device")
 local Screen = Device.screen
@@ -47,16 +22,16 @@ local WinSummary = InputContainer:extend{
     name = "mahjongwinsummary",
     full_width = Screen:getWidth(),
     full_height = Screen:getHeight(),
-    parent = nil,        -- the Mahjong instance (unused; kept for symmetry)
-    text = "",           -- headline string (the harness reads it)
-    win_rows = nil,      -- { {label=, value=}, ... } (rows + harness surface)
-    ok_text = nil,       -- "Play again"
-    cancel_text = nil,   -- "Select Layout"
-    ok_callback = nil,   -- fired by "Play again" (the harness calls it directly)
-    cancel_callback = nil, -- fired by "Select Layout"
-    _done = false,       -- guards the buttons so a double tap fires once
-    _row_group = nil,    -- the aligned-rows VerticalGroup (harness structural check)
-    _panel_geom = nil,   -- absolute screen rect of the floating card
+    parent = nil,
+    text = "",
+    win_rows = nil,
+    ok_text = nil,
+    cancel_text = nil,
+    ok_callback = nil,
+    cancel_callback = nil,
+    _done = false,
+    _row_group = nil,
+    _panel_geom = nil,
 }
 
 function WinSummary:init()
@@ -64,120 +39,203 @@ function WinSummary:init()
     self.dimen = Geometry:new{ w = self.full_width, h = self.full_height }
     self.covers_fullscreen = true
 
-    local label_face = Font:getFace("smallinfofont", Screen:scaleBySize(18))
-    local value_face = Font:getFace("cfont", Screen:scaleBySize(20))
+    local compact = MahjongUI.isNarrow(self.full_width) or self.full_height < 700
+    -- Kindle screens can report a large scaleBySize factor without providing
+    -- proportionally more room. Keep this card readable instead of allowing
+    -- DPI scaling to turn the headline into a screen-wide widget.
+    local label_preferred = math.min(Screen:scaleBySize(compact and 14 or 18), 24)
+    local value_preferred = math.min(Screen:scaleBySize(compact and 16 or 20), 26)
+    local headline_preferred = math.min(Screen:scaleBySize(compact and 16 or 20), 28)
+    local label_minimum = math.min(Screen:scaleBySize(8), label_preferred)
+    local value_minimum = math.min(Screen:scaleBySize(9), value_preferred)
     local label_color = Blitbuffer.COLOR_DARK_GRAY
 
     local function measureText(text, face)
         local probe = TextWidget:new{ text = text, padding = 0, face = face }
         local w = probe:getSize().w
-        probe:free()
+        if probe.free then probe:free() end
         return w
     end
 
-    -- Rows: right-align every label to the widest one so the value column
-    -- starts at the same x and each value is LEFT-aligned within it (the stats
-    -- screen's column trick). Measure each label so the leading span pads it.
     local win_rows = self.win_rows or {}
+    local longest_label = ""
+    local longest_value = ""
     local max_label_w = 0
-    for _, r in ipairs(win_rows) do
-        max_label_w = math.max(max_label_w, measureText(r.label, label_face))
-    end
-    local row_gap = Screen:scaleBySize(4)
-    local center_gap = Screen:scaleBySize(8)
-    local marker_gap = Screen:scaleBySize(4)
-    -- The value column's width must account for the marker text too (the
-    -- "(New best!)" / trophy+best that rides after a value), so the card is
-    -- wide enough to hold a fully-marked row without clipping.
     local max_value_w = 0
+    local probe_label_face = Font:getFace("smallinfofont", label_preferred)
+    local probe_value_face = Font:getFace("cfont", value_preferred)
     for _, r in ipairs(win_rows) do
+        local label_w = measureText(r.label, probe_label_face)
+        if label_w > max_label_w then
+            max_label_w = label_w
+            longest_label = r.label
+        end
         local full = r.value .. (r.marker and (" " .. r.marker) or "")
-        max_value_w = math.max(max_value_w, measureText(full, value_face))
+        local value_w = measureText(full, probe_value_face)
+        if value_w > max_value_w then
+            max_value_w = value_w
+            longest_value = full
+        end
     end
-    -- Headline, centered across the card's content width.
+
+    local border = math.max(1, math.min(Screen:scaleBySize(1),
+        math.floor(self.full_width * 0.01)))
+    local outer_margin = math.max(Screen:scaleBySize(8),
+        math.floor(self.full_width * 0.02))
+    local max_panel_w = math.max(1, self.full_width - 2 * outer_margin)
+    local panel_padding = math.max(Screen:scaleBySize(compact and 8 or 12),
+        math.floor(math.min(self.full_width, self.full_height) * 0.018))
+    panel_padding = math.min(panel_padding, Screen:scaleBySize(24))
+    local max_content_w = math.max(1,
+        max_panel_w - 2 * panel_padding - 2 * border)
+
     local headline_widget = TextWidget:new{
         text = self.text,
         padding = 0,
-        face = Font:getFace("tfont", Screen:scaleBySize(20)),
+        face = Font:getFace("tfont", headline_preferred),
     }
     local headline_size = headline_widget:getSize()
-    local gap = Screen:scaleBySize(14)
 
-    -- Buttons: Play again (primary) + Select Layout, centered at the bottom.
-    local panel_padding = math.min(Screen:scaleBySize(24),
-        math.max(Screen:scaleBySize(10), math.floor(self.full_width * 0.05)))
-    local max_content_w = math.max(1, self.full_width - 2 * panel_padding - 2 * Screen:scaleBySize(8))
+    local row_gap = math.min(Screen:scaleBySize(compact and 4 or 6),
+        math.max(2, math.floor(self.full_height * 0.008)))
+    local center_gap = math.min(Screen:scaleBySize(8),
+        math.max(3, math.floor(max_content_w * 0.02)))
+    local marker_gap = math.min(Screen:scaleBySize(4),
+        math.max(2, math.floor(max_content_w * 0.01)))
+    local gap = math.min(Screen:scaleBySize(compact and 8 or 12),
+        math.max(2, math.floor(self.full_height * 0.018)))
+
+    -- Buttons have a bounded width too, so they cannot become the child that
+    -- silently widens the FrameContainer on a translated or small screen.
+    local button_gap = math.min(Screen:scaleBySize(10),
+        math.max(2, math.floor(max_content_w * 0.02)))
     local btn_w = math.min(Screen:scaleBySize(150),
-        math.max(1, math.floor((max_content_w - Screen:scaleBySize(10)) / 2)))
-    local btn_h = Screen:scaleBySize(32)
+        math.max(1, math.floor((max_content_w - button_gap) / 2)))
+    local btn_h = math.max(1, math.min(Screen:scaleBySize(32),
+        math.floor(self.full_height * 0.06)))
+    local button_face_size = math.max(8, math.min(20, math.floor(btn_h * 0.6)))
     local primary = ButtonWidget:new{
         text = self.ok_text,
         text_font_face = "cfont",
-        text_font_size = 20,
+        text_font_size = button_face_size,
         text_font_bold = true,
         width = btn_w,
         height = btn_h,
-        bordersize = Screen:scaleBySize(1),
+        bordersize = border,
         radius = Screen:scaleBySize(4),
-        padding = Screen:scaleBySize(6),
+        padding = math.max(1, math.min(Screen:scaleBySize(6), math.floor(btn_h * 0.16))),
         callback = function() self:_finish(true) end,
     }
     local secondary = ButtonWidget:new{
         text = self.cancel_text,
         text_font_face = "cfont",
-        text_font_size = 20,
+        text_font_size = button_face_size,
+        text_font_bold = true,
         width = btn_w,
         height = btn_h,
-        bordersize = Screen:scaleBySize(1),
+        bordersize = border,
         radius = Screen:scaleBySize(4),
-        padding = Screen:scaleBySize(6),
+        padding = math.max(1, math.min(Screen:scaleBySize(6), math.floor(btn_h * 0.16))),
         callback = function() self:_finish(false) end,
     }
     local buttons = HorizontalGroup:new{
         primary,
-        HorizontalSpan:new{ width = Screen:scaleBySize(10) },
+        HorizontalSpan:new{ width = button_gap },
         secondary,
     }
-    -- Content width: at least the widest row, but wide enough for the headline
-    -- and the button row so those center over the value column. Widths come
-    -- from measured text (the mock's group containers expose no getSize, so this
-    -- never depends on a container's getSize — mirroring the stats screen).
-    -- The rows use two equal columns.  Size the card for the larger side so
-    -- the midpoint is a real divider, rather than centering the natural row
-    -- width (which made the labels and values move together as one block).
-    local column_w = math.max(max_label_w, max_value_w)
-    local rows_w = 2 * column_w + 2 * center_gap
-    local buttons_w = 2 * btn_w + Screen:scaleBySize(10)
-    local content_w = math.min(max_content_w, math.max(rows_w, headline_size.w, buttons_w))
-    local headline_h = headline_size.h
 
-    local half_w = math.floor(content_w / 2)
+    -- Keep the card content-sized when it fits, but never let intrinsic text
+    -- determine a width larger than the runtime canvas. Rows use two equal
+    -- bounded slots around a stable divider.
+    local rows_w = 2 * math.max(max_label_w, max_value_w) + 2 * center_gap
+    local buttons_w = 2 * btn_w + button_gap
+    local content_w = math.min(max_content_w,
+        math.max(rows_w, headline_size.w, buttons_w))
+    local half_w = math.max(1, math.floor((content_w - 2 * center_gap) / 2))
+    local label_slot_w = half_w
+    local value_slot_w = half_w
+    local fitted_label_face = MahjongUI.fitTextFace(
+        longest_label, "smallinfofont", label_preferred, label_minimum,
+        label_slot_w, Screen:scaleBySize(24))
+    local fitted_value_face = MahjongUI.fitTextFace(
+        longest_value, "cfont", value_preferred, value_minimum,
+        value_slot_w, Screen:scaleBySize(28))
+    local fitted_headline_face = MahjongUI.fitTextFace(
+        self.text, "tfont", headline_preferred, label_minimum,
+        content_w, Screen:scaleBySize(32))
+    headline_widget.face = fitted_headline_face
+    headline_widget.max_width = content_w
+    headline_widget.truncate_with_ellipsis = true
+    local headline_h = math.min(headline_widget:getSize().h,
+        math.max(1, math.floor(self.full_height * 0.06)))
+
+    self._content_w = content_w
+    self._max_panel_w = max_panel_w
+    self._panel_padding = panel_padding
+    self._border = border
+    self._row_slots = { label = label_slot_w, value = value_slot_w }
+    self._headline_widget = headline_widget
+
+    local function boundedMarker(r, marker_slot_w)
+        if not r.marker_widget then return nil end
+        local marker_size = r.marker_widget.getSize
+            and r.marker_widget:getSize() or { w = 0 }
+        if marker_size.w <= marker_slot_w then return r.marker_widget end
+
+        -- Record markers are secondary to the session value. If an icon/group
+        -- marker cannot fit, use its harness-equivalent text with an ellipsis
+        -- guard rather than allowing a HorizontalGroup to widen the card.
+        local marker_text = r.marker or ""
+        local marker_face = MahjongUI.fitTextFace(
+            marker_text, "cfont", fitted_value_face.size or value_preferred,
+            value_minimum, marker_slot_w, Screen:scaleBySize(28))
+        return TextWidget:new{
+            text = marker_text,
+            padding = 0,
+            face = marker_face,
+            bold = true,
+            max_width = marker_slot_w,
+            truncate_with_ellipsis = true,
+        }
+    end
+
     local row_widgets = {}
     for i, r in ipairs(win_rows) do
-        local label_w = measureText(r.label, label_face)
-        local value_w = measureText(r.value, value_face)
+        local label_w = math.min(label_slot_w, measureText(r.label, fitted_label_face))
+        local value_w = math.min(value_slot_w, measureText(r.value, fitted_value_face))
         local row_children = {
-            -- Leave a small gap on both sides of the center divider.
-            HorizontalSpan:new{ width = math.max(0, half_w - center_gap - label_w) },
-            TextWidget:new{ text = r.label, padding = 0, face = label_face, fgcolor = label_color },
+            HorizontalSpan:new{ width = math.max(0, label_slot_w - label_w) },
+            TextWidget:new{
+                text = r.label,
+                padding = 0,
+                face = fitted_label_face,
+                max_width = label_slot_w,
+                truncate_with_ellipsis = true,
+                fgcolor = label_color,
+            },
             HorizontalSpan:new{ width = center_gap },
-            TextWidget:new{ text = r.value, padding = 0, face = value_face, bold = true },
+            TextWidget:new{
+                text = r.value,
+                padding = 0,
+                face = fitted_value_face,
+                bold = true,
+                max_width = value_slot_w,
+                truncate_with_ellipsis = true,
+            },
         }
-        -- A score/time row may carry a marker widget (a "(New best!)" TextWidget
-        -- or a trophy+old-best group); render it in the value column after a
-        -- small gap. The trailing span keeps every row as wide as the content,
-        -- preserving the same center line even when values have different widths.
-        local used_w = half_w + center_gap + value_w
-        if r.marker_widget then
+        local used_w = label_slot_w + center_gap + value_w
+        local marker_slot_w = math.max(1, value_slot_w - value_w - marker_gap)
+        local marker_widget = boundedMarker(r, marker_slot_w)
+        if marker_widget then
             row_children[#row_children + 1] = HorizontalSpan:new{ width = marker_gap }
-            row_children[#row_children + 1] = r.marker_widget
-            local marker_w = 0
-            if r.marker_widget.getSize then
-                marker_w = r.marker_widget:getSize().w or 0
-            end
-            used_w = used_w + marker_gap + marker_w
+            row_children[#row_children + 1] = marker_widget
+            local marker_w = marker_widget.getSize
+                and (marker_widget:getSize().w or 0) or 0
+            used_w = used_w + marker_gap + math.min(marker_slot_w, marker_w)
         end
-        row_children[#row_children + 1] = HorizontalSpan:new{ width = math.max(0, content_w - used_w) }
+        row_children[#row_children + 1] = HorizontalSpan:new{
+            width = math.max(0, content_w - used_w),
+        }
         row_widgets[#row_widgets + 1] = HorizontalGroup:new(row_children)
         if i < #win_rows then
             row_widgets[#row_widgets + 1] = VerticalSpan:new{ width = row_gap }
@@ -185,8 +243,6 @@ function WinSummary:init()
     end
     self._row_group = VerticalGroup:new(row_widgets)
 
-    -- Horizontal children are centered at `content_w`; the rows keep their
-    -- left-aligned value column below.
     local vchildren = {
         CenterContainer:new{
             dimen = Geometry:new{ w = content_w, h = headline_h },
@@ -200,11 +256,10 @@ function WinSummary:init()
             buttons,
         },
     }
-
     local panel = FrameContainer:new{
         background = Blitbuffer.COLOR_WHITE,
         color = Blitbuffer.COLOR_DARK_GRAY,
-        bordersize = Screen:scaleBySize(1),
+        bordersize = border,
         radius = Screen:scaleBySize(10),
         padding = panel_padding,
         VerticalGroup:new(vchildren),
@@ -212,8 +267,8 @@ function WinSummary:init()
 
     local panel_size = panel:getSize()
     self._panel_geom = Geometry:new{
-        x = math.floor((self.full_width - panel_size.w) / 2),
-        y = math.floor((self.full_height - panel_size.h) / 2),
+        x = math.max(0, math.floor((self.full_width - panel_size.w) / 2)),
+        y = math.max(0, math.floor((self.full_height - panel_size.h) / 2)),
         w = panel_size.w,
         h = panel_size.h,
     }
@@ -222,8 +277,8 @@ function WinSummary:init()
         panel,
     }
 
-    -- Consume every tap outside the buttons (a stray tap must not dismiss, and
-    -- must never reach the board/toolbar/HUD).
+    -- Consume every tap outside the buttons. Only the explicit buttons dismiss
+    -- the card, so a stray tap cannot reach the board or exit the game.
     self.ges_events = {
         TapClose = {
             GestureRange:new{ ges = "tap", range = self.dimen },
@@ -246,8 +301,6 @@ function WinSummary:onTapClose() -- luacheck: no unused args
     return true
 end
 
--- Fires the action (Play again true / Select Layout false), then drops the card.
--- Guarded so a double tap cannot fire the callback twice.
 function WinSummary:_finish(ok)
     if self._done then return end
     self._done = true

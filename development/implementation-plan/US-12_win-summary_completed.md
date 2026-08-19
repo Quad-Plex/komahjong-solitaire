@@ -30,6 +30,16 @@ reason to replay.
   stats recording on a `self.game_was_autosolved` flag that US-19's `startAutoSolve` sets and the
   normal win path never does (or route auto-solve wins through a dedicated win dialog path).
 
+## Responsive implementation note
+
+The win summary is a centered floating card with a hard maximum width derived from the runtime
+KOReader canvas. Its headline, labels, values, buttons, and best-record markers use bounded slots
+and fitted text faces; an oversized marker falls back to truncated text instead of widening the
+row. This is required for PW12 and other high-DPI Kindle canvases, where unrestricted
+`scaleBySize` typography or intrinsic marker groups can otherwise push the results card off-screen.
+The responsive regression suite exercises a 1072x1448 PW12-sized canvas with a long headline and
+oversized markers.
+
 **Acceptance:**
 - Self-tests: `startGame` bumps games_played and breaks a stale streak only when the previous game
   wasn't won; `recordWin` updates every field; best_time starts nil and only ever decreases;
@@ -39,4 +49,4 @@ reason to replay.
   a first record; zero and nonzero help counts are covered for human wins, and help counts are
   shown for auto-solve wins; Play again starts a new game; a mid-game New Game resets the streak.
 - Manual: win → summary matches the game; a later win with a higher score updates best_score;
-  abandoning resets the streak.
+  abandoning resets the streak; the summary remains fully visible on the target Kindle canvas.
