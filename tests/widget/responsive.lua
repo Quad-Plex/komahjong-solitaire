@@ -190,6 +190,8 @@ expect(pw_summary._content_w + 2 * pw_summary._panel_padding + 2 * pw_summary._b
 expect(pw_summary._headline_widget.max_width <= pw_summary._content_w
         and pw_summary._headline_widget.face.size <= 28,
     "PW12 win summary headline is bounded and not DPI-enlarged")
+expect(pw_summary._content_w < pw_summary._max_panel_w,
+    "PW12 win summary headline does not force a full-width result card")
 expect(pw_summary._row_slots.value < pw_summary._max_panel_w / 2,
     "PW12 win summary value column has an explicit slot")
 local pw_summary_row = pw_summary._row_group[3]

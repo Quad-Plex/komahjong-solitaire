@@ -94,7 +94,6 @@ function WinSummary:init()
         padding = 0,
         face = Font:getFace("tfont", headline_preferred),
     }
-    local headline_size = headline_widget:getSize()
 
     local row_gap = math.min(Screen:scaleBySize(compact and 4 or 6),
         math.max(2, math.floor(self.full_height * 0.008)))
@@ -149,8 +148,12 @@ function WinSummary:init()
     -- bounded slots around a stable divider.
     local rows_w = 2 * math.max(max_label_w, max_value_w) + 2 * center_gap
     local buttons_w = 2 * btn_w + button_gap
+    -- The headline is fitted into the card after its width is known. Do not
+    -- let its unbounded natural width choose the card width: on high-DPI
+    -- devices that makes CenterContainer position an oversized headline off
+    -- both sides of the panel and can produce apparent letter spacing.
     local content_w = math.min(max_content_w,
-        math.max(rows_w, headline_size.w, buttons_w))
+        math.max(rows_w, buttons_w))
     local half_w = math.max(1, math.floor((content_w - 2 * center_gap) / 2))
     local label_slot_w = half_w
     local value_slot_w = half_w
@@ -166,6 +169,10 @@ function WinSummary:init()
     headline_widget.face = fitted_headline_face
     headline_widget.max_width = content_w
     headline_widget.truncate_with_ellipsis = true
+    -- The widget was created with a probe face above. Invalidate those cached
+    -- metrics after replacing the face and max-width, otherwise
+    -- CenterContainer can center using the old, oversized natural width.
+    if headline_widget.free then headline_widget:free() end
     local headline_h = math.min(headline_widget:getSize().h,
         math.max(1, math.floor(self.full_height * 0.06)))
 
