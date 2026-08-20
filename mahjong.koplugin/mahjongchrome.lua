@@ -52,12 +52,20 @@ function Chrome.updateStatus(self)
     if self.hint_counter_badge then
         local text = tostring(self.hints_used or 0)
         structural = structural or self.hint_counter_badge.text ~= text
-        self.hint_counter_badge:setText(text)
+        if self.hint_counter_badge.setCounterText then
+            self.hint_counter_badge:setCounterText(text)
+        else
+            self.hint_counter_badge:setText(text)
+        end
     end
     if self.shuffle_counter_badge then
         local text = tostring(self.shuffles_used or 0)
         structural = structural or self.shuffle_counter_badge.text ~= text
-        self.shuffle_counter_badge:setText(text)
+        if self.shuffle_counter_badge.setCounterText then
+            self.shuffle_counter_badge:setCounterText(text)
+        else
+            self.shuffle_counter_badge:setText(text)
+        end
     end
     local refresh = function()
         UIManager:setDirty(self, "ui", self.status_region or self.status_bar.dimen)

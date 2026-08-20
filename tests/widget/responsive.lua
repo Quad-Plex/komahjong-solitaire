@@ -198,6 +198,49 @@ local pw_summary_row = pw_summary._row_group[3]
 expect(pw_summary_row[6].max_width <= pw_summary._row_slots.value,
     "PW12 win summary record markers cannot widen a result row")
 
+local pw_game = Main:new()
+pw_game.board = Logic.newGame("turtle", 12)
+pw_game:buildUILayout()
+expect(pw_game.hint_counter_badge.face.size <= 18
+        and pw_game.shuffle_counter_badge.face.size <= 18
+        and pw_game.hint_counter_badge.height <= 24
+        and pw_game.shuffle_counter_badge.height <= 24,
+    "PW12 toolbar counters stay compact beside the action icons")
+pw_game.hints_used = 12
+pw_game.shuffles_used = 1234
+pw_game:updateStatus()
+ctx.runScheduled(2) -- drain the chrome settle before the shared picker flow
+ctx.runScheduled(2)
+expect(pw_game.hint_counter_badge.text == "12"
+        and pw_game.shuffle_counter_badge.text == "1234"
+        and pw_game.hint_counter_badge.face.size <= 18
+        and pw_game.shuffle_counter_badge.face.size <= 18,
+    "PW12 toolbar counters refit live multi-digit values")
+
+-- Kindle Touch-sized canvas: retain the larger native counter face while the
+-- fixed badge slot prevents a two-digit value from widening past the button.
+ctx.screen.getWidth = function() return 600 end
+ctx.screen.getHeight = function() return 800 end
+ctx.screen.scaleBySize = function(_, px) return px * 2 end
+ctx.mocks["device"].isAndroid = nil
+local touch_game = Main:new()
+touch_game.board = Logic.newGame("turtle", 12)
+touch_game:buildUILayout()
+local touch_badge_width = touch_game.hint_counter_badge.width
+expect(touch_game.hint_counter_badge.face.size == 24
+        and touch_game.shuffle_counter_badge.face.size == 24,
+    "Kindle Touch keeps its readable native counter face")
+touch_game.hint_counter_badge:setCounterText("12")
+touch_game.shuffle_counter_badge:setCounterText("12")
+expect(touch_game.hint_counter_badge.width == touch_badge_width
+        and touch_game.shuffle_counter_badge.width == touch_badge_width
+        and touch_game.hint_counter_badge.max_width == touch_badge_width
+        and touch_game.shuffle_counter_badge.max_width == touch_badge_width,
+    "Kindle Touch counter badges keep a fixed two-digit slot")
+
+ctx.screen.getWidth = function() return 1072 end
+ctx.screen.getHeight = function() return 1448 end
+
 local kindle_picker = Picker:new{
     wins_by_layout = { bridge = 0 },
 }

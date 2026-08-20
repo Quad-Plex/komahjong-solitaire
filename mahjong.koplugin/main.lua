@@ -171,17 +171,46 @@ end
 -- badge is created but the button's frame is a plain stub, so it is only
 -- ever sized/painted on the device.
 local function createCountBadge(value)
-    return TextWidget:new{
+    -- This is a corner counter, not a primary toolbar value. A Kindle's
+    -- scaleBySize factor can otherwise make the number taller than the
+    -- button's visual padding and compete with the icon.
+    local wide_canvas = Screen:getWidth() >= 900
+    local badge_height = math.min(Screen:scaleBySize(16), 24)
+    -- Keep the PW12 result compact, but do not throw away the larger native
+    -- Kindle Touch face. The width reserves two digits at the chosen face so
+    -- a counter changing from 1 to 12 never changes its visual footprint.
+    local preferred_size = wide_canvas
+        and math.min(Screen:scaleBySize(12), 18)
+        or Screen:scaleBySize(12)
+    local badge_width = math.min(math.max(Screen:scaleBySize(18), preferred_size * 2), 48)
+    local minimum_size = math.min(Screen:scaleBySize(8), preferred_size)
+    local badge = TextWidget:new{
         text = tostring(value),
         -- Reserve a stable slot; changing TextWidget text frees its cached
         -- size, which otherwise makes this tiny overlay unreliable on device.
-        width = Screen:scaleBySize(18),
-        height = Screen:scaleBySize(16),
+        width = badge_width,
+        height = badge_height,
         align = "right",
         padding = 0,
-        face = Font:getFace("smallinfofont", Screen:scaleBySize(12)),
+        max_width = badge_width,
+        truncate_with_ellipsis = true,
+        face = MahjongUI.fitTextFace(tostring(value), "smallinfofont",
+            preferred_size, minimum_size, badge_width, badge_height),
         fgcolor = Blitbuffer.COLOR_DARK_GRAY,
     }
+    badge._counter_preferred_size = preferred_size
+    badge._counter_minimum_size = minimum_size
+    badge._counter_max_width = badge_width
+    badge._counter_max_height = badge_height
+    badge.setCounterText = function(self, counter_value)
+        local text = tostring(counter_value)
+        self.face = MahjongUI.fitTextFace(text, "smallinfofont",
+            self._counter_preferred_size, self._counter_minimum_size,
+            self._counter_max_width, self._counter_max_height)
+        self:setText(text)
+        if self.free then self:free() end
+    end
+    return badge
 end
 
 -- Toolbar action button: a rounded rectangle `w` x `h` — the WHOLE widget is
