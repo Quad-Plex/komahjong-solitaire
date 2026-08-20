@@ -133,6 +133,29 @@ expect(mj.board_view.paused == false
         and mj.board_view.tile_widgets[pk(2, 2, 0)].icon == live_tile_icon,
     "Resume restores the live tile artwork")
 
+-- ---- Device suspend/resume freezes only a previously-running timer ------------
+
+local suspend_elapsed = mj:getElapsed()
+expect(mj:onSuspend() == false and mj._timer_running == false,
+    "Suspend stops the running game timer")
+expect(mj:getElapsed() == suspend_elapsed,
+    "Suspend freezes elapsed time")
+local suspend_frozen = mj:getElapsed()
+mj:onSuspend() -- Some device paths can emit another Suspend before Resume.
+expect(mj:getElapsed() == suspend_frozen,
+    "duplicate Suspend events do not advance or reset elapsed time")
+mj:onResume()
+expect(mj._timer_running == true and mj:getElapsed() >= suspend_frozen,
+    "Resume restarts a timer paused by device suspend")
+
+mj:pauseGame()
+mj:onSuspend()
+mj:onResume()
+expect(mj._timer_running == false,
+    "Resume does not override an already-manually-paused game")
+local manual_dlg = mj._pause_dlg
+if manual_dlg then manual_dlg:resume() end
+
 -- ---- Pause is IGNORED while a running auto-solver owns the board (US-33) ---------
 
 local mj_solve = Mahjong:new()

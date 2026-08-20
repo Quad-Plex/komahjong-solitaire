@@ -363,6 +363,7 @@ local Mahjong = FrameContainer:extend{
     layout = "turtle", -- current layout id (US-14); saved with the game state
     _picker_dlg = nil, -- the layout picker while it is up (US-14)
     _help_dlg = nil, -- gameplay help above the layout picker
+    _suspend_paused_timer = false, -- timer was running when KOReader suspended
     _timer_defaults = SETTINGS_DEFAULTS,
     _timer_min_interval = MIN_TIMER_INTERVAL,
 }
@@ -454,6 +455,31 @@ end
 function Mahjong:onMahjongStart()
     self:startGame()
     return true
+end
+
+-- KOReader broadcasts these lifecycle events for both explicit power-button
+-- sleep and automatic inactivity sleep.  Pause only a timer that was running
+-- before suspend; dialogs and the manual pause overlay already own their
+-- stopped-timer state and must not be resumed behind the user's back.
+function Mahjong:onSuspend()
+    if self._suspend_paused_timer then return false end
+    self._suspend_paused_timer = self._timer_running == true
+    if self._suspend_paused_timer then
+        self:stopTimer()
+        self:saveGameState()
+    end
+    return false
+end
+
+function Mahjong:onResume()
+    if not self._suspend_paused_timer then return false end
+    self._suspend_paused_timer = false
+    if self.board and not MahjongLogic.isWin(self.board)
+            and not self._pause_dlg and not self._picker_dlg then
+        self:startTimer()
+        self:updateTimerDisplay()
+    end
+    return false
 end
 
 -- Kindle's physical Home button is delivered as a Home key event. Keep it in
@@ -2488,6 +2514,7 @@ function Mahjong:shuffleBoard(...) return Gameplay.shuffleBoard(self, ...) end
 function Mahjong:scheduleDeadBoardDialog(...) return Transitions.scheduleDeadBoardDialog(self, ...) end
 
 function Mahjong:onCloseWidget()
+    self._suspend_paused_timer = false
     self._win_dialog_pending = false
     self._no_moves_pending = false
     self._render_transition_token = self._render_transition_token + 1
